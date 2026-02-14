@@ -1,0 +1,183 @@
+* {
+	box-sizing: border-box;
+}
+
+.header {
+	margin-top: 4vh;
+	height: 11vh;
+}
+
+.header h1 {
+	color: #419b4c;
+}
+
+.header button {
+	height: 40px;
+	margin-right: 1rem;
+}
+
+.ProductsList {
+	display: flex;
+	justify-content: center;
+	flex-grow: 1;
+}
+
+.blockCategory,
+.blockProducts {
+	height: 78vh;
+}
+
+.Products {
+	height: 78vh;
+}
+
+.blockProducts i {
+	position: static;
+}
+
+.ProductsList h1 {
+	color: #fff;
+}
+
+.ProductsList ul {
+	list-style: none;
+	margin: 0;
+	padding: 0;
+}
+
+.ProductsList li {
+	margin-bottom: 10px;
+}
+
+.ProductsList li a {
+	text-decoration: none;
+}
+
+.filter_link_cat {
+	color: #000;
+}
+
+.filter_link_subcat {
+	color: #007bff;
+}
+
+.ProductsList li a:hover {
+	color: #363f54;
+}
+
+.ProductsList .renderCategories {
+	height: calc(79vh - 110px);
+	margin-top: 110px;
+}
+
+.resetFilter {
+	color: red;
+	cursor: pointer;
+}
+
+.resetFilter:hover {
+	font-weight: bold;
+}
+
+.promotionFilter {
+	color: red;
+	cursor: pointer;
+}
+
+.promotionFilter:hover {
+	font-weight: bold;
+}
+
+.topFilters {
+	height: 110px;
+	position: absolute;
+}
+
+.btnTop {
+	z-index: 99;
+	position: absolute;
+	bottom: 10px;
+	right: 10px;
+	opacity: 0.5;
+}
+
+.navbarSort {
+	position: sticky;
+	top: 0;
+	z-index: 100;
+	padding-top: 3px;
+	padding-bottom: 3px;
+	height: 105px;
+}
+
+.pagination {
+	border: 1px solid #dee2e6;
+}
+
+.pagination span,
+.pagination_md span {
+	padding: 3px;
+}
+
+.pagination span:hover,
+.pagination_md span:hover {
+	border: 2px solid #dee2e6;
+	padding: 1px;
+	color: rebeccapurple;
+	font-weight: bold;
+	cursor: pointer;
+}
+
+.arrow_pagination {
+	border-radius: 50%;
+	height: 20px;
+	width: 20px;
+	padding: 0;
+	font-size: 10px;
+}
+
+.selectedPage {
+	color: green;
+	font-weight: bold;
+}
+
+@media (max-width: 1199.98px) {
+	.blockCategory {
+		font-size: 0.9rem;
+	}
+}
+
+@media (max-width: 991.98px) {
+	/*
+	.ProductsList .renderCategories {
+		height: 62%;
+	}
+*/
+
+	.header h1 {
+		font-size: 2rem;
+	}
+
+	.Products .btnTop {
+		height: 30px;
+		width: 30px;
+		margin-bottom: 5px;
+		padding: 0;
+	}
+}
+
+@media (max-width: 767.98px) {
+	.Products {
+		height: calc(80vh - 127px) !important;
+	}
+
+	.navbarSort {
+		height: 70px;
+	}
+}
+
+@media (max-width: 575.98px) {
+	.header h1 {
+		font-size: 1.5rem;
+	}
+}

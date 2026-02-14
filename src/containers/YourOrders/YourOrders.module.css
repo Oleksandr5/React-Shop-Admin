@@ -1,0 +1,55 @@
+.YourOrders {
+	padding-bottom: 5vh;
+}
+
+.Wrapper {
+	/*    padding-top: 1rem;*/
+}
+
+.productFoto {
+	height: 100px;
+	width: 100px;
+	background: grey;
+}
+
+.divInputNumberYourOrders input {
+	width: 100px;
+}
+
+.renderOrders {
+	max-height: 68vh;
+}
+
+.deleteIcon:hover {
+	cursor: pointer;
+}
+
+.btnTop {
+	z-index: 99;
+	position: absolute;
+	bottom: 45px;
+	right: 10px;
+	opacity: 0.5;
+}
+
+.renderOrders button {
+	height: 40px;
+	padding: 5px 12px;
+}
+
+@media (max-width: 991.98px) {
+	.renderOrders button {
+		height: 30px;
+		min-width: 30px;
+		padding-left: 1vw;
+		padding-right: 1vw;
+		padding-top: 0;
+		padding-bottom: 0;
+	}
+}
+
+@media (max-width: 575.98px) {
+	.h5 {
+		font-size: 0.8rem;
+	}
+}

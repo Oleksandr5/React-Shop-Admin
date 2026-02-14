@@ -1,0 +1,53 @@
+.ProductsListEdit {
+	padding-bottom: 5vh;
+}
+
+.ProductsModals {
+	position: sticky;
+	top: 0;
+	background: #fff;
+	z-index: 100;
+}
+
+.ProductsListEdit::-webkit-scrollbar {
+	width: 7px;
+	height: 7px;
+}
+
+.ProductsListEdit > div {
+	/*    padding: 0 20px;*/
+}
+
+.btnTop {
+	z-index: 99;
+	position: absolute;
+	bottom: 45px;
+	right: 10px;
+	opacity: 0.5;
+}
+
+.btnRight {
+	z-index: 99;
+	position: absolute;
+	top: 56vh;
+	right: 5px;
+	opacity: 0.5;
+}
+
+.btnLeft {
+	z-index: 99;
+	position: absolute;
+	top: 56vh;
+	left: 5px;
+	opacity: 0.5;
+}
+
+@media (max-width: 991.98px) {
+	.btnRight {
+		display: none;
+	}
+
+	.btnLeft {
+		display: none;
+	}
+}

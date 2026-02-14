@@ -1,0 +1,33 @@
+.MenuToggle {
+	position: absolute;
+	bottom: 0.4rem;
+	left: 1rem;
+	font-size: 1.5rem;
+	cursor: pointer;
+	color: #000;
+	transition: opacity, left 0.22s ease-in;
+	z-index: 90;
+}
+
+.MenuToggle::before {
+	/*	background: #2884f6;*/
+	border-radius: 50%;
+	padding: 5px;
+}
+
+.MenuToggle:hover {
+	opacity: 0.7;
+}
+
+.MenuToggle.open {
+	left: 20px;
+}
+
+@media (max-width: 767.98px) {
+	.MenuToggle {
+		bottom: 0.2rem;
+	}
+}
+
+@media (max-width: 575.98px) {
+}

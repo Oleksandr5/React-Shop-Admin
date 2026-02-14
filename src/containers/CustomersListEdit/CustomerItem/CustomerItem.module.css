@@ -1,0 +1,81 @@
+.CustomerItem {
+	width: 100%;
+}
+
+.CustomerItem:hover {
+	background: #ececec;
+	box-shadow: 0px 0px 12px rgba(86, 86, 86, 0.2);
+	z-index: 10;
+}
+
+.CustomerItem th {
+	padding-top: 1rem;
+	padding-bottom: 1rem;
+}
+
+.CustomerItem .btnRemove {
+	background: red;
+	border-radius: 50%;
+	color: #fff;
+	border: none;
+	cursor: pointer;
+}
+
+.CustomerItem .btnEdit {
+	background: green;
+	color: #fff;
+	border: none;
+	cursor: pointer;
+}
+
+.CustomerItem .btnRemove:active {
+	outline: none;
+	box-shadow: none;
+}
+
+.CustomerItem .leftTitle {
+	display: none;
+	justify-content: flex-end;
+	align-items: center;
+	width: 50%;
+	padding-right: 1rem;
+	border-right: 1px solid #000;
+}
+
+.CustomerItem th .th_value {
+	text-align: center;
+}
+
+.CustomerItem th .th_value::-webkit-scrollbar {
+	width: 3px;
+	height: 3px;
+}
+
+.CustomerItem th .th_value::-webkit-scrollbar-thumb {
+	background-color: darkred;
+}
+
+@media (max-width: 991.98px) {
+	.CustomerItem th {
+		display: flex;
+		padding: 0;
+		height: 3rem;
+	}
+
+	.CustomerItem th .th_value {
+		display: flex;
+		justify-content: flex-start;
+		align-items: center;
+		width: 50%;
+	}
+
+	.CustomerItem {
+		display: flex;
+		flex-direction: column;
+		margin-bottom: 1rem;
+	}
+
+	.CustomerItem .leftTitle {
+		display: flex;
+	}
+}

@@ -1,0 +1,47 @@
+.btnTop {
+	z-index: 99;
+	position: absolute;
+	bottom: 10px;
+	right: 10px;
+}
+
+.Wrapper {
+	padding-top: 1rem;
+}
+
+.SwitchCustomersOrders .btnRemove {
+	background: red;
+	border-radius: 50%;
+	color: #fff;
+	border: none;
+	cursor: pointer;
+	width: 30px;
+	height: 30px;
+	padding: 0;
+	margin: 0;
+	font-size: 18px;
+}
+
+.btnTop {
+	z-index: 99;
+	position: absolute;
+	bottom: 50px;
+	left: 10px;
+	opacity: 0.5;
+}
+
+.navLinkOrders {
+	width: 80%;
+}
+
+@media (max-width: 767.98px) {
+	.navLinkOrders {
+		width: 100%;
+	}
+}
+
+@media (max-width: 575.98px) {
+	.h5 {
+		font-size: 0.8rem;
+	}
+}

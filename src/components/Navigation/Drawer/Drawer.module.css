@@ -1,0 +1,113 @@
+.Drawer {
+	position: fixed;
+	left: 0;
+	top: 0;
+	bottom: 0;
+	width: 80%;
+	max-width: 300px;
+	padding: 20px 10px;
+	box-sizing: border-box;
+	background: #fff;
+	transform: translateX(0px);
+	transition: transform 0.22s ease-in;
+	z-index: 1000;
+	overflow-y: scroll;
+}
+
+.Drawer .webkit_scrollbar_width::-webkit-scrollbar {
+	width: 5px;
+	height: 5px;
+}
+
+.Drawer .webkit_scrollbar_style::-webkit-scrollbar-thumb {
+	background-color: #364969;
+	border-radius: 10px;
+}
+
+.Drawer.close {
+	transform: translateX(-300px);
+}
+
+.Drawer ul {
+	list-style: none;
+	margin: 0;
+	padding: 20px;
+}
+
+.Drawer ul li {
+	margin-bottom: 8px;
+}
+
+.Drawer ul li a {
+	color: #363d54;
+	font-size: 16px;
+	text-decoration: none;
+	background: #fff;
+	position: relative;
+	transition: opacity 0.3s;
+}
+
+.Drawer ul li a:hover,
+.active {
+	opacity: 0.7;
+	color: #ff0000 !important;
+	font-weight: bold;
+}
+
+.resetFilter {
+	color: red;
+	cursor: pointer;
+}
+
+.resetFilter:hover {
+	font-weight: bold;
+}
+
+.promotionFilter {
+	color: red;
+	cursor: pointer;
+}
+
+.promotionFilter:hover {
+	font-weight: bold;
+}
+
+.topFilters {
+	position: sticky;
+	top: 0;
+	z-index: 90;
+	background: #fff;
+}
+
+.drawerMenu a:hover {
+	color: #0000ff;
+	font-weight: bold;
+}
+
+.drawerMenu a[aria-current="page"] {
+	color: #ff0000;
+	font-weight: bold;
+}
+
+/*
+.drawerCategory a[aria-current="page"] {
+	color: #ff0000 !important;
+	font-weight: bold;
+}
+*/
+
+.iconClose {
+	top: 1rem;
+	right: 1rem;
+	font-size: 1.5rem;
+}
+
+@media (max-width: 575.98px) {
+	.Drawer ul li {
+		/*        margin-bottom: 5px;*/
+	}
+
+	.Drawer .filter_link {
+		font-size: 13px;
+	}
+}

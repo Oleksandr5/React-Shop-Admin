@@ -1,0 +1,101 @@
+.Layout {
+	height: auto;
+	min-height: 100vh;
+	display: flex;
+	flex-direction: column;
+}
+
+.header {
+	padding-top: 2vh;
+	padding-bottom: 12vh;
+	height: 11vh;
+	background: #fff;
+	/*    border-bottom: 1px solid #000;*/
+}
+
+.header h1 {
+	font-size: 2rem;
+	color: #419b4c;
+	text-transform: uppercase;
+}
+
+.Layout main {
+	display: flex;
+	flex-direction: column;
+	flex-grow: 1;
+	height: 78vh;
+	box-sizing: border-box;
+	overflow: hidden;
+}
+
+.footer {
+	padding-top: 2vh;
+	padding-bottom: 2vh;
+	height: 8vh;
+	width: 100%;
+	background: #000;
+	box-sizing: border-box;
+	overflow: hidden;
+}
+
+.footer .lnIcon i {
+	color: #fff;
+}
+
+.footer .lnIcon {
+	height: 20px;
+	width: 20px;
+	border-radius: 2px;
+	background: #0a66c2;
+	font-size: 10px;
+}
+
+.footer h5 {
+	color: #419b4c;
+}
+
+.children {
+	height: 79vh;
+	overflow: scroll;
+}
+
+.Layout h1.nameShop:hover {
+	background: -webkit-linear-gradient(#10ff2d, #7a7a7a);
+	-webkit-background-clip: text;
+	-webkit-text-fill-color: transparent;
+}
+
+.Layout a:hover {
+	color: #0000ff;
+	text-decoration: none;
+}
+
+@media (max-width: 991.98px) {
+}
+
+@media (max-width: 767.98px) {
+	.header {
+		padding-bottom: 9vh;
+		height: 9vh;
+	}
+	main {
+		height: 81vh !important;
+	}
+
+	.header h1 {
+		font-size: 1.6rem;
+	}
+}
+
+@media (max-width: 575.98px) {
+	.header h1 {
+		font-size: 1.2rem;
+	}
+	.header {
+		padding-bottom: 8vh;
+		height: 8vh;
+	}
+	main {
+		height: 82vh !important;
+	}
+}

@@ -1,0 +1,29 @@
+.Registr {
+	display: flex;
+	justify-content: center;
+	padding-top: 20px;
+	flex-grow: 1;
+	width: 100%;
+	padding-bottom: 10vh;
+}
+
+.Registr > div {
+	width: 100%;
+	padding: 0 20px;
+}
+
+.Registr h1 {
+	text-align: center;
+}
+
+.RegistrForm {
+	background: #eee;
+	box-shadow: 2px 2px 2px rgba(0, 0, 0, 0.5);
+	padding: 15px;
+	border-radius: 5px;
+}
+
+.Registr Button {
+	margin-right: 15px;
+	margin-top: 15px;
+}

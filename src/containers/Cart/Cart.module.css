@@ -1,0 +1,90 @@
+/*
+.Cart .input_in_cart{
+	width: 100px !important;
+}
+*/
+
+.productFoto {
+	height: 100px;
+	width: 100px;
+	background: grey;
+}
+
+.spanPromotion {
+	font-size: 0.8rem;
+	font-weight: bold;
+}
+
+.modalBodyCart {
+	height: 70vh;
+}
+
+.modalBodyCart input {
+	width: 100px;
+}
+
+.renderOrders {
+	/*    max-height: 55vh;*/
+}
+
+.deleteIcon:hover {
+	cursor: pointer;
+}
+
+.Registr {
+	display: flex;
+	justify-content: center;
+	flex-grow: 1;
+	width: 100%;
+	/*    background: linear-gradient(270deg, #cef2fa 0%, #59bfef 100%);*/
+}
+
+.Registr > div {
+	width: 100%;
+	padding: 0 20px;
+}
+
+.Registr h1 {
+	text-align: center;
+}
+
+.RegistrForm {
+	background: #eee;
+	box-shadow: 2px 2px 2px rgba(0, 0, 0, 0.5);
+	padding: 10px;
+	border-radius: 5px;
+}
+
+.Registr Button {
+	margin-right: 15px;
+	margin-top: 15px;
+}
+
+.btnTop {
+	z-index: 99;
+	position: absolute;
+	bottom: -50px;
+	right: 20px;
+	opacity: 0.5;
+}
+
+.btnCart {
+	height: 40px;
+	padding: 10px;
+}
+
+@media (max-width: 991.98px) {
+	.btnCart {
+		height: 30px;
+		min-width: 30px;
+		padding-left: 1vw;
+		padding-right: 1vw;
+		padding-top: 0;
+		padding-bottom: 0;
+	}
+}
+@media (max-width: 575.98px) {
+	.modalBodyCart input {
+		width: 120px;
+	}
+}

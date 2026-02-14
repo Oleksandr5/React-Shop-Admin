@@ -1,0 +1,94 @@
+.YourOrders {
+	padding-bottom: 5vh;
+}
+
+.CustomersOrders {
+	padding-top: 1rem;
+}
+
+.productFoto {
+	height: 100px;
+	width: 100px;
+	background: grey;
+}
+
+.modalBodyCart input {
+	width: 100px;
+}
+
+.renderOrders {
+	max-height: 70vh;
+}
+
+.deleteIcon:hover {
+	cursor: pointer;
+}
+
+.Registr {
+	display: flex;
+	justify-content: center;
+	padding-top: 10px;
+	flex-grow: 1;
+	width: 100%;
+	/*    background: linear-gradient(270deg, #cef2fa 0%, #59bfef 100%);*/
+}
+
+.Registr > div {
+	width: 100%;
+	padding: 0 20px;
+}
+
+.Registr h1 {
+	text-align: center;
+}
+
+.RegistrForm {
+	background: #eee;
+	box-shadow: 2px 2px 2px rgba(0, 0, 0, 0.5);
+	padding: 15px;
+	border-radius: 5px;
+}
+
+.Registr Button {
+	margin-right: 15px;
+	margin-top: 15px;
+}
+
+.btnTop {
+	z-index: 99;
+	position: absolute;
+	bottom: 50px;
+	left: 10px;
+	opacity: 0.5;
+}
+
+.btnRemove {
+	background: red;
+	border-radius: 50%;
+	color: #fff;
+	border: none;
+	cursor: pointer;
+	width: 30px;
+	height: 30px;
+	padding: 0;
+	margin: 0;
+	font-size: 18px;
+	bottom: 5px;
+	right: 5px;
+}
+
+.inputPrice {
+	width: 120px;
+}
+
+@media (max-width: 575.98px) {
+	.h5 {
+		font-size: 0.8rem;
+	}
+
+	.btnRemove {
+		width: 25px;
+		height: 25px;
+		font-size: 14px;
+	}
+}

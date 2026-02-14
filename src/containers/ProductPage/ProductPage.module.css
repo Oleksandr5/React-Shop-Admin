@@ -1,0 +1,48 @@
+.ProductPage {
+	height: auto;
+}
+
+/*
+.Product:nth-of-type(3n+1), .ProductPage:nth-of-type(3n+2) {
+	margin-right: 5%;
+}
+*/
+
+.Product h3 {
+	color: blue;
+	font-weight: bold;
+}
+
+.productFoto {
+	height: 200px;
+	background: grey;
+}
+
+.ProductPage h3 {
+	font-size: 16px;
+}
+
+.spanPromotion {
+	font-weight: bold;
+}
+
+.productFooter button:hover {
+	background: blue;
+}
+
+.productFooter input {
+	width: 100px;
+}
+
+.describe {
+	height: 100px;
+	background: #f9feff;
+}
+
+.describe::-webkit-scrollbar-thumb {
+	background-color: #afb2b3;
+}
+
+.describe::-webkit-scrollbar {
+	width: 3px;
+}

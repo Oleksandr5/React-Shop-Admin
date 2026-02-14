@@ -1,0 +1,15 @@
+.CategoriesListEdit {
+	padding-bottom: 5vh;
+}
+
+.CategoriesListEdit > div {
+	padding: 0 20px;
+}
+
+.btnTop {
+	z-index: 99;
+	position: absolute;
+	bottom: 45px;
+	right: 10px;
+	opacity: 0.5;
+}

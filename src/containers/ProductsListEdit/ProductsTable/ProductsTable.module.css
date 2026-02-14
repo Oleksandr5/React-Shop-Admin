@@ -1,0 +1,119 @@
+.ProductsTable {
+	width: 100%;
+	margin-bottom: 1rem;
+}
+
+.ProductsTable th,
+.ProductsTable tr {
+	border: 1px solid #000;
+}
+
+.ProductsTable th {
+	padding-top: 1rem;
+	padding-bottom: 1rem;
+}
+
+.ProductsTable .leftTitle {
+	display: none;
+	justify-content: flex-end;
+	align-items: center;
+	width: 50%;
+	padding-right: 1rem;
+	border-right: 1px solid #000;
+}
+
+.ProductsTable .headerTitle {
+	text-align: center;
+}
+
+.ProductsTable th .th_value {
+	text-align: center;
+}
+
+.ProductsTable th {
+	min-width: 50px;
+}
+
+.ProductsTable th > div select {
+	margin: 0 auto;
+}
+
+.ProductsTable th.min_width {
+	min-width: 20vw;
+}
+
+.resetFiltersAdmin {
+	color: red;
+	cursor: pointer;
+}
+
+.headerTitleSelect select {
+	width: 180px;
+}
+
+.popularityFilterAdmin {
+	color: red;
+	cursor: pointer;
+}
+
+.popularityFilterAdmin:hover {
+	font-weight: bold;
+}
+
+.ProductsTable th.th_image {
+	min-width: 150px;
+}
+
+@media (max-width: 991.98px) {
+	.ProductsTable .headerTitleCheckAll {
+		display: flex;
+		padding: 0;
+		height: 3rem;
+	}
+
+	.ProductsTable .headerTitle {
+		display: none;
+	}
+
+	.ProductsTable .trHeaderSelect {
+		display: flex;
+		flex-direction: column;
+	}
+
+	.ProductsTable .trHeaderSelect th {
+		padding-top: 0;
+		padding-bottom: 0;
+	}
+
+	.ProductsTable .headerTitleSelect,
+	.ProductsTable .headerTitleFilter {
+		display: block;
+	}
+
+	.ProductsTable .headerTitleFilter {
+		text-align: center;
+		padding-top: 0.5rem !important;
+	}
+
+	.ProductsTable .leftTitle {
+		display: flex;
+	}
+
+	.ProductsTable th .th_value {
+		display: flex;
+		justify-content: flex-start;
+		align-items: center;
+		width: 50%;
+		padding-left: 1rem;
+	}
+
+	.mob_d_none {
+		display: none;
+	}
+}
+
+@media (max-width: 575.98px) {
+	.ProductsTable {
+		font-size: 0.8rem;
+	}
+}

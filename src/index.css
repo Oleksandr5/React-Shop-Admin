@@ -1,0 +1,375 @@
+body {
+	margin: 0;
+	font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Roboto", "Oxygen", "Ubuntu", "Cantarell", "Fira Sans",
+		"Droid Sans", "Helvetica Neue", sans-serif;
+	-webkit-font-smoothing: antialiased;
+	-moz-osx-font-smoothing: grayscale;
+}
+
+code {
+	font-family: source-code-pro, Menlo, Monaco, Consolas, "Courier New", monospace;
+}
+
+.webkit_scrollbar_width::-webkit-scrollbar {
+	width: 7px;
+	height: 7px;
+}
+
+.webkit_scrollbar_style::-webkit-scrollbar-thumb {
+	background-color: #364969;
+	border-radius: 10px;
+}
+
+.filterToggle {
+	position: sticky;
+	top: 1px;
+	z-index: 10;
+	height: 165px;
+}
+
+.filterToggle .menuToggle {
+	height: 7vh;
+	background: #8bc9de;
+}
+
+.filterToggle .menuToggle label {
+	cursor: pointer;
+	text-align: center;
+}
+
+.wrapper {
+	margin: 0 auto;
+	width: 920px;
+}
+
+.navbarSort a {
+	font-size: 1rem;
+	padding-bottom: 0;
+}
+
+.aSortDesktop a {
+	padding-top: 0;
+	display: flex;
+	align-items: center;
+}
+
+.aSort .nav-link.active {
+	color: rgb(101 28 123) !important;
+	font-weight: 500 !important;
+}
+
+.navbarSort .navbar-toggler {
+	font-size: 1rem;
+	width: 30px;
+	height: 30px;
+	padding: 0;
+	display: flex;
+	justify-content: center;
+	align-items: center;
+}
+
+.navbarSort .navbar-nav input:focus {
+	box-shadow: none;
+}
+
+.searchBooks input {
+	height: 30px;
+}
+
+.searchBooks input:focus {
+	box-shadow: none;
+}
+
+.searchBooks i.fa-search,
+.navbarSort i.fa-search {
+	cursor: pointer;
+	position: absolute;
+	color: grey;
+}
+
+.searchBooks i.fa-search {
+	right: 10px;
+	bottom: 8px;
+}
+
+.navbarSort i.fa-search {
+	right: 15px;
+	bottom: 9px;
+}
+
+.navbarSort .navbar-toggler {
+	background: red;
+}
+
+.btnToggleSort.collapsed {
+	background: green;
+}
+
+.totalPriceInCart {
+	font-size: 12px;
+	font-weight: 400;
+	color: #a6a5a5;
+	max-width: 52px;
+	line-height: 10px;
+	/*    left: -60px;*/
+	top: 0;
+	text-transform: lowercase;
+}
+
+.divInfoQuantityVisitors h3,
+.divInfoQuantityOfDownloads h3 {
+	font-size: 1rem;
+	font-weight: bold;
+}
+
+#updateStatusQuantityVisitors,
+#statusUpdateQuantityOfDownloads {
+	height: 30px;
+	width: 30px;
+	padding: 0;
+}
+
+@media (max-width: 991.98px) {
+	#goToTop,
+	#goToTopCart {
+		height: 30px;
+		width: 30px;
+		margin-bottom: 5px;
+		padding: 0;
+	}
+
+	.navbarSort i.fa-search {
+		right: 15px;
+		bottom: 7px;
+	}
+}
+
+@media (max-width: 575.98px) {
+	.searchBooks input {
+		width: auto;
+	}
+}
+
+@media (min-width: 768px) and (orientation: landscape) {
+	.btnToggleSort {
+		display: none !important;
+	}
+}
+
+@media (max-width: 991.98px) {
+	.navbarSort .navbar-nav input {
+		height: 30px;
+	}
+}
+
+@media (max-width: 991.98px) {
+	.wrapper {
+		width: 95%;
+	}
+
+	.btn_to_cart {
+		height: 30px;
+		width: 30px;
+		margin-bottom: 5px;
+		padding: 0 !important;
+	}
+}
+
+.done {
+	color: red;
+}
+
+.filterToggle i::before {
+	background: transparent;
+}
+
+/*.number-wrapper: */
+
+.number-wrapper {
+	position: relative;
+}
+
+.number-wrapper:after,
+.number-wrapper:before {
+	position: absolute;
+	right: 5px;
+	width: 2em;
+	height: 1.5em;
+	font-size: 10px;
+	pointer-events: none;
+	background: #fff;
+}
+
+@media (max-width: 575.98px) {
+	.number-wrapper:after,
+	.number-wrapper:before {
+		font-size: 9px;
+	}
+}
+
+.number-wrapper:after {
+	top: 1em;
+	color: blue;
+	content: "\25B2";
+	margin-top: 1px;
+}
+
+.number-wrapper:before {
+	color: red;
+	content: "\25BC";
+	margin-bottom: 5px;
+	bottom: 0.5em;
+}
+
+/*.number-wrapper end */
+
+.successAuth,
+.h1Title,
+.infoAboutCustomer,
+#blockInfo,
+.divInfo,
+#blockInfo h2,
+.blockError {
+	font-size: 1rem;
+}
+
+.successAuth {
+	height: 10vh;
+	line-height: 1.1rem;
+}
+
+@media (max-width: 991.98px) {
+	.successAuth,
+	.h1Title,
+	.infoAboutCustomer,
+	#blockInfo,
+	.divInfo,
+	#blockInfo h2,
+	.blockError {
+		font-size: 0.8rem;
+	}
+}
+
+@media (max-width: 767.98px) {
+	/*
+	.successAuth, .h1Title, .infoAboutCustomer, #blockInfo, #blockInfo h2 {
+		font-size: 1.3rem;
+	}	
+*/
+
+	.divInfo {
+		font-size: 0.8rem;
+	}
+}
+
+@media (max-width: 575.98px) {
+	/*
+	.successAuth, .h1Title, .infoAboutCustomer, #blockInfo, #blockInfo h2 {
+		font-size: 1rem;
+	}
+*/
+	.divInfo {
+		font-size: 0.7rem;
+	}
+}
+
+.divInputNumber {
+	display: inline-block;
+	position: relative;
+}
+
+.divInputNumber input {
+	height: 30px;
+}
+
+.arrow:hover {
+	background: #ccc;
+}
+
+.arrow_minus,
+.arrow_plus {
+	width: 30px;
+	height: 30px;
+	border: 1px solid #000;
+	line-height: 15px;
+	cursor: pointer;
+}
+
+.arrow_minus {
+	top: 0;
+	left: 0;
+	color: red;
+}
+
+.arrow_plus {
+	top: 0;
+	right: 0;
+	color: blue;
+}
+
+input[type="number"]::-webkit-inner-spin-button,
+input[type="number"]::-webkit-outer-spin-button {
+	-webkit-appearance: none;
+}
+
+@media (max-width: 575.98px) {
+	.divInputNumber input {
+		height: 30px;
+	}
+
+	.arrow:hover {
+		background: #ccc;
+	}
+
+	.arrow_minus,
+	.arrow_plus {
+		width: 30px;
+		height: 30px;
+
+		line-height: 15px;
+	}
+
+	.btn_to_cart {
+		width: 30px;
+		height: 30px;
+		padding: 0 !important;
+	}
+}
+
+.filter_link:hover,
+.filter_link.active {
+	opacity: 0.7;
+	color: #ff0000 !important;
+	font-weight: bold;
+}
+
+/*btnBack``````````````*/
+.btnBack {
+	color: #8e2222;
+	font-size: 1rem;
+	font-weight: bold;
+	position: sticky;
+	top: 0;
+	background: #fff;
+	z-index: 10;
+	padding-left: 4vw;
+}
+
+.btnBack:hover {
+	color: #cc1111 !important;
+}
+/*btnBack.............*/
+
+.promotionFilter.active,
+.popularityFilterAdmin.active {
+	font-weight: bold;
+	color: green;
+}
+
+.selectPromotionsProduct {
+	width: 70px !important;
+}
+
+a:hover {
+	text-decoration: none !important;
+}

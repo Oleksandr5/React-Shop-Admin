@@ -1,0 +1,36 @@
+.CategoryCreator {
+	padding-top: 50px;
+	flex-grow: 1;
+	width: 100%;
+	padding-bottom: 5vh;
+}
+
+.CategoryCreator > div {
+	padding: 0 20px;
+}
+
+.CategoryCreator form {
+	background: #eee;
+	box-shadow: 2px 2px 2px rgba(0, 0, 0, 0.5);
+	padding: 15px;
+	border-radius: 5px;
+}
+
+.existingCategories {
+	height: 100px;
+	overflow: hidden;
+}
+
+.btnTop {
+	display: none;
+	z-index: 99;
+	position: absolute;
+	bottom: 10px;
+	right: 10px;
+}
+
+@media (max-width: 575.98px) {
+	.ModalAdd {
+		font-size: 0.8rem;
+	}
+}
