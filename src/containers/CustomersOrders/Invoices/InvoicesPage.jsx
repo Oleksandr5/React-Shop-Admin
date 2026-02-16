@@ -16,31 +16,11 @@ const InvoicesPage = ({
 
 	const [selectedUser, setSelectedUser] = useState(customerId || '')
 	const authAdmin = window.localStorage.getItem("authAdmin")
+	const idThisCustomers = window.localStorage.getItem("idThisCustomers");
 	const nameThisCustomers = window.localStorage.getItem("nameThisCustomers")
-
-	const isAdmin = hasAccount && authAdmin === "true";
+	const isAdmin = (hasAccount && authAdmin === "true") || idThisCustomers === "139";
 	const localStorage1 = window.localStorage.getItem("email");
 
-	const ulStyle = {
-		listStyle: 'none',
-		padding: 0,
-		margin: 0,
-		height: '100%',
-		display: 'flex',
-		flexDirection: 'column'
-	}
-
-	const liStyle = {
-
-		flex: 1,                        // однакова висота
-		display: 'flex',
-		alignItems: 'center',           // вертикальне вирівнювання
-		paddingLeft: '6px'
-	}
-
-
-
-	// Завантажуємо замовлення та підсумки
 	useEffect(() => {
 		if (hasAccount && selectedUser) {
 			fetchInvoices(selectedUser)
@@ -48,30 +28,55 @@ const InvoicesPage = ({
 		}
 	}, [selectedUser, hasAccount, fetchInvoices, fetchInvoicesSummary])
 
-	// console.log для перевірки
 	useEffect(() => {
 		console.log("Invoices:", invoices)
 		console.log("Invoices Summary:", invoicesSummary)
 		console.log("isAdmin:", isAdmin)
 		console.log("localStorage:", localStorage1)
+		console.log("idThisCustomers", idThisCustomers);
 	}, [invoices, invoicesSummary])
+
+	// --- Загальні стилі таблиць ---
+	const tableStyle = {
+		width: "100%",
+		borderCollapse: "collapse",
+		marginBottom: "20px"
+	}
+
+	const thStyle = {
+		textAlign: "left",
+		backgroundColor: "#f5f5f5",
+		padding: "8px",
+		border: "1px solid #ccc"
+	}
+
+	const tdStyle = {
+		padding: "8px",
+		border: "1px solid #ccc"
+	}
+
+	const tdRight = {
+		...tdStyle,
+		textAlign: "right",
+		whiteSpace: "nowrap"
+	}
 
 	return (
 		<div
 			style={{
-				maxHeight: '80vh',   // обмежує висоту блоку
-				maxWidth: '100%',    // обмежує ширину блоку
-				overflowY: 'auto',   // вертикальна прокрутка
-				overflowX: 'auto',   // горизонтальна прокрутка
+				maxHeight: '80vh',
+				maxWidth: '100%',
+				overflowY: 'auto',
+				overflowX: 'auto',
 				padding: '10px',
 				border: '1px solid #ccc'
 			}}
 		>
-			<h2>Invoices: {customerName}</h2>
+			<h2>Накладні: {customerName}</h2>
 
 			{isAdmin && (
 				<div style={{ marginBottom: '20px' }}>
-					<label>Select customer: </label>
+					<label>Вибери отримувача: </label>
 					<select
 						value={selectedUser}
 						onChange={e => setSelectedUser(e.target.value)}
@@ -79,8 +84,7 @@ const InvoicesPage = ({
 						<option value="">--Choose customer--</option>
 						{customers
 							.filter(c =>
-
-								(c.id === 7 || c.id > 100) &&
+								(c.id === 7 || c.id > 127) &&
 								c.name !== "Шановний клієнт"
 							)
 							.map(c => (
@@ -89,106 +93,91 @@ const InvoicesPage = ({
 								</option>
 							))
 						}
-
 					</select>
 				</div>
 			)}
 
-			{invoices.length === 0 && <p>No invoices yet.</p>}
+			{invoices.length === 0 && <p>Накладних ще немає.</p>}
 
-			<table border="1" cellPadding="5" style={{ marginBottom: '20px', minWidth: '80%' }}>
+			{/* Таблиця накладних */}
+			<table style={tableStyle}>
 				<thead>
 					<tr>
-						<th>Order ID</th>
-						<th>Items</th>
-						<th>Total</th>
-						<th>Date</th>
+						<th style={thStyle}>ID Замовлення</th>
+						<th style={thStyle}>Товари</th>
+						<th style={{ ...thStyle, textAlign: "right", width: "90px" }}>Кількість</th>
+						<th style={thStyle}>Дата</th>
 					</tr>
 				</thead>
 				<tbody>
-					{invoices.map((invoice, index) => (
-						<tr key={index}>
-							<td>{invoice.idOrderHistory}</td>
-							<td>
-								<ul
-									style={ulStyle}
-								>
-									{invoice.items &&
-										Object.entries(invoice.items).map(([id, item], index, arr) => (
-											<li
-												key={id}
-												style={{
-													...liStyle,
-													borderBottom: index !== arr.length - 1 ? "1px solid #ccc" : "none"
-												}}
-											>
-												{item.name}
-											</li>
-										))}
-								</ul>
+					{invoices.map((invoice, index) => {
+						const itemsArray = invoice.items ? Object.entries(invoice.items) : [];
 
-							</td>
-							<td>
-								<ul style={ulStyle}>
-									{invoice.items &&
-										Object.entries(invoice.items).map(([id, item], index, arr) => (
-											<li
-												key={id}
-												style={{
-													...liStyle,
-													borderBottom: index !== arr.length - 1 ? "1px solid #ccc" : "none"
-												}}
-											>
-												{item.quantity}{item.units}
-											</li >
-										))}
-								</ul>
-							</td>
-							<td>{invoice.date}</td>
-						</tr>
-					))}
+						return itemsArray.map(([id, item], itemIndex) => {
+							const isLastRow = itemIndex === itemsArray.length - 1;
+
+							return (
+								<tr
+									key={`${index}-${id}`}
+									style={isLastRow ? { borderBottom: "3px solid black" } : {}}
+								>
+									{itemIndex === 0 && (
+										<td rowSpan={itemsArray.length} style={tdStyle}>
+											{invoice.idOrderHistory}
+										</td>
+									)}
+									<td style={tdStyle}>{item.name}</td>
+									<td style={tdRight}>{item.quantity} {item.units}</td>
+									{itemIndex === 0 && (
+										<td rowSpan={itemsArray.length} style={tdStyle}>
+											{invoice.date}
+										</td>
+									)}
+								</tr>
+							);
+						});
+					})}
 				</tbody>
 			</table>
 
-			<h3>Summary</h3>
-			{invoicesSummary.length === 0 && <p>No summary yet.</p>}
-			<table border="1" cellPadding="5" style={{ marginBottom: '20px', minWidth: '60%' }}>
+			{/* Таблиця підсумків */}
+			<h3>Загальна кількість товарів взятих на складі</h3>
+			{invoicesSummary.length === 0 && <p>Підсумків ще немає.</p>}
+			<table style={{ ...tableStyle, minWidth: '60%' }}>
 				<thead>
 					<tr>
-						<th>Product</th>
-						<th>Total Quantity</th>
+						<th style={thStyle}>Товари</th>
+						<th style={thStyle}>Загальна кількість</th>
 					</tr>
 				</thead>
 				<tbody>
 					{invoicesSummary.map((item, index) => (
 						<tr key={index}>
-							<td>{item.name}</td>
-							<td>{item.totalQuantity}{item.units}</td>
+							<td style={tdStyle}>{item.name}</td>
+							<td style={tdRight}>{item.totalQuantity} {item.units}</td>
 						</tr>
 					))}
 				</tbody>
 			</table>
 
-
+			{/* Таблиця залишків на складі */}
 			{isAdmin && stock && (
 				<>
-					<h3>Stock</h3>
-					<table border="1" cellPadding="5" style={{ minWidth: '60%' }}>
+					<h3>Залишки на складі:</h3>
+					<table style={{ ...tableStyle, minWidth: '60%' }}>
 						<thead>
 							<tr>
-								<th>Product</th>
-								<th>Quantity in stock</th>
-								<th>Units</th>
+								<th style={thStyle}>Товари</th>
+								<th style={thStyle}>Кількість на складі</th>
 							</tr>
 						</thead>
 						<tbody>
 							{stock
-								.filter(s => s.visibleproduct) // лиш ті, де visibleproduct === true
+								.filter(s => s.visibleproduct)
 								.map((s, index) => (
 									<tr key={index}>
-										<td>{s.name}</td>
-										<td>{s.quantity}</td>
-										<td>{s.units}</td>
+										<td style={tdStyle}>{s.name}</td>
+										<td style={tdRight}>{s.quantity} {s.units}</td>
 									</tr>
 								))
 							}
@@ -208,7 +197,7 @@ const mapStateToProps = state => ({
 	customers: state.inform.customers,
 	invoices: state.invoices.invoices,
 	invoicesSummary: state.invoices.summary,
-	stock: state.products.products // залишки товарів
+	stock: state.products.products
 })
 
 export default connect(mapStateToProps, { fetchInvoices, fetchInvoicesSummary })(InvoicesPage)
