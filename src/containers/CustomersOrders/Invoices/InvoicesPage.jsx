@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react'
 import { connect } from 'react-redux'
 import { fetchInvoices, fetchInvoicesSummary } from '../../../redux/actions/invoices'
+import classes from './InvoicesPage.module.css'
 
 const InvoicesPage = ({
 	hasAccount,
@@ -14,122 +15,107 @@ const InvoicesPage = ({
 	stock
 }) => {
 
-	const [selectedUser, setSelectedUser] = useState(customerId || '')
-	const authAdmin = window.localStorage.getItem("authAdmin")
+	const [selectedUser, setSelectedUser] = useState(customerId || '');
+
+	const authAdmin = window.localStorage.getItem("authAdmin");
 	const idThisCustomers = window.localStorage.getItem("idThisCustomers");
-	const nameThisCustomers = window.localStorage.getItem("nameThisCustomers")
-	const isAdmin = (hasAccount && authAdmin === "true") || idThisCustomers === "139";
-	const localStorage1 = window.localStorage.getItem("email");
+
+	const isAdmin =
+		(hasAccount && authAdmin === "true") ||
+		["139", "155", "156"].includes(idThisCustomers);
 
 	useEffect(() => {
 		if (hasAccount && selectedUser) {
-			fetchInvoices(selectedUser)
-			fetchInvoicesSummary(selectedUser)
+			fetchInvoices(selectedUser);
+			fetchInvoicesSummary(selectedUser);
 		}
-	}, [selectedUser, hasAccount, fetchInvoices, fetchInvoicesSummary])
-
-	useEffect(() => {
-		console.log("Invoices:", invoices)
-		console.log("Invoices Summary:", invoicesSummary)
-		console.log("isAdmin:", isAdmin)
-		console.log("localStorage:", localStorage1)
-		console.log("idThisCustomers", idThisCustomers);
-	}, [invoices, invoicesSummary])
-
-	// --- Загальні стилі таблиць ---
-	const tableStyle = {
-		width: "100%",
-		borderCollapse: "collapse",
-		marginBottom: "20px"
-	}
-
-	const thStyle = {
-		textAlign: "left",
-		backgroundColor: "#f5f5f5",
-		padding: "8px",
-		border: "1px solid #ccc"
-	}
-
-	const tdStyle = {
-		padding: "8px",
-		border: "1px solid #ccc"
-	}
-
-	const tdRight = {
-		...tdStyle,
-		textAlign: "right",
-		whiteSpace: "nowrap"
-	}
+	}, [selectedUser, hasAccount, fetchInvoices, fetchInvoicesSummary]);
 
 	return (
-		<div
-			style={{
-				maxHeight: '80vh',
-				maxWidth: '100%',
-				overflowY: 'auto',
-				overflowX: 'auto',
-				padding: '10px',
-				border: '1px solid #ccc'
-			}}
-		>
-			<h2>Накладні: {customerName}</h2>
+		<div className={classes.wrapper}>
 
-			{isAdmin && (
-				<div style={{ marginBottom: '20px' }}>
-					<label>Вибери отримувача: </label>
-					<select
-						value={selectedUser}
-						onChange={e => setSelectedUser(e.target.value)}
-					>
-						<option value="">--Choose customer--</option>
-						{customers
-							.filter(c =>
-								(c.id === 7 || c.id > 127) &&
-								c.name !== "Шановний клієнт"
-							)
-							.map(c => (
-								<option key={c.id} value={c.id}>
-									{c.name} ({c.email})
-								</option>
-							))
-						}
-					</select>
-				</div>
-			)}
+			{/* HEADER */}
+			<div className={classes.pageHeader}>
+				<h2 className={classes.pageTitle}>
+					🧾 Накладні: {customerName}
+				</h2>
+
+				{isAdmin && (
+					<div className={classes.selectWrapper}>
+						<label className={classes.label}>
+							👤 Вибери отримувача:
+						</label>
+						<select
+							className={classes.select}
+							value={selectedUser}
+							onChange={e => setSelectedUser(e.target.value)}
+						>
+							<option value="">--Choose customer--</option>
+							{customers
+								.filter(c => (c.id === 7 || c.id > 127) && c.name !== "Шановний клієнт")
+								.map(c => (
+									<option key={c.id} value={c.id}>
+										{c.name} ({c.email})
+									</option>
+								))}
+						</select>
+					</div>
+				)}
+			</div>
 
 			{invoices.length === 0 && <p>Накладних ще немає.</p>}
 
-			{/* Таблиця накладних */}
-			<table style={tableStyle}>
+			<h3 className={classes.sectionTitle}>
+				📑 Замовлення:
+			</h3>
+
+			{/* ================= TABLE: НАКЛАДНІ ================= */}
+			<table className={classes.table}>
 				<thead>
 					<tr>
-						<th style={thStyle}>ID Замовлення</th>
-						<th style={thStyle}>Товари</th>
-						<th style={{ ...thStyle, textAlign: "right", width: "90px" }}>Кількість</th>
-						<th style={thStyle}>Дата</th>
+						<th style={{ width: "12%" }}>ID</th>
+						<th style={{ width: "48%" }}>Товари</th>
+						<th style={{ width: "20%" }} className={classes.alignRight}>Кі-сть</th>
+						<th style={{ width: "20%" }}>Дата</th>
 					</tr>
 				</thead>
+
 				<tbody>
 					{invoices.map((invoice, index) => {
-						const itemsArray = invoice.items ? Object.entries(invoice.items) : [];
+						const itemsArray = invoice.items
+							? Object.entries(invoice.items)
+							: [];
 
 						return itemsArray.map(([id, item], itemIndex) => {
-							const isLastRow = itemIndex === itemsArray.length - 1;
+
+							const isLastRowInInvoice =
+								itemIndex === itemsArray.length - 1;
+
+							const isNotLastInvoice =
+								index !== invoices.length - 1;
+
+							const shouldHaveBorder =
+								isLastRowInInvoice && isNotLastInvoice;
 
 							return (
 								<tr
 									key={`${index}-${id}`}
-									style={isLastRow ? { borderBottom: "3px solid black" } : {}}
+									className={shouldHaveBorder ? classes.invoiceDivider : ""}
 								>
 									{itemIndex === 0 && (
-										<td rowSpan={itemsArray.length} style={tdStyle}>
+										<td rowSpan={itemsArray.length}>
 											{invoice.idOrderHistory}
 										</td>
 									)}
-									<td style={tdStyle}>{item.name}</td>
-									<td style={tdRight}>{item.quantity} {item.units}</td>
+
+									<td>{item.name}</td>
+
+									<td className={classes.alignRight}>
+										{item.quantity} {item.units}
+									</td>
+
 									{itemIndex === 0 && (
-										<td rowSpan={itemsArray.length} style={tdStyle}>
+										<td rowSpan={itemsArray.length}>
 											{invoice.date}
 										</td>
 									)}
@@ -140,55 +126,66 @@ const InvoicesPage = ({
 				</tbody>
 			</table>
 
-			{/* Таблиця підсумків */}
-			<h3>Загальна кількість товарів взятих на складі</h3>
+			{/* ================= TABLE: ПІДСУМКИ ================= */}
+			<h3 className={classes.sectionTitle}>
+				📊 Загальна кількість товарів взятих на складі:
+			</h3>
+
 			{invoicesSummary.length === 0 && <p>Підсумків ще немає.</p>}
-			<table style={{ ...tableStyle, minWidth: '60%' }}>
+
+			<table className={classes.table}>
 				<thead>
 					<tr>
-						<th style={thStyle}>Товари</th>
-						<th style={thStyle}>Загальна кількість</th>
+						<th style={{ width: "80%" }}>Товари</th>
+						<th style={{ width: "20%" }} className={classes.alignRight}>Кі-сть</th>
 					</tr>
 				</thead>
+
 				<tbody>
 					{invoicesSummary.map((item, index) => (
 						<tr key={index}>
-							<td style={tdStyle}>{item.name}</td>
-							<td style={tdRight}>{item.totalQuantity} {item.units}</td>
+							<td>{item.name}</td>
+							<td className={classes.alignRight}>
+								{item.totalQuantity} {item.units}
+							</td>
 						</tr>
 					))}
 				</tbody>
 			</table>
 
-			{/* Таблиця залишків на складі */}
+			{/* ================= TABLE: ЗАЛИШКИ ================= */}
 			{isAdmin && stock && (
 				<>
-					<h3>Залишки на складі:</h3>
-					<table style={{ ...tableStyle, minWidth: '60%' }}>
+					<h3 className={classes.sectionTitle}>
+						📦 Залишки на складі:
+					</h3>
+
+					<table className={classes.table}>
 						<thead>
 							<tr>
-								<th style={thStyle}>Товари</th>
-								<th style={thStyle}>Кількість на складі</th>
+								<th style={{ width: "75%" }}>Товари</th>
+								<th style={{ width: "25%" }} className={classes.alignRight}>Кі-сть</th>
 							</tr>
 						</thead>
+
 						<tbody>
 							{stock
 								.filter(s => s.visibleproduct)
 								.map((s, index) => (
 									<tr key={index}>
-										<td style={tdStyle}>{s.name}</td>
-										<td style={tdRight}>{s.quantity} {s.units}</td>
+										<td>{s.name}</td>
+										<td className={classes.alignRight}>
+											{s.quantity} {s.units}
+										</td>
 									</tr>
-								))
-							}
+								))}
 						</tbody>
 					</table>
 				</>
 			)}
 		</div>
-	)
-
-}
+	);
+};
 
 const mapStateToProps = state => ({
 	hasAccount: state.inform.hasAccount,
