@@ -43,7 +43,7 @@ const InvoicesPage = ({
 				{isAdmin && (
 					<div className={classes.selectWrapper}>
 						<label className={classes.label}>
-							👤 Вибери отримувача:
+							👤 Виберіть отримувача:
 						</label>
 						<select
 							className={classes.select}
@@ -136,8 +136,8 @@ const InvoicesPage = ({
 			<table className={classes.table}>
 				<thead>
 					<tr>
-						<th style={{ width: "80%" }}>Товари</th>
-						<th style={{ width: "20%" }} className={classes.alignRight}>Кі-сть</th>
+						<th style={{ width: "75%" }}>Товари</th>
+						<th style={{ width: "25%" }} className={classes.alignRight}>Кі-сть</th>
 					</tr>
 				</thead>
 
