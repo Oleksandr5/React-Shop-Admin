@@ -1986,11 +1986,24 @@ export function changeStatusCustomersOrders(customerId, orderHistoryId, valueSel
 			};
 
 			await invoiceRef.set(invoiceData);
+			/* ========= 🔔 ADD NOTIFICATION ========= */
+
+			await db.ref(`orderNotifications/${customerId}/${cartItem.orderHistoryId}`).set({
+				orderId: cartItem.orderHistoryId,
+				customerId,
+				date: cartItem.date,
+				createdAt: Date.now()
+			});
+
 		}
 
 		if (oldStatus === 'completed' && valueSelectedStatusOrder === 'in process...') {
 			// видаляємо накладну
 			await invoiceRef.remove();
+			/* ========= 🔄 REMOVE NOTIFICATION ========= */
+			await db.ref(`orderNotifications/${customerId}/${cartItem.orderHistoryId}`).remove();
+
+
 		}
 
 		/* ========= 8️⃣ invoicesSummary — ПОВНИЙ ПЕРЕРАХУНОК ========= */

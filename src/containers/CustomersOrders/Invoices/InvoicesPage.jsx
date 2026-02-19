@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react'
 import { connect } from 'react-redux'
-import { fetchInvoices, fetchInvoicesSummary } from '../../../redux/actions/invoices'
+import { fetchInvoices, fetchInvoicesSummary, fetchOrderNotifications, deleteNotification, clearNotifications } from '../../../redux/actions/invoices'
 import classes from './InvoicesPage.module.css'
 
 const InvoicesPage = ({
@@ -12,11 +12,15 @@ const InvoicesPage = ({
 	fetchInvoices,
 	fetchInvoicesSummary,
 	customers,
+	notifications,
+	fetchOrderNotifications,
+	deleteNotification,
+	clearNotifications,
 	stock
 }) => {
 
 	const [selectedUser, setSelectedUser] = useState(customerId || '');
-
+	console.log('notifications:', notifications)
 	const authAdmin = window.localStorage.getItem("authAdmin");
 	const idThisCustomers = window.localStorage.getItem("idThisCustomers");
 
@@ -28,14 +32,68 @@ const InvoicesPage = ({
 		if (hasAccount && selectedUser) {
 			fetchInvoices(selectedUser);
 			fetchInvoicesSummary(selectedUser);
+			fetchOrderNotifications(selectedUser);
 		}
-	}, [selectedUser, hasAccount, fetchInvoices, fetchInvoicesSummary]);
+	}, [selectedUser, hasAccount, fetchInvoices, fetchInvoicesSummary, fetchOrderNotifications]);
 
 	return (
 		<div className={classes.wrapper}>
 
+			{notifications.length > 0 && (
+				<div className={classes.notificationsBlock}>
+
+					<div className={classes.notificationsHeader}>
+						<h3>🔔 Підтверджені замовлення</h3>
+
+						<button
+							className={classes.clearBtn}
+							onClick={() => {
+								if (window.confirm("Очистити всі повідомлення?")) {
+									// для адміна передаємо пустий параметр
+									clearNotifications(isAdmin ? null : selectedUser);
+								}
+							}}
+						>
+							❌ Очистити всі
+						</button>
+
+					</div>
+
+					<div className={classes.notificationsList}>
+						{notifications.map((n) => (
+							<div key={n.orderId} className={classes.notificationItem}>
+
+								<div>
+									<strong>Замовлення #{n.orderId}</strong>
+									<div className={classes.meta}>
+										👤 {n.customerId} ({customers.find(c => c.id === n.customerId)?.name || 'Без імені'}) | 📅 {n.date}
+
+									</div>
+								</div>
+
+								<button
+									className={classes.deleteBtn}
+									onClick={() => {
+										if (window.confirm("Видалити це повідомлення?")) {
+											deleteNotification(n); // передаємо весь об’єкт notification
+										}
+									}}
+								>
+									🗑
+								</button>
+
+
+							</div>
+						))}
+					</div>
+
+				</div>
+			)}
+
 			{/* HEADER */}
 			<div className={classes.pageHeader}>
+
+
 				<h2 className={classes.pageTitle}>
 					🧾 Накладні: {customerName}
 				</h2>
@@ -194,7 +252,9 @@ const mapStateToProps = state => ({
 	customers: state.inform.customers,
 	invoices: state.invoices.invoices,
 	invoicesSummary: state.invoices.summary,
-	stock: state.products.products
+	stock: state.products.products,
+	notifications: state.invoices.notifications
+
 })
 
-export default connect(mapStateToProps, { fetchInvoices, fetchInvoicesSummary })(InvoicesPage)
+export default connect(mapStateToProps, { fetchInvoices, fetchInvoicesSummary, fetchOrderNotifications, deleteNotification, clearNotifications })(InvoicesPage)

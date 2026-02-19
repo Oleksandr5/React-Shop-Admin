@@ -116,3 +116,71 @@
 		font-size: 18px;
 	}
 }
+
+.notificationsBlock {
+	margin-bottom: 30px;
+	padding: 20px;
+	background: #f4f8ff;
+	border-radius: 12px;
+	border: 1px solid #dce6ff;
+}
+
+.notificationsHeader {
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	margin-bottom: 15px;
+}
+
+.notificationsHeader h3 {
+	font-size: 16px; /* трохи більший шрифт */
+	font-weight: 600;
+	color: #1a1a1a; /* темніший колір */
+}
+
+.notificationsList {
+	display: flex;
+	flex-direction: column;
+	gap: 10px;
+}
+
+.notificationItem {
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	padding: 14px 18px;
+	background: #e6f0ff; /* світліший синій фон для контрасту */
+	border-radius: 10px;
+	box-shadow: 0 2px 6px rgba(0,0,0,0.1); /* трохи яскравіша тінь */
+	transition: 0.2s;
+	font-weight: 500; /* трохи жирніше */
+	color: #000; /* чорний текст */
+}
+
+.notificationItem:hover {
+	transform: translateY(-2px);
+	box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+}
+
+
+.meta {
+	font-size: 13px;
+	color: #666;
+	margin-top: 4px;
+}
+
+.clearBtn {
+	background: #ff5252;
+	color: white;
+	border: none;
+	padding: 6px 12px;
+	border-radius: 6px;
+	cursor: pointer;
+}
+
+.deleteBtn {
+	background: transparent;
+	border: none;
+	font-size: 18px;
+	cursor: pointer;
+}

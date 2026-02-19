@@ -1,8 +1,9 @@
-import { UPDATE_INVOICES, UPDATE_INVOICES_SUMMARY } from "../actions/invoices"; // шлях під твій проект
+import { UPDATE_INVOICES, UPDATE_INVOICES_SUMMARY, SET_NOTIFICATIONS } from "../actions/invoices"; // шлях під твій проект
 
 const initialState = {
 	invoices: [],
 	summary: [],
+	notifications: [],
 	loading: false
 };
 
@@ -18,6 +19,12 @@ export default function invoicesReducer(state = initialState, action) {
 			return {
 				...state,
 				summary: action.payload
+			};
+
+		case SET_NOTIFICATIONS:
+			return {
+				...state,
+				notifications: action.payload
 			};
 
 		default:
