@@ -169,18 +169,106 @@
 	margin-top: 4px;
 }
 
-.clearBtn {
-	background: #ff5252;
-	color: white;
-	border: none;
-	padding: 6px 12px;
-	border-radius: 6px;
-	cursor: pointer;
+/* --- БАЗОВІ СТИЛІ ЕЛЕМЕНТІВ --- */
+
+.usedWrapper {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
 }
 
-.deleteBtn {
-	background: transparent;
-	border: none;
-	font-size: 18px;
-	cursor: pointer;
+.totalBadge {
+    display: inline-block;
+    min-width: 40px;
+    padding: 6px 8px;
+    background: #e3f2fd;
+    color: #1976d2;
+    border-radius: 4px;
+    font-weight: bold;
+    text-align: center;
+    border: 1px solid #bbdefb;
+}
+
+/* Уніфіковані інпути */
+.inputSmall, .inputAgreement {
+    height: 36px; /* Однаковая висота з кнопками */
+    padding: 0 8px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    font-size: 14px;
+    box-sizing: border-box;
+}
+
+.inputSmall { width: 70px; }
+.inputAgreement { width: 100px; }
+
+/* --- УНІФІКОВАНІ КНОПКИ --- */
+/* Загальний клас для всіх кнопок управління (якщо хочете додати в JSX) 
+   або просто однакові параметри в кожному класі */
+
+
+
+.btnAdd, .btnHistory, .btnUndo, .clearBtn {
+    height: 36px;
+    padding: 0 15px;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-weight: 500;
+    font-size: 14px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background-color 0.2s;
+    color: white !important;
+}
+
+.clearBtn {background-color: #faf8fe !important; border: 2px solid #000000; color: rgb(11, 11, 11) !important;}
+.clearBtn:hover {background-color: #d2d0d9 !important; border: 2px solid #000; color: rgb(17, 2, 2) !important;}
+
+.btnAdd { background-color: #28a745 !important; }
+.btnAdd:hover { background-color: #218838 !important; box-shadow: 0 4px 10px rgba(0, 0, 0, 0.25);}
+
+.btnHistory { background-color: #6c757d !important; }
+.btnHistory:hover { background-color: #5a6268 !important;  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.25);}
+
+.btnUndo { background-color: #da1c0b !important; }
+.btnUndo:hover { background-color: #9d0b08 !important;  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.25);}
+
+.undoIcon {
+    font-size: 18px;
+    line-height: 0;	
+}
+
+/* --- МОБІЛЬНА ВЕРСІЯ (до 600px) --- */
+@media (max-width: 600px) {
+    .usedWrapper {
+        display: flex;
+        flex-direction: column; /* Все в один стовпчик */
+        align-items: stretch; /* Розтягуємо на всю ширину */
+        width: 100%;
+        gap: 8px;
+    }
+
+    /* Ряд для інпутів, щоб вони були поруч навіть на мобільних */
+    /* Якщо хочете інпути теж один під одним — просто видаліть цей блок */
+    .inputSmall, .inputAgreement {
+        width: 100%;
+        max-width: none;
+    }
+
+    .totalBadge {
+        width: 100%;
+        box-sizing: border-box;
+        padding: 10px;
+    }
+
+    .btnAdd, .btnHistory, .btnUndo {
+        width: 100%; /* Кнопки на всю ширину */
+        height: 42px; /* Трохи більша висота для зручності натискання пальцем */
+        max-width: none;
+    }
+
+	.clearBtn {height: 48px !important;}
 }

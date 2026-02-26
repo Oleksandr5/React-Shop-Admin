@@ -212,7 +212,7 @@ class CustomersOrders extends Component {
 		let customerId = +url.substring(url.lastIndexOf('/') + 1)
 
 		const thisCustomer = this.props.customers.filter(customer => customer.id === customerId)[0]
-
+		let name = thisCustomer.name
 		const ordersHistory = this.props.ordersHistory
 
 		const thisOrdersHistory = ordersHistory.filter(order => order.customerId === customerId)[0] ? ordersHistory.filter(order => order.customerId === customerId)[0].cartsHistory : null
@@ -269,7 +269,14 @@ class CustomersOrders extends Component {
 													</p>
 												</div>
 
-												<button className={`position-absolute ${classes.btnRemove}`} onClick={() => this.props.removeOrderHistoryCustomer(customerId, order.orderHistoryId)}>
+												<button
+													className={`position-absolute ${classes.btnRemove}`}
+													onClick={() => {
+														if (window.confirm(`Видалити замовлення клієнта ${name}?`)) {
+															this.props.removeOrderHistoryCustomer(customerId, order.orderHistoryId);
+														}
+													}}
+												>
 													<i className="fa fa-times" aria-hidden="true"></i>
 												</button>
 											</div>

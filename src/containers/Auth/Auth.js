@@ -7,6 +7,7 @@ import { connect } from 'react-redux'
 import { NavLink } from 'react-router-dom'
 
 import { authUser, singOutAccount } from '../../redux/actions/inform'
+import firebase from 'firebase'; // <-- додано для доступів (🔹)
 
 class Auth extends Component {
 
@@ -46,7 +47,13 @@ class Auth extends Component {
 		},
 		email: '',
 		password: '',
-		textErrorAuth: ''
+		textErrorAuth: '',
+		// 🔹 новий стан для доступів
+		uidToAdd: '',
+		invoices: false,
+		usedMaterials: false,
+		fullAccess: false, // 🔹 новий вид доступу
+		admins: {}
 	}
 
 	submitHandler = event => {
@@ -159,12 +166,114 @@ class Auth extends Component {
 	}
 
 	componentDidMount() {
+		this.adminsRef = firebase.database().ref('settings/admins');
+		this.adminsRef.on('value', snapshot => {
+			let admins = snapshot.val() || {};
+
+			// Якщо хочемо забезпечити fullAccess для id "7" за замовчуванням
+			if (!admins['7']) {
+				this.adminsRef.child('7').set({
+					fullAccess: true,
+					invoices: true,
+					usedMaterials: true
+				});
+				admins['7'] = { fullAccess: true, invoices: true, usedMaterials: true };
+			}
+
+			this.setState({ admins });
+		});
 
 	}
 
+	componentWillUnmount() {
+		if (this.adminsRef) this.adminsRef.off();
+	}
+
+	// 🔹 Додавання або оновлення доступів
+	addOrUpdateAdmin = async () => {
+		const { uidToAdd, invoices, usedMaterials, fullAccess } = this.state;
+		if (!uidToAdd.trim()) return;
+
+		const userRef = firebase.database().ref(`settings/admins/${uidToAdd.trim()}`);
+
+		try {
+			await userRef.transaction(currentData => {
+				if (!currentData) {
+					// новий користувач — створюємо об'єкт із вибраними доступами
+					return {
+						invoices: !!invoices,
+						usedMaterials: !!usedMaterials,
+						fullAccess: !!fullAccess
+					};
+				} else {
+					// існуючий користувач — оновлюємо лише ті права, що вибрав адмін
+					return {
+						invoices: invoices ? true : currentData.invoices,
+						usedMaterials: usedMaterials ? true : currentData.usedMaterials,
+						fullAccess: fullAccess ? true : currentData.fullAccess
+					};
+				}
+			});
+
+			// очищаємо форму
+			this.setState({ uidToAdd: '', invoices: false, usedMaterials: false, fullAccess: false });
+
+		} catch (e) {
+			console.error("Помилка додавання/оновлення:", e);
+		}
+	}
+
+	// 🔹 Видалення конкретного доступу
+	removeAdminAccess = async (uid, accessType) => {
+		if (!window.confirm(`Видалити доступ "${accessType}" у користувача ${uid}?`)) return;
+
+		const userRef = firebase.database().ref(`settings/admins/${uid}`);
+
+		try {
+			await userRef.transaction(currentData => {
+				if (!currentData) return;
+
+				const updatedData = { ...currentData, [accessType]: false };
+				if (!updatedData.invoices && !updatedData.usedMaterials && !updatedData.fullAccess) return null;
+
+				return updatedData;
+			});
+
+		} catch (e) {
+			console.error("Помилка видалення доступу:", e);
+		}
+	}
+
+	// 🔹 Список адміністраторів
+	renderAdminsList() {
+		const { admins } = this.state;
+		return (
+			<ul className="list-group list-group-flush mb-3">
+				{Object.entries(admins).map(([uid, rights]) => (
+					<li key={uid} className="list-group-item d-flex justify-content-between align-items-center p-1" style={{ fontSize: '0.9rem' }}>
+						<div>
+							<strong>{uid}</strong> — Invoices: {rights.invoices ? '✅' : '❌'}, Materials: {rights.usedMaterials ? '✅' : '❌'}, FullAccess: {rights.fullAccess ? '✅' : '❌'}
+						</div>
+						<div>
+							{rights.invoices && <button className="btn btn-sm btn-outline-danger me-1" onClick={() => this.removeAdminAccess(uid, 'invoices')}>&times; Invoices</button>}
+							{rights.usedMaterials && <button className="btn btn-sm btn-outline-danger me-1" onClick={() => this.removeAdminAccess(uid, 'usedMaterials')}>&times; Materials</button>}
+							{rights.fullAccess && <button className="btn btn-sm btn-outline-danger" onClick={() => this.removeAdminAccess(uid, 'fullAccess')}>&times; FullAccess</button>}
+						</div>
+					</li>
+				))}
+			</ul>
+		)
+	}
+
+
 	render() {
 
+		const { uidToAdd, invoices, usedMaterials, fullAccess, admins } = this.state;
 		const { hasAccount } = this.props
+
+		// ✅ перевірка, чи користувач має fullAccess
+		const idThisCustomers = window.localStorage.getItem("idThisCustomers");
+		const isAdminFullAccess = hasAccount && admins[idThisCustomers]?.fullAccess;
 
 		return (
 			<div className={`mb-3 overflow-auto webkit_scrollbar_width webkit_scrollbar_style ${classes.Auth}`}>
@@ -201,7 +310,7 @@ class Auth extends Component {
 								disabled={!this.state.isFormValid || this.props.hasAccount}
 							>
 								Ввійти
-						</Button>
+							</Button>
 
 							: null}
 
@@ -234,7 +343,71 @@ class Auth extends Component {
 
 
 				</div>
+				{/* 🔹 блок керування доступами лише для користувачів з fullAccess */}
+				{isAdminFullAccess && (
+					<div className={classes.AccessControl}>
+						<h4>Керування доступом</h4>
+						<h6>Список користувачів:</h6>
+						{this.renderAdminsList()}
 
+						<div className="mt-3 d-flex flex-column">
+							<div className="mb-2">
+								<Input
+									label="UID користувача"
+									value={uidToAdd}
+									onChange={(e) => this.setState({ uidToAdd: e.target.value })}
+								/>
+							</div>
+
+							<div className="form-check mb-2">
+								<input
+									type="checkbox"
+									className="form-check-input"
+									id="invoices"
+									checked={invoices}
+									onChange={(e) => this.setState({ invoices: e.target.checked })}
+								/>
+								<label className="form-check-label" htmlFor="invoices">
+									Доступ до Invoices
+								</label>
+							</div>
+
+							<div className="form-check mb-2">
+								<input
+									type="checkbox"
+									className="form-check-input"
+									id="usedMaterials"
+									checked={usedMaterials}
+									onChange={(e) => this.setState({ usedMaterials: e.target.checked })}
+								/>
+								<label className="form-check-label" htmlFor="usedMaterials">
+									Доступ до Used Materials
+								</label>
+							</div>
+
+							<div className="form-check mb-2">
+								<input
+									type="checkbox"
+									className="form-check-input"
+									id="fullAccess"
+									checked={fullAccess}
+									onChange={(e) => this.setState({ fullAccess: e.target.checked })}
+								/>
+								<label className="form-check-label" htmlFor="fullAccess">
+									Full Access
+								</label>
+							</div>
+
+							<Button
+								selfType="success"
+								className={classes.btnAddAccess}
+								onClick={this.addOrUpdateAdmin}
+							>
+								Додати / Оновити доступ
+							</Button>
+						</div>
+					</div>
+				)}
 			</div>
 		)
 	}

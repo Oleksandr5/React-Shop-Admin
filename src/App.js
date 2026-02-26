@@ -17,8 +17,33 @@ import CategoriesListEdit from './containers/CategoriesListEdit/CategoriesListEd
 import SubcategoriesListEdit from './containers/SubcategoriesListEdit/SubcategoriesListEdit'
 import { Route, Switch, Redirect } from 'react-router-dom'
 import InvoicesPage from "./containers/CustomersOrders/Invoices/InvoicesPage"
+import firebase from 'firebase/app'  // <-- Додано для Firebase ⬅
+import 'firebase/database'           // <-- Додано для Firebase ⬅
 
 class App extends Component {
+
+	// ================= ДОДАНО =================
+	componentDidMount() {  // <-- Додано ⬅
+		const adminsRef = firebase.database().ref('settings/admins');  // <-- Додано ⬅
+
+		adminsRef.once('value', snapshot => {  // <-- Додано ⬅
+			if (!snapshot.exists()) {  // <-- Додано ⬅
+				const initialAdmins = {   // <-- Додано ⬅
+					"7": {                  // <-- Додано ⬅
+						invoices: true,       // <-- Додано ⬅
+						usedMaterials: true,   // <-- Додано ⬅
+						fullAccess: true
+					}                        // <-- Додано ⬅
+					// тут можна додати інших користувачів при потребі
+				};                         // <-- Додано ⬅
+
+				adminsRef.set(initialAdmins)  // <-- Додано ⬅
+					.then(() => console.log("Доступи для адмінів ініціалізовано"))  // <-- Додано ⬅
+					.catch(error => console.error("Помилка ініціалізації доступів:", error));  // <-- Додано ⬅
+			}  // <-- Додано ⬅
+		});  // <-- Додано ⬅
+	}  // <-- Додано ⬅
+	// ======================
 
 	render() {
 

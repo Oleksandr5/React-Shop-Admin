@@ -198,6 +198,7 @@ class ProductItem extends Component {
 		let id = product.id
 
 		let checked = product.checked
+		let name = product.name
 
 		if (checked) {
 			cls.push('done') // in index.css
@@ -348,7 +349,16 @@ class ProductItem extends Component {
 				<th>
 					<div className={classes.leftTitle}>remove</div>
 					<div className={classes.th_value}>
-						<button className={classes.btnRemove} onClick={() => this.props.removeProducts(id)}><i className="fa fa-times" aria-hidden="true"></i></button>
+						<button
+							className={classes.btnRemove}
+							onClick={() => {
+								if (window.confirm(`Видалити продукт ${name}?`)) {
+									this.props.removeProducts(id);
+								}
+							}}
+						>
+							<i className="fa fa-times" aria-hidden="true"></i>
+						</button>
 					</div>
 				</th>
 			</tr>

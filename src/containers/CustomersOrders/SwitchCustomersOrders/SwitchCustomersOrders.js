@@ -33,7 +33,16 @@ class SwitchCustomersOrders extends Component {
 							<p>Замовлення користувача <span className="text-info">{thisCustomer.name}</span> під id = <span className="text-info">{orders.customerId}</span><span className="d-block"></span> Статус: {statusInProcess ? <span><span className="text-danger">in process...</span><span className="d-block"></span>date:  <span className="text-dark">{`${dateLastOrdersInProcess} 2`}</span></span> : <span className="text-success">completed</span>}</p>
 
 						</NavLink>
-						<button className={`ml-0 mb-2 mb-md-0 ml-md-auto ${classes.btnRemove}`} onClick={() => this.props.removeOrdersHistoryCustomer(orders.customerId, 'SwitchCustomersOrders')}><i className="fa fa-times" aria-hidden="true"></i></button>
+						<button
+							className={`ml-0 mb-2 mb-md-0 ml-md-auto ${classes.btnRemove}`}
+							onClick={() => {
+								if (window.confirm(`Видалити всі замовлення клієнта ${thisCustomer.name}?`)) {
+									this.props.removeOrdersHistoryCustomer(orders.customerId, 'SwitchCustomersOrders');
+								}
+							}}
+						>
+							<i className="fa fa-times" aria-hidden="true"></i>
+						</button>
 					</li>
 				)
 			})

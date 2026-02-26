@@ -19,7 +19,7 @@ class SubcategoryItem extends Component {
 		let idCategory = this.props.categoryId
 		let subcategoryId = this.props.subcategoryId
 		let thisSubcategory = this.props.thisSubcategory
-
+		let name = thisSubcategory.name
 		const cls = [classes.SubcategoryItem]
 
 		let indexCategory
@@ -79,7 +79,16 @@ class SubcategoryItem extends Component {
 				<th>
 					<div className={classes.leftTitle}>remove</div>
 					<div className={classes.th_value}>
-						<button className={classes.btnRemove} onClick={() => this.props.removeSubcategories(idCategory, subcategoryId)} ><i className="fa fa-times" aria-hidden="true"></i></button>
+						<button
+							className={classes.btnRemove}
+							onClick={() => {
+								if (window.confirm(`Видалити підкатегорію ${name}?`)) {
+									this.props.removeSubcategories(idCategory, subcategoryId);
+								}
+							}}
+						>
+							<i className="fa fa-times" aria-hidden="true"></i>
+						</button>
 					</div>
 				</th>
 			</tr>

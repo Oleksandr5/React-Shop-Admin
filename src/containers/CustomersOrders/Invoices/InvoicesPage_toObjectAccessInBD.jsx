@@ -202,37 +202,28 @@ const InvoicesPage = ({
 
 	const [inputValues, setInputValues] = useState({});
 	const [selectedUser, setSelectedUser] = useState(customerId || '');
-	const [admins, setAdmins] = useState({}); // ← стан для доступів з Firebase
-
+	console.log('notifications:', notifications)
 	const authAdmin = window.localStorage.getItem("authAdmin");
 	const idThisCustomers = window.localStorage.getItem("idThisCustomers");
 
-	// --- завантаження доступів з Firebase ---
+
+	const isAdmin =
+		(hasAccount && authAdmin === "true") ||
+		["139", "155", "156"].includes(idThisCustomers);
+
+	const isAdminUsedMaterials =
+		(hasAccount && authAdmin === "true") ||
+		["155"].includes(idThisCustomers);
+
 	useEffect(() => {
-		const ref = firebase.database().ref('settings/admins');
-		ref.on('value', snapshot => {
-			setAdmins(snapshot.val() || {});
-		});
-		return () => ref.off();
-	}, []);
-
-	// --- перевірка доступів ---
-	const isAdminInvoices = (hasAccount && authAdmin === "true") ||
-		(!!admins[idThisCustomers]?.invoices);
-
-	const isAdminUsedMaterials = (hasAccount && authAdmin === "true") ||
-		(!!admins[idThisCustomers]?.usedMaterials);
-
-	// --- Вибраний користувач ---
-	useEffect(() => {
+		// Виконується один раз при завантаженні компонента
 		const savedId = window.localStorage.getItem('idSelectedCustomer') || idThisCustomers;
 		if (savedId) {
 			setSelectedUser(savedId);
 			window.localStorage.setItem('idSelectedCustomer', savedId);
 		}
-	}, []);
+	}, []); // пустий масив залежностей
 
-	// --- Завантаження накладних та повідомлень ---
 	useEffect(() => {
 		if (hasAccount && selectedUser) {
 			fetchInvoices(selectedUser);
@@ -241,7 +232,6 @@ const InvoicesPage = ({
 		}
 	}, [selectedUser, hasAccount, fetchInvoices, fetchInvoicesSummary, fetchOrderNotifications]);
 
-	// --- Завантаження використаних матеріалів ---
 	useEffect(() => {
 		if (selectedUser) {
 			fetchUsedMaterials(selectedUser);
@@ -251,7 +241,6 @@ const InvoicesPage = ({
 	return (
 		<div className={classes.wrapper}>
 
-			{/* ПОВІДОМЛЕННЯ */}
 			{isAdminUsedMaterials && notifications.length > 0 && (
 				<div className={classes.notificationsBlock}>
 
@@ -262,7 +251,8 @@ const InvoicesPage = ({
 							className={classes.clearBtn}
 							onClick={() => {
 								if (window.confirm("Очистити всі повідомлення?")) {
-									clearNotifications(isAdminInvoices ? null : selectedUser);
+									// для адміна передаємо пустий параметр
+									clearNotifications(isAdmin ? null : selectedUser);
 								}
 							}}
 						>
@@ -279,6 +269,7 @@ const InvoicesPage = ({
 									<strong>Замовлення #{n.orderId}</strong>
 									<div className={classes.meta}>
 										👤 {n.customerId} ({customers.find(c => c.id === n.customerId)?.name || 'Без імені'}) | 📅 {n.date}
+
 									</div>
 								</div>
 
@@ -286,12 +277,13 @@ const InvoicesPage = ({
 									className={classes.deleteBtn}
 									onClick={() => {
 										if (window.confirm(`Видалити замовлення #${n.orderId}?`)) {
-											deleteNotification(n);
+											deleteNotification(n); // передаємо весь об’єкт notification
 										}
 									}}
 								>
 									🗑
 								</button>
+
 
 							</div>
 						))}
@@ -302,20 +294,24 @@ const InvoicesPage = ({
 
 			{/* HEADER */}
 			<div className={classes.pageHeader}>
+
+
 				<h2 className={classes.pageTitle}>
 					🧾 Накладні: {customerName}
 				</h2>
 
-				{isAdminInvoices && (
+				{isAdmin && (
 					<div className={classes.selectWrapper}>
-						<label className={classes.label}>👤 Виберіть отримувача:</label>
+						<label className={classes.label}>
+							👤 Виберіть отримувача:
+						</label>
 						<select
 							className={classes.select}
 							value={selectedUser}
 							onChange={e => {
 								const userId = e.target.value;
 								setSelectedUser(userId);
-								window.localStorage.setItem('idSelectedCustomer', userId);
+								window.localStorage.setItem('idSelectedCustomer', userId); // зберігаємо вибраного клієнта
 							}}
 						>
 							<option value="">--Choose customer--</option>
@@ -333,9 +329,11 @@ const InvoicesPage = ({
 
 			{invoices.length === 0 && <p>Накладних ще немає.</p>}
 
-			<h3 className={classes.sectionTitle}>📑 Замовлення:</h3>
+			<h3 className={classes.sectionTitle}>
+				📑 Замовлення:
+			</h3>
 
-			{/* TABLE: НАКЛАДНІ */}
+			{/* ================= TABLE: НАКЛАДНІ ================= */}
 			<table className={classes.table}>
 				<thead>
 					<tr>
@@ -348,18 +346,43 @@ const InvoicesPage = ({
 
 				<tbody>
 					{invoices.map((invoice, index) => {
-						const itemsArray = invoice.items ? Object.entries(invoice.items) : [];
+						const itemsArray = invoice.items
+							? Object.entries(invoice.items)
+							: [];
+
 						return itemsArray.map(([id, item], itemIndex) => {
-							const isLastRowInInvoice = itemIndex === itemsArray.length - 1;
-							const isNotLastInvoice = index !== invoices.length - 1;
-							const shouldHaveBorder = isLastRowInInvoice && isNotLastInvoice;
+
+							const isLastRowInInvoice =
+								itemIndex === itemsArray.length - 1;
+
+							const isNotLastInvoice =
+								index !== invoices.length - 1;
+
+							const shouldHaveBorder =
+								isLastRowInInvoice && isNotLastInvoice;
 
 							return (
-								<tr key={`${index}-${id}`} className={shouldHaveBorder ? classes.invoiceDivider : ""}>
-									{itemIndex === 0 && <td rowSpan={itemsArray.length}>{invoice.idOrderHistory}</td>}
+								<tr
+									key={`${index}-${id}`}
+									className={shouldHaveBorder ? classes.invoiceDivider : ""}
+								>
+									{itemIndex === 0 && (
+										<td rowSpan={itemsArray.length}>
+											{invoice.idOrderHistory}
+										</td>
+									)}
+
 									<td>{item.name}</td>
-									<td className={classes.alignRight}>{item.quantity} {item.units}</td>
-									{itemIndex === 0 && <td rowSpan={itemsArray.length}>{invoice.date}</td>}
+
+									<td className={classes.alignRight}>
+										{item.quantity} {item.units}
+									</td>
+
+									{itemIndex === 0 && (
+										<td rowSpan={itemsArray.length}>
+											{invoice.date}
+										</td>
+									)}
 								</tr>
 							);
 						});
@@ -367,8 +390,11 @@ const InvoicesPage = ({
 				</tbody>
 			</table>
 
-			{/* TABLE: ПІДСУМКИ */}
-			<h3 className={classes.sectionTitle}>📊 Загальна кількість товарів взятих на складі:</h3>
+			{/* ================= TABLE: ПІДСУМКИ ================= */}
+			<h3 className={classes.sectionTitle}>
+				📊 Загальна кількість товарів взятих на складі:
+			</h3>
+
 			{invoicesSummary.length === 0 && <p>Підсумків ще немає.</p>}
 
 			<table className={classes.table}>
@@ -378,17 +404,19 @@ const InvoicesPage = ({
 						<th style={{ width: "25%" }} className={classes.alignRight}>Кі-сть</th>
 					</tr>
 				</thead>
+
 				<tbody>
 					{invoicesSummary.map((item, index) => (
 						<tr key={index}>
 							<td>{item.name}</td>
-							<td className={classes.alignRight}>{item.totalQuantity} {item.units}</td>
+							<td className={classes.alignRight}>
+								{item.totalQuantity} {item.units}
+							</td>
 						</tr>
 					))}
 				</tbody>
 			</table>
 
-			{/* Використані матеріали */}
 			{isAdminUsedMaterials && invoicesSummary.length > 0 && (
 				<UsedMaterialsTable
 					selectedUser={selectedUser}
@@ -400,10 +428,14 @@ const InvoicesPage = ({
 				/>
 			)}
 
-			{/* TABLE: ЗАЛИШКИ */}
-			{isAdminInvoices && stock && (
+
+			{/* ================= TABLE: ЗАЛИШКИ ================= */}
+			{isAdmin && stock && (
 				<>
-					<h3 className={classes.sectionTitle}>📦 Залишки на складі:</h3>
+					<h3 className={classes.sectionTitle}>
+						📦 Залишки на складі:
+					</h3>
+
 					<table className={classes.table}>
 						<thead>
 							<tr>
@@ -411,13 +443,18 @@ const InvoicesPage = ({
 								<th style={{ width: "25%" }} className={classes.alignRight}>Кі-сть</th>
 							</tr>
 						</thead>
+
 						<tbody>
-							{stock.filter(s => s.visibleproduct).map((s, index) => (
-								<tr key={index}>
-									<td>{s.name}</td>
-									<td className={classes.alignRight}>{s.quantity} {s.units}</td>
-								</tr>
-							))}
+							{stock
+								.filter(s => s.visibleproduct)
+								.map((s, index) => (
+									<tr key={index}>
+										<td>{s.name}</td>
+										<td className={classes.alignRight}>
+											{s.quantity} {s.units}
+										</td>
+									</tr>
+								))}
 						</tbody>
 					</table>
 				</>
@@ -436,15 +473,10 @@ const mapStateToProps = state => ({
 	stock: state.products.products,
 	notifications: state.invoices.notifications,
 	usedMaterials: state.invoices.usedMaterials
-});
+})
 
 export default connect(mapStateToProps, {
-	fetchInvoices,
-	fetchInvoicesSummary,
-	fetchOrderNotifications,
-	deleteNotification,
-	clearNotifications,
-	fetchUsedMaterials,
-	addUsedMaterial,
-	fetchUsedMaterialsHistory
-})(InvoicesPage);
+	fetchInvoices, fetchInvoicesSummary, fetchOrderNotifications, deleteNotification, clearNotifications, fetchUsedMaterials,
+	addUsedMaterial, fetchUsedMaterialsHistory
+})(InvoicesPage)
+

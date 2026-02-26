@@ -60,6 +60,7 @@ class CategoryItem extends Component {
 		let id = categoryId
 
 		let checked = category.checked
+		let name = category.name
 
 		if (checked) {
 			cls.push('done') // in index.css
@@ -130,7 +131,17 @@ class CategoryItem extends Component {
 				<th>
 					<div className={classes.leftTitle}>remove</div>
 					<div className={classes.th_value}>
-						<button className={classes.btnRemove} onClick={() => this.props.removeCategories(id)} ><i className="fa fa-times" aria-hidden="true"></i></button>
+
+						<button
+							className={classes.btnRemove}
+							onClick={() => {
+								if (window.confirm(`Видалити категорію ${name}?`)) {
+									this.props.removeCategories(id);
+								}
+							}}
+						>
+							<i className="fa fa-times" aria-hidden="true"></i>
+						</button>
 					</div>
 				</th>
 			</tr>

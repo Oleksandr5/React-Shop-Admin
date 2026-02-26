@@ -144,128 +144,62 @@ export function fetchUsedMaterials(customerId) {
 }
 
 
-// export function addUsedMaterial(customerId, productId, value = null, agreement = null, rollbackToValue = null) {
-// 	return async (dispatch) => {
-// 		try {
-// 			const ref = firebase.database().ref(`usedMaterials/${customerId}/${productId}`);
-// 			const historyRef = firebase.database().ref(`usedMaterialsHistory/${customerId}/${productId}`);
+export function addUsedMaterial(customerId, productId, value = null, agreement = null, rollbackToValue = null) {
+	return async (dispatch) => {
+		try {
+			const ref = firebase.database().ref(`usedMaterials/${customerId}/${productId}`);
+			const historyRef = firebase.database().ref(`usedMaterialsHistory/${customerId}/${productId}`);
 
-// 			if (rollbackToValue !== null) {
-// 				// Відкат до конкретного значення
-// 				const snapshot = await historyRef.once("value");
-// 				const history = snapshot.val() || {};
-// 				const sortedHistory = Object.entries(history).sort((a, b) => a[1].createdAt - b[1].createdAt);
+			if (rollbackToValue !== null) {
+				// Відкат до конкретного значення
+				const snapshot = await historyRef.once("value");
+				const history = snapshot.val() || {};
+				const sortedHistory = Object.entries(history).sort((a, b) => a[1].createdAt - b[1].createdAt);
 
-// 				let newTotal = 0;
-// 				const updates = {};
+				let newTotal = 0;
+				const updates = {};
 
-// 				for (const [id, h] of sortedHistory) {
-// 					if (newTotal + h.value <= rollbackToValue) {
-// 						newTotal += h.value;
-// 					} else {
-// 						updates[id] = null; // видаляємо записи після rollback
-// 					}
-// 				}
-
-// 				await historyRef.update(updates);
-// 				await ref.set(newTotal);
-
-// 			} else if (value) {
-// 				// Миттєве додавання нового запису
-// 				const snapshot = await ref.once("value");
-// 				const currentValue = snapshot.val() || 0;
-// 				const newTotal = currentValue + value;
-// 				await ref.set(newTotal);
-
-// 				// Додаємо історію з currentValue
-// 				await historyRef.push({
-// 					value,                // що списано
-// 					currentValue: newTotal, // залишок після списання
-// 					createdAt: firebase.database.ServerValue.TIMESTAMP,
-// 					agreement
-// 				});
-// 			}
-
-// 			// Оновлення Redux state
-// 			if (dispatch) await dispatch(fetchUsedMaterials(customerId));
-
-// 		} catch (error) {
-// 			console.error("Error in addUsedMaterial:", error);
-// 		}
-// 	};
-// }
-
-
-// export function fetchUsedMaterialsHistory(customerId, productId) {
-// 	return async () => {
-// 		if (!customerId || !productId) return [];
-
-// 		const snapshot = await firebase
-// 			.database()
-// 			.ref(`usedMaterialsHistory/${customerId}/${productId}`)
-// 			.once("value");
-
-// 		const data = snapshot.val();
-// 		if (!data) return [];
-
-// 		return Object.values(data).sort(
-// 			(a, b) => a.createdAt - b.createdAt
-// 		);
-// 	};
-// }
-
-
-// Виправлений формат: (аргументи) => async (dispatch) => { ... }
-
-export const addUsedMaterial = (customerId, productId, value = null, agreement = null, rollbackToValue = null) => async (dispatch) => {
-	try {
-		const dbRef = firebase.database().ref(`usedMaterials/${customerId}/${productId}`);
-		const historyRef = firebase.database().ref(`usedMaterialsHistory/${customerId}/${productId}`);
-
-		if (rollbackToValue !== null) {
-			// Логіка відкату (Rollback)
-			const snapshot = await historyRef.once("value");
-			const history = snapshot.val() || {};
-			const sortedHistory = Object.entries(history).sort((a, b) => a[1].createdAt - b[1].createdAt);
-
-			let newTotal = 0;
-			const updates = {};
-			for (const [id, h] of sortedHistory) {
-				if (newTotal + h.value <= rollbackToValue) {
-					newTotal += h.value;
-				} else {
-					updates[id] = null;
+				for (const [id, h] of sortedHistory) {
+					if (newTotal + h.value <= rollbackToValue) {
+						newTotal += h.value;
+					} else {
+						updates[id] = null; // видаляємо записи після rollback
+					}
 				}
+
+				await historyRef.update(updates);
+				await ref.set(newTotal);
+
+			} else if (value) {
+				// Миттєве додавання нового запису
+				const snapshot = await ref.once("value");
+				const currentValue = snapshot.val() || 0;
+				const newTotal = currentValue + value;
+				await ref.set(newTotal);
+
+				// Додаємо історію з currentValue
+				await historyRef.push({
+					value,                // що списано
+					currentValue: newTotal, // залишок після списання
+					createdAt: firebase.database.ServerValue.TIMESTAMP,
+					agreement
+				});
 			}
-			await historyRef.update(updates);
-			await dbRef.set(newTotal);
-		} else if (value) {
-			// Логіка додавання
-			const snapshot = await dbRef.once("value");
-			const currentValue = snapshot.val() || 0;
-			const newTotal = currentValue + Number(value);
 
-			await dbRef.set(newTotal);
-			await historyRef.push({
-				value: Number(value),
-				currentValue: newTotal,
-				createdAt: firebase.database.ServerValue.TIMESTAMP,
-				agreement
-			});
+			// Оновлення Redux state
+			if (dispatch) await dispatch(fetchUsedMaterials(customerId));
+
+		} catch (error) {
+			console.error("Error in addUsedMaterial:", error);
 		}
+	};
+}
 
-		// Оновлюємо основний стейт через існуючий екшен
-		await dispatch(fetchUsedMaterials(customerId));
-	} catch (error) {
-		console.error("Error in addUsedMaterial:", error);
-	}
-};
 
-export const fetchUsedMaterialsHistory = async (customerId, productId) => {
+export function fetchUsedMaterialsHistory(customerId, productId) {
+	return async () => {
+		if (!customerId || !productId) return [];
 
-	console.log("--- ПЕРЕВІРКА ВЕРСІЇ КОДУ 2.0 ---"); // Додайте цей рядок
-	if (!customerId || !productId) return [];
-	try {
 		const snapshot = await firebase
 			.database()
 			.ref(`usedMaterialsHistory/${customerId}/${productId}`)
@@ -274,10 +208,8 @@ export const fetchUsedMaterialsHistory = async (customerId, productId) => {
 		const data = snapshot.val();
 		if (!data) return [];
 
-		// Пряме повернення масиву даних для await у компоненті
-		return Object.values(data).sort((a, b) => a.createdAt - b.createdAt);
-	} catch (error) {
-		console.error("Error in fetchUsedMaterialsHistory:", error);
-		return [];
-	}
-};
+		return Object.values(data).sort(
+			(a, b) => a.createdAt - b.createdAt
+		);
+	};
+}

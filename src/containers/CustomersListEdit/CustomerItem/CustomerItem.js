@@ -16,6 +16,7 @@ class CustomerItem extends Component {
 
 		let id = customer.id
 		let email = customer.email
+		let name = customer.name
 
 		let checked = customer.checked
 
@@ -75,7 +76,17 @@ class CustomerItem extends Component {
 				<th>
 					<div className={classes.leftTitle}>remove</div>
 					<div className={classes.th_value}>
-						&nbsp;&nbsp;&nbsp;<button className={classes.btnRemove} onClick={() => this.props.removeCustomers(id, email)}><i className="fa fa-times" aria-hidden="true"></i></button>
+						&nbsp;&nbsp;&nbsp;
+						<button
+							className={classes.btnRemove}
+							onClick={() => {
+								if (window.confirm(`Видалити клієнта ${name}?`)) {
+									this.props.removeCustomers(id, email);
+								}
+							}}
+						>
+							<i className="fa fa-times" aria-hidden="true"></i>
+						</button>
 					</div>
 				</th>
 			</tr>
