@@ -247,22 +247,52 @@ class Auth extends Component {
 	// 🔹 Список адміністраторів
 	renderAdminsList() {
 		const { admins } = this.state;
+
 		return (
 			<ul className="list-group list-group-flush mb-3">
 				{Object.entries(admins).map(([uid, rights]) => (
-					<li key={uid} className="list-group-item d-flex justify-content-between align-items-center p-1" style={{ fontSize: '0.9rem' }}>
-						<div>
-							<strong>{uid}</strong> — Invoices: {rights.invoices ? '✅' : '❌'}, Materials: {rights.usedMaterials ? '✅' : '❌'}, FullAccess: {rights.fullAccess ? '✅' : '❌'}
+					<li key={uid} className="list-group-item admin-item">
+
+						<div className="admin-info">
+							<strong>{uid}</strong><br />
+							Invoices: {rights.invoices ? '✅' : '❌'} |{" "}
+							Materials: {rights.usedMaterials ? '✅' : '❌'} |{" "}
+							FullAccess: {rights.fullAccess ? '✅' : '❌'}
 						</div>
-						<div>
-							{rights.invoices && <button className="btn btn-sm btn-outline-danger me-1" onClick={() => this.removeAdminAccess(uid, 'invoices')}>&times; Invoices</button>}
-							{rights.usedMaterials && <button className="btn btn-sm btn-outline-danger me-1" onClick={() => this.removeAdminAccess(uid, 'usedMaterials')}>&times; Materials</button>}
-							{rights.fullAccess && <button className="btn btn-sm btn-outline-danger" onClick={() => this.removeAdminAccess(uid, 'fullAccess')}>&times; FullAccess</button>}
+
+						<div className="admin-buttons">
+							{rights.invoices && (
+								<button
+									className="btn btn-sm btn-outline-danger"
+									onClick={() => this.removeAdminAccess(uid, 'invoices')}
+								>
+									× Invoices
+								</button>
+							)}
+
+							{rights.usedMaterials && (
+								<button
+									className="btn btn-sm btn-outline-danger"
+									onClick={() => this.removeAdminAccess(uid, 'usedMaterials')}
+								>
+									× Materials
+								</button>
+							)}
+
+							{rights.fullAccess && (
+								<button
+									className="btn btn-sm btn-outline-danger"
+									onClick={() => this.removeAdminAccess(uid, 'fullAccess')}
+								>
+									× FullAccess
+								</button>
+							)}
 						</div>
+
 					</li>
 				))}
 			</ul>
-		)
+		);
 	}
 
 
