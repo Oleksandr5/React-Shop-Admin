@@ -42,38 +42,24 @@ export function fetchInvoicesSummary(customerId) {
 	};
 }
 
-export function fetchOrderNotifications(selectedUser) {
-	return async (dispatch, getState) => {
+export function fetchOrderNotifications() {
+	return async (dispatch) => {
 		try {
-			const authAdmin = window.localStorage.getItem("authAdmin");
-			const idThisCustomers = window.localStorage.getItem("idThisCustomers");
+			const snapshot = await firebase
+				.database()
+				.ref('orderNotifications')
+				.once("value");
 
-			const isAdmin =
-				(authAdmin === "true") ||
-				["139", "155", "156"].includes(idThisCustomers);
-
+			const data = snapshot.val();
 			let allNotifications = [];
 
-			if (isAdmin) {
-				// адмін: беремо notifications всіх клієнтів
-				const snapshot = await firebase.database().ref('orderNotifications').once("value");
-				const data = snapshot.val();
-
-				if (data) {
-					Object.values(data).forEach(customerNotifications => {
-						allNotifications.push(...Object.values(customerNotifications));
-					});
-				}
-			} else if (selectedUser) {
-				// звичайний користувач: тільки свої
-				const snapshot = await firebase.database().ref(`orderNotifications/${selectedUser}`).once("value");
-				const data = snapshot.val();
-				if (data) {
-					allNotifications = Object.values(data);
-				}
+			if (data) {
+				Object.values(data).forEach(customerNotifications => {
+					allNotifications.push(...Object.values(customerNotifications));
+				});
 			}
 
-			// сортуємо за createdAt (останні зверху)
+			// сортування (нові зверху)
 			allNotifications.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
 
 			dispatch({
@@ -142,80 +128,6 @@ export function fetchUsedMaterials(customerId) {
 		}
 	};
 }
-
-
-// export function addUsedMaterial(customerId, productId, value = null, agreement = null, rollbackToValue = null) {
-// 	return async (dispatch) => {
-// 		try {
-// 			const ref = firebase.database().ref(`usedMaterials/${customerId}/${productId}`);
-// 			const historyRef = firebase.database().ref(`usedMaterialsHistory/${customerId}/${productId}`);
-
-// 			if (rollbackToValue !== null) {
-// 				// Відкат до конкретного значення
-// 				const snapshot = await historyRef.once("value");
-// 				const history = snapshot.val() || {};
-// 				const sortedHistory = Object.entries(history).sort((a, b) => a[1].createdAt - b[1].createdAt);
-
-// 				let newTotal = 0;
-// 				const updates = {};
-
-// 				for (const [id, h] of sortedHistory) {
-// 					if (newTotal + h.value <= rollbackToValue) {
-// 						newTotal += h.value;
-// 					} else {
-// 						updates[id] = null; // видаляємо записи після rollback
-// 					}
-// 				}
-
-// 				await historyRef.update(updates);
-// 				await ref.set(newTotal);
-
-// 			} else if (value) {
-// 				// Миттєве додавання нового запису
-// 				const snapshot = await ref.once("value");
-// 				const currentValue = snapshot.val() || 0;
-// 				const newTotal = currentValue + value;
-// 				await ref.set(newTotal);
-
-// 				// Додаємо історію з currentValue
-// 				await historyRef.push({
-// 					value,                // що списано
-// 					currentValue: newTotal, // залишок після списання
-// 					createdAt: firebase.database.ServerValue.TIMESTAMP,
-// 					agreement
-// 				});
-// 			}
-
-// 			// Оновлення Redux state
-// 			if (dispatch) await dispatch(fetchUsedMaterials(customerId));
-
-// 		} catch (error) {
-// 			console.error("Error in addUsedMaterial:", error);
-// 		}
-// 	};
-// }
-
-
-// export function fetchUsedMaterialsHistory(customerId, productId) {
-// 	return async () => {
-// 		if (!customerId || !productId) return [];
-
-// 		const snapshot = await firebase
-// 			.database()
-// 			.ref(`usedMaterialsHistory/${customerId}/${productId}`)
-// 			.once("value");
-
-// 		const data = snapshot.val();
-// 		if (!data) return [];
-
-// 		return Object.values(data).sort(
-// 			(a, b) => a.createdAt - b.createdAt
-// 		);
-// 	};
-// }
-
-
-// Виправлений формат: (аргументи) => async (dispatch) => { ... }
 
 export const addUsedMaterial = (customerId, productId, value = null, agreement = null, rollbackToValue = null) => async (dispatch) => {
 	try {
