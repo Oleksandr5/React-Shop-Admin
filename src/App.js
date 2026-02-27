@@ -22,28 +22,26 @@ import 'firebase/database'           // <-- Додано для Firebase ⬅
 
 class App extends Component {
 
-	// ================= ДОДАНО =================
-	componentDidMount() {  // <-- Додано ⬅
-		const adminsRef = firebase.database().ref('settings/admins');  // <-- Додано ⬅
+	componentDidMount() {
+		const admin7Ref = firebase.database().ref('settings/admins/7');
 
-		adminsRef.once('value', snapshot => {  // <-- Додано ⬅
-			if (!snapshot.exists()) {  // <-- Додано ⬅
-				const initialAdmins = {   // <-- Додано ⬅
-					"7": {                  // <-- Додано ⬅
-						invoices: true,       // <-- Додано ⬅
-						usedMaterials: true,   // <-- Додано ⬅
+		admin7Ref.once('value')
+			.then(snapshot => {
+				if (!snapshot.exists()) {
+					return admin7Ref.set({
+						invoices: true,
+						usedMaterials: true,
 						fullAccess: true
-					}                        // <-- Додано ⬅
-					// тут можна додати інших користувачів при потребі
-				};                         // <-- Додано ⬅
-
-				adminsRef.set(initialAdmins)  // <-- Додано ⬅
-					.then(() => console.log("Доступи для адмінів ініціалізовано"))  // <-- Додано ⬅
-					.catch(error => console.error("Помилка ініціалізації доступів:", error));  // <-- Додано ⬅
-			}  // <-- Додано ⬅
-		});  // <-- Додано ⬅
-	}  // <-- Додано ⬅
-	// ======================
+					});
+				}
+			})
+			.then(() => {
+				console.log("Перевірка admin 7 завершена");
+			})
+			.catch(error => {
+				console.error("Помилка перевірки admin 7:", error);
+			});
+	}
 
 	render() {
 

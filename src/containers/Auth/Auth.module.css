@@ -99,12 +99,18 @@
 
 .AccessControl .form-check {
   display: flex;
+  justify-content: space-between; /* ← головне */
   align-items: center;
-  gap: 10px;
   margin-bottom: 10px;
+  width: 100%;
 }
 
-.AccessControl input {
+.AccessControl .form-check-label {
+  flex: 1;
+}
+
+/* тільки текстові input */
+.AccessControl input:not([type="checkbox"]) {
   width: 100%;
   box-sizing: border-box;
 }

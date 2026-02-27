@@ -169,21 +169,11 @@ class Auth extends Component {
 		this.adminsRef = firebase.database().ref('settings/admins');
 		this.adminsRef.on('value', snapshot => {
 			let admins = snapshot.val() || {};
-
-			// Якщо хочемо забезпечити fullAccess для id "7" за замовчуванням
-			if (!admins['7']) {
-				this.adminsRef.child('7').set({
-					fullAccess: true,
-					invoices: true,
-					usedMaterials: true
-				});
-				admins['7'] = { fullAccess: true, invoices: true, usedMaterials: true };
-			}
-
 			this.setState({ admins });
 		});
-
 	}
+
+	// Маленька рекомендація (правильна очистка listener) Щоб не було витоків пам’яті. Маленька рекомендація (правильна очистка listener). Щоб не було витоків пам’яті. Це зніме listener при виході з компонента.
 
 	componentWillUnmount() {
 		if (this.adminsRef) this.adminsRef.off();
