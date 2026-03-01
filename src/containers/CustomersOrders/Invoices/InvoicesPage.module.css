@@ -7,6 +7,12 @@
 	background: #ffffff;
 }
 
+.archiveWrapper {
+    composes: wrapper; /* копіює всі стилі з .wrapper */
+    max-height: 100vh;
+    height: 100vh;
+}
+
 /* ================= HEADER ================= */
 
 .pageHeader {

@@ -29,22 +29,45 @@ const ArchivePage = ({ customers, products }) => {
 	};
 
 	const showHistoryAlert = (productId, productName) => {
-		const logs = userData.historyLog[productId] ? Object.values(userData.historyLog[productId]) : [];
+		// 1. Отримуємо логи та сортуємо їх від НАЙСТАРІШИХ до НОВИХ для математики
+		const logs = userData.historyLog[productId]
+			? Object.values(userData.historyLog[productId]).sort((a, b) => a.createdAt - b.createdAt)
+			: [];
+
+		const productInfo = userData.summary.find(s => s.productId === productId);
+		const units = productInfo?.units || 'шт.';
+
 		if (logs.length === 0) {
 			alert(`Історія для "${productName}" порожня.`);
 			return;
 		}
-		const historyText = logs
-			.sort((a, b) => b.createdAt - a.createdAt)
-			.map(log => {
-				const date = new Date(log.createdAt).toLocaleString();
-				return `${date} — ${log.value} од. ${log.agreement ? `(Угода: ${log.agreement})` : ''}`;
-			})
-			.join('\n');
-		alert(`📜 Історія списань для: ${productName}\n\n${historyText}`);
+
+		let runningTotal = 0;
+
+		// 2. Формуємо масив рядків з індивідуальним "Сумарно" для кожного запису
+		const historyLines = logs.map(log => {
+			runningTotal += Number(log.value || 0); // Додаємо до накопичувального підсумку
+			const date = new Date(log.createdAt).toLocaleString();
+
+			return `${date} — Списано: ${log.value} ${units} (Сумарно: ${runningTotal}) ${log.agreement ? `[Угода: ${log.agreement}]` : ''}`;
+		});
+
+		// 3. Перевертаємо, щоб нові були зверху
+		const historyText = historyLines.reverse().join('\n');
+
+		// 4. ПЕРЕВІРКА НА ДОВЖИНУ: якщо тексту забагато для alert, виводимо в консоль або нове вікно
+		const fullMessage = `📜 Історія списань для: ${productName} (Всього: ${runningTotal} ${units})\n\n${historyText}`;
+
+		if (fullMessage.length > 1000) {
+			// Якщо історія гігантська — відкриваємо її в окремому вікні, щоб не обрізало
+			const newWindow = window.open("", "_blank", "width=600,height=400");
+			newWindow.document.write(`<pre style="font-family: monospace; padding: 20px;">${fullMessage}</pre>`);
+			newWindow.document.title = "Історія списань";
+		} else {
+			alert(fullMessage);
+		}
 	};
 
-	// --- ПІДГОТОВКА ДАНИХ ---
 	const userId = selectedUser ? String(selectedUser) : null;
 
 	const userData = (fullArchive && userId) ? {
@@ -64,21 +87,26 @@ const ArchivePage = ({ customers, products }) => {
 	} : null;
 
 	return (
-		<div className={classes.InvoicesPage} style={{ padding: '20px', height: '100vh', overflowY: 'auto' }}>
-			<div className="container">
-				<h2 className="mb-4">📦 Архів замовлень</h2>
+		<div className={classes.archiveWrapper}>
+			<div className={classes.pageHeader} style={{ background: 'linear-gradient(135deg, #6c757d, #495057)' }}>
+				<h2 className={classes.pageTitle}>📦 Архів замовлень</h2>
 
-				<div className="d-flex mb-4" style={{ gap: '10px' }}>
-					<select value={selectedMonth} onChange={(e) => handleMonthChange(e.target.value)} className="form-control" style={{ width: '200px' }}>
+				<div className={classes.selectWrapper}>
+					<label className={classes.label}>📅 Місяць:</label>
+					<select
+						value={selectedMonth}
+						onChange={(e) => handleMonthChange(e.target.value)}
+						className={classes.select}
+					>
 						<option value="">-- Оберіть місяць --</option>
 						{months.map(m => <option key={m} value={m}>{m}</option>)}
 					</select>
 
+					<label className={classes.label}>👤 Клієнт:</label>
 					<select
 						value={selectedUser}
 						onChange={(e) => setSelectedUser(e.target.value)}
-						className="form-control"
-						style={{ width: '250px' }}
+						className={classes.select}
 						disabled={!selectedMonth}
 					>
 						<option value="">-- Оберіть клієнта --</option>
@@ -90,105 +118,100 @@ const ArchivePage = ({ customers, products }) => {
 						}
 					</select>
 				</div>
-
-				{userData ? (
-					<div className={classes.TablesWrapper}>
-
-						<h4 className="mt-4">📑 Деталізація замовлень:</h4>
-						<table className="table table-bordered bg-white">
-							<thead className="thead-light">
-								<tr>
-									<th style={{ width: '60px' }}>ID</th>
-									<th>Назва товару</th>
-									<th className={classes.alignRight}>Кількість</th>
-									<th className={classes.alignRight} style={{ width: '150px' }}>Дата</th>
-								</tr>
-							</thead>
-							<tbody>
-								{userData.groupedInvoices.length > 0 ? userData.groupedInvoices.map((group, gIdx) => (
-									<React.Fragment key={gIdx}>
-										{group.items.map((item, iIdx) => (
-											<tr key={`${gIdx}-${iIdx}`} style={iIdx === group.items.length - 1 ? { borderBottom: '3px solid #444' } : {}}>
-												{/* ID ЗАМОВЛЕННЯ - Тільки для першого рядка групи */}
-												{iIdx === 0 && (
-													<td rowSpan={group.items.length} style={{ verticalAlign: 'middle', textAlign: 'center', backgroundColor: '#f9f9f9', fontWeight: 'bold' }}>
-														{group.id}
-													</td>
-												)}
-
-												<td>{item.name}</td>
-												<td className={classes.alignRight}>{item.quantity} {item.units}</td>
-
-												{/* ДАТА - Тільки для першого рядка групи, розтягнута на всі рядки */}
-												{iIdx === 0 && (
-													<td rowSpan={group.items.length} className={classes.alignRight} style={{ verticalAlign: 'middle', backgroundColor: '#f9f9f9' }}>
-														{group.date}
-													</td>
-												)}
-											</tr>
-										))}
-									</React.Fragment>
-								)) : <tr><td colSpan="4" className="text-center">Дані відсутні</td></tr>}
-							</tbody>
-						</table>
-
-						<h4 className="mt-5">🛠 Використані матеріали:</h4>
-						<table className="table table-bordered bg-white">
-							<thead className="thead-light">
-								<tr>
-									<th>Назва товару</th>
-									<th className={classes.alignRight}>Всього взято</th>
-									<th className="text-center">Списано</th>
-									<th className="text-center">Історія</th>
-								</tr>
-							</thead>
-							<tbody>
-								{userData.summary.length > 0 ? userData.summary.map((item, idx) => (
-									<tr key={idx}>
-										<td>{item.name}</td>
-										<td className={classes.alignRight}>{item.totalQuantity} {item.units}</td>
-										<td className="text-center">
-											<span className={classes.totalBadge}>
-												{userData.used[item.productId] || 0} {item.units}
-											</span>
-										</td>
-										<td className="text-center">
-											<button className="btn btn-sm btn-light" onClick={() => showHistoryAlert(item.productId, item.name)}>
-												📜
-											</button>
-										</td>
-									</tr>
-								)) : <tr><td colSpan="4" className="text-center">Дані відсутні</td></tr>}
-							</tbody>
-						</table>
-
-						<h4 className="mt-5">📦 Стан складу (на момент архіву):</h4>
-						<table className="table table-bordered bg-white">
-							<thead className="thead-light">
-								<tr>
-									<th>Товар</th>
-									<th className={classes.alignRight}>Доступно</th>
-								</tr>
-							</thead>
-							<tbody>
-								{Object.values(userData.stock)
-									.filter(s => s.visibleproduct)
-									.map((s, index) => (
-										<tr key={index}>
-											<td>{s.name}</td>
-											<td className={classes.alignRight}>{s.quantity} {s.units}</td>
-										</tr>
-									))
-								}
-							</tbody>
-						</table>
-					</div>
-				) : (
-					<div className="text-center mt-5" style={{ color: '#999', padding: '100px' }}>
-						{selectedMonth ? "Оберіть клієнта" : "Будь ласка, оберіть місяць"}
-					</div>
-				)}
 			</div>
+
+			{userData ? (
+				<>
+					<h3 className={classes.sectionTitle}>📑 Деталізація замовлень:</h3>
+					<table className={classes.table}>
+						<thead>
+							<tr>
+								<th style={{ width: "12%" }}>ID</th>
+								<th style={{ width: "48%" }}>Товари</th>
+								<th style={{ width: "20%" }} className={classes.alignRight}>Кі-сть</th>
+								<th style={{ width: "20%" }}>Дата</th>
+							</tr>
+						</thead>
+						<tbody>
+							{userData.groupedInvoices.length > 0 ? userData.groupedInvoices.map((group, gIdx) => (
+								<React.Fragment key={gIdx}>
+									{group.items.map((item, iIdx) => (
+										<tr key={`${gIdx}-${iIdx}`} className={iIdx === group.items.length - 1 ? classes.invoiceDivider : ""}>
+											{iIdx === 0 && (
+												<td rowSpan={group.items.length} style={{ verticalAlign: 'middle', fontWeight: 'bold' }}>
+													{group.id}
+												</td>
+											)}
+											<td>{item.name}</td>
+											<td className={classes.alignRight}>{item.quantity} {item.units}</td>
+											{iIdx === 0 && (
+												<td rowSpan={group.items.length} style={{ verticalAlign: 'middle' }}>
+													{group.date}
+												</td>
+											)}
+										</tr>
+									))}
+								</React.Fragment>
+							)) : <tr><td colSpan="4" style={{ textAlign: 'center' }}>Дані відсутні</td></tr>}
+						</tbody>
+					</table>
+
+					<h3 className={classes.sectionTitle}>🛠 Використані матеріали:</h3>
+					<table className={classes.table}>
+						<thead>
+							<tr>
+								<th style={{ width: "40%" }}>Назва товару</th>
+								<th className={classes.alignRight}>Взято</th>
+								<th style={{ textAlign: 'center' }}>Списано</th>
+								<th style={{ textAlign: 'center' }}>Історія</th>
+							</tr>
+						</thead>
+						<tbody>
+							{userData.summary.length > 0 ? userData.summary.map((item, idx) => (
+								<tr key={idx}>
+									<td>{item.name}</td>
+									<td className={classes.alignRight}>{item.totalQuantity} {item.units}</td>
+									<td style={{ textAlign: 'center' }}>
+										<span className={classes.totalBadge}>
+											{userData.used[item.productId] || 0} {item.units}
+										</span>
+									</td>
+									<td style={{ textAlign: 'center' }}>
+										<button className={classes.btnHistory} onClick={() => showHistoryAlert(item.productId, item.name)}>
+											📜
+										</button>
+									</td>
+								</tr>
+							)) : <tr><td colSpan="4" style={{ textAlign: 'center' }}>Дані відсутні</td></tr>}
+						</tbody>
+					</table>
+
+					<h3 className={classes.sectionTitle}>📦 Стан складу (на момент архіву):</h3>
+					<table className={classes.table}>
+						<thead>
+							<tr>
+								<th style={{ width: "75%" }}>Товар</th>
+								<th style={{ width: "25%" }} className={classes.alignRight}>Доступно</th>
+							</tr>
+						</thead>
+						<tbody>
+							{Object.values(userData.stock)
+								.filter(s => s.visibleproduct)
+								.map((s, index) => (
+									<tr key={index}>
+										<td>{s.name}</td>
+										<td className={classes.alignRight}>{s.quantity} {s.units}</td>
+									</tr>
+								))
+							}
+						</tbody>
+					</table>
+				</>
+			) : (
+				<div style={{ textAlign: 'center', marginTop: '50px', color: '#999', padding: '40px' }}>
+					{selectedMonth ? "Оберіть клієнта" : "Будь ласка, оберіть місяць"}
+				</div>
+			)}
 		</div>
 	);
 };

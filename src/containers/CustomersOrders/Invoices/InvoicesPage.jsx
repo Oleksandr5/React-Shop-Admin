@@ -50,7 +50,7 @@ const UsedMaterialsTable = ({
 	// --- ІСТОРІЯ (Виправлено логіку отримання) ---
 	const handleHistory = async (productId) => {
 		try {
-			// Ми викликаємо функцію з пропсів
+			// 1. Отримуємо дані з пропсів (Firebase)
 			const hist = await fetchUsedMaterialsHistory(selectedUser, productId);
 
 			console.log("LOG: Результат у компоненті:", hist);
@@ -60,18 +60,47 @@ const UsedMaterialsTable = ({
 				return;
 			}
 
-			const text = hist
+			// Знаходимо назву товару для заголовка (якщо є доступ до списку summary)
+			const productInfo = invoicesSummary.find(s => s.productId === productId);
+			const productName = productInfo?.name || `Товар №${productId}`;
+			const units = productInfo?.units || 'од.';
+
+			// 2. Формуємо текст історії
+			// .slice() робимо, щоб не мутувати оригінальний масив
+			// .reverse() щоб нові записи були зверху
+			const historyText = hist
 				.slice()
 				.reverse()
 				.map(h => {
 					const date = h.createdAt ? new Date(h.createdAt).toLocaleString("uk-UA") : "---";
-					return `[${date}] Списано: ${h.value} (Сумарно: ${h.currentValue}) Угода: ${h.agreement ?? "без угоди"}`;
+					// Формат: [Дата] — Списано: X (Сумарно: Y) [Угода: Z]
+					return `${date} — Списано: ${h.value} ${units} (Сумарно: ${h.currentValue}) ${h.agreement ? `[Угода: ${h.agreement}]` : '[без угоди]'}`;
 				})
 				.join("\n");
 
-			alert(text);
+			const fullMessage = `📜 Історія списань для: ${productName}\n\n${historyText}`;
+
+			// 3. Перевірка на довжину тексту (щоб не було "...")
+			if (fullMessage.length > 1000) {
+				// Якщо текст занадто довгий для alert, відкриваємо у новому вікні
+				const newWindow = window.open("", "_blank", "width=700,height=500");
+				newWindow.document.write(`
+                <html>
+                    <head><title>Історія списань</title></head>
+                    <body style="font-family: sans-serif; padding: 20px; line-height: 1.6;">
+                        <h2 style="border-bottom: 2px solid #eee; padding-bottom: 10px;">${productName}</h2>
+                        <pre style="background: #f8f9fa; padding: 15px; border-radius: 5px; white-space: pre-wrap;">${fullMessage}</pre>
+                        <button onclick="window.close()" style="padding: 10px 20px; cursor: pointer;">Закрити</button>
+                    </body>
+                </html>
+            `);
+			} else {
+				alert(fullMessage);
+			}
+
 		} catch (err) {
 			console.error("LOG: Помилка в handleHistory:", err);
+			alert("Не вдалося завантажити історію.");
 		}
 	};
 
