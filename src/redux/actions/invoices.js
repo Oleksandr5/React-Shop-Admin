@@ -5,6 +5,7 @@ export const UPDATE_INVOICES = "UPDATE_INVOICES";
 export const UPDATE_INVOICES_SUMMARY = "UPDATE_INVOICES_SUMMARY";
 export const SET_NOTIFICATIONS = "SET_NOTIFICATIONS";
 export const SET_USED_MATERIALS = "SET_USED_MATERIALS";
+export const ARCHIVE_DATA_SUCCESS = "ARCHIVE_DATA_SUCCESS";
 
 
 // 2️⃣ Функції-екшени
@@ -192,4 +193,47 @@ export const fetchUsedMaterialsHistory = async (customerId, productId) => {
 		console.error("Error in fetchUsedMaterialsHistory:", error);
 		return [];
 	}
+};
+
+// Функція архівації
+export const archiveAllDataMonthly = () => {
+	return async (dispatch, getState) => { // Додаємо getState
+		try {
+			const date = new Date();
+			const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+			const db = firebase.database();
+
+			// Отримуємо поточний стан продуктів (складу) з Redux
+			const currentStock = getState().products.products;
+
+			const paths = {
+				invoices: "invoices",
+				invoicesSummary: "invoicesSummary",
+				usedMaterials: "usedMaterials",
+				usedMaterialsHistory: "usedMaterialsHistory"
+			};
+
+			const archiveData = {};
+
+			await Promise.all(Object.keys(paths).map(async (key) => {
+				const snapshot = await db.ref(paths[key]).once('value');
+				archiveData[key] = snapshot.val();
+			}));
+
+			// Записуємо в архів з урахуванням залишків
+			await db.ref(`archive/${monthKey}`).set({
+				invoicesHistory: archiveData.invoices || {},
+				invoicesSummaryHistory: archiveData.invoicesSummary || {},
+				usedMaterialsHistory: archiveData.usedMaterials || {},
+				usedMaterialsHistoryHistory: archiveData.usedMaterialsHistory || {},
+				stockAtThatTime: currentStock || {} // Фіксуємо склад!
+			});
+
+			dispatch({ type: ARCHIVE_DATA_SUCCESS });
+			alert(`✅ Загальний архів за ${monthKey} успішно створено!`);
+		} catch (error) {
+			console.error("Помилка архівації:", error);
+			alert("Помилка при створенні архіву: " + error.message);
+		}
+	};
 };

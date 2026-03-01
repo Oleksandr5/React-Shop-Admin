@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react'
 import { connect, useDispatch } from 'react-redux'
-import { fetchInvoices, fetchInvoicesSummary, fetchOrderNotifications, deleteNotification, clearNotifications, fetchUsedMaterials, addUsedMaterial, fetchUsedMaterialsHistory } from '../../../redux/actions/invoices'
+import { fetchInvoices, fetchInvoicesSummary, fetchOrderNotifications, deleteNotification, clearNotifications, fetchUsedMaterials, addUsedMaterial, fetchUsedMaterialsHistory, archiveAllDataMonthly } from '../../../redux/actions/invoices'
 import classes from './InvoicesPage.module.css'
 import firebase from 'firebase';
 
@@ -197,6 +197,7 @@ const InvoicesPage = ({
 	usedMaterials,
 	fetchUsedMaterials,
 	addUsedMaterial,
+	archiveAllDataMonthly,
 	stock
 }) => {
 
@@ -222,6 +223,10 @@ const InvoicesPage = ({
 
 	const isAdminUsedMaterials = (hasAccount && authAdmin === "true") ||
 		(!!admins[idThisCustomers]?.usedMaterials);
+
+	// ✅ перевірка, чи користувач має fullAccess	
+	const isAdminFullAccess = (hasAccount && authAdmin === "true") ||
+		(!!admins[idThisCustomers]?.fullAccess);
 
 	// --- Вибраний користувач ---
 	useEffect(() => {
@@ -307,6 +312,7 @@ const InvoicesPage = ({
 				</h2>
 
 				{isAdminInvoices && (
+
 					<div className={classes.selectWrapper}>
 						<label className={classes.label}>👤 Виберіть отримувача:</label>
 						<select
@@ -422,6 +428,24 @@ const InvoicesPage = ({
 					</table>
 				</>
 			)}
+			{isAdminFullAccess && (
+				<button
+					className={classes.btnAdd}
+					style={{
+						backgroundColor: '#f39c12', // Прибрали !important, тут він не працює
+						width: 'auto',
+						marginBottom: '20px',
+						borderColor: '#e67e22'
+					}}
+					onClick={() => {
+						if (window.confirm("УВАГА! Буде створено повну копію всіх даних (накладні, підсумки, списання) за поточний місяць у вузол 'archive'. Продовжити?")) {
+							archiveAllDataMonthly();
+						}
+					}}
+				>
+					📦 Створити архів за поточний місяць
+				</button>
+			)}
 		</div>
 	);
 };
@@ -446,5 +470,6 @@ export default connect(mapStateToProps, {
 	clearNotifications,
 	fetchUsedMaterials,
 	addUsedMaterial,
-	fetchUsedMaterialsHistory
+	fetchUsedMaterialsHistory,
+	archiveAllDataMonthly
 })(InvoicesPage);

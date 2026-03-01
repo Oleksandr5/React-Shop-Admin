@@ -158,13 +158,25 @@ class Drawer extends Component {
 	}
 }
 
-const mapStateToProps = state => ({
-	products: state.products.products,
-	categories: state.products.categories,
-	loading: state.products.loading,
-	error: state.products.error,
-	isAdmin: state.inform.isAdmin // перевірка для adminOnly
-});
+const mapStateToProps = state => {
+	// 1. Отримуємо дані про поточного користувача
+	const authAdmin = window.localStorage.getItem("authAdmin");
+	const idThisCustomers = window.localStorage.getItem("idThisCustomers");
+	const admins = state.inform.admins || {};
+
+	// 2. Рахуємо, чи має він повний доступ (як у InvoicesPage)
+	const isAdminFullAccess = (state.inform.hasAccount && authAdmin === "true") ||
+		(!!admins[idThisCustomers]?.fullAccess);
+
+	return {
+		products: state.products.products,
+		categories: state.products.categories,
+		loading: state.products.loading,
+		error: state.products.error,
+		// ТЕПЕР ТУТ ПРАВИЛЬНА ПЕРЕВІРКА:
+		isAdmin: isAdminFullAccess
+	};
+};
 
 const mapDispatchToProps = dispatch => ({
 	categoriesFilter: obj => dispatch(categoriesFilter(obj)),
