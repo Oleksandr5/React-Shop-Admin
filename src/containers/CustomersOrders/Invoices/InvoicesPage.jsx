@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useState, useMemo } from 'react'
 import { connect, useDispatch } from 'react-redux'
 import { fetchInvoices, fetchInvoicesSummary, fetchOrderNotifications, deleteNotification, clearNotifications, fetchUsedMaterials, addUsedMaterial, fetchUsedMaterialsHistory, archiveAllDataMonthly } from '../../../redux/actions/invoices'
 import classes from './InvoicesPage.module.css'
@@ -8,197 +8,388 @@ const UsedMaterialsTable = ({
 	selectedUser,
 	invoicesSummary,
 	usedMaterials,
+	stock,
 	fetchUsedMaterials,
 	addUsedMaterial,
-	fetchUsedMaterialsHistory
+	fetchUsedMaterialsHistory,
+	isAdminFullAccess
 }) => {
 	const [inputValues, setInputValues] = useState({});
 	const [agreementValues, setAgreementValues] = useState({});
+	const [commonAgreement, setCommonAgreement] = useState('');
+	const [searchAgreement, setSearchAgreement] = useState('');
+	const [isEditingIds, setIsEditingIds] = useState(false);
+	const [newIdsString, setNewIdsString] = useState("");
 
-	// --- ДОДАВАННЯ З УГОДОЮ ---
+	// 1. Стейт для динамічного списку ID товарів
+	const [dynamicProductIds, setDynamicProductIds] = useState([]);
+
+	// 2. Автоматична синхронізація та отримання списку з Firebase
+	useEffect(() => {
+		const ref = firebase.database().ref('settings/productsForWorkOrders');
+
+		const syncAndFetch = async () => {
+			// Твій початковий список як база для першого створення
+			const initialList = [104, 123, 121, 122, 120, 119, 103, 124, 118, 117, 125, 132, 126, 108, 116, 112, 109, 114, 113, 115, 110, 111, 130, 129, 131, 128, 150, 153, 152, 151, 149, 148, 147];
+
+			try {
+				const snapshot = await ref.once('value');
+				if (!snapshot.exists()) {
+					await ref.set(initialList);
+					setDynamicProductIds(initialList);
+					console.log("✅ Список товарів синхронізовано з Firebase");
+				} else {
+					setDynamicProductIds(snapshot.val() || []);
+				}
+			} catch (err) {
+				console.error("❌ Помилка завантаження налаштувань:", err);
+			}
+		};
+
+		syncAndFetch();
+	}, []);
+
+	// 3. Динамічна підготовка даних (useMemo тепер залежить від dynamicProductIds)
+	const fullMaterialsList = useMemo(() => {
+		if (!stock || stock.length === 0) return [];
+
+		const stockMap = new Map(stock.map(s => [Number(s.id), s]));
+		const summaryMap = new Map((invoicesSummary || []).map(s => [Number(s.productId), s]));
+
+		const list = dynamicProductIds.map(id => {
+			const productFromStock = stockMap.get(Number(id));
+			const userInventory = summaryMap.get(Number(id));
+
+			return {
+				productId: id,
+				name: productFromStock?.name || userInventory?.name || `Товар #${id}`,
+				units: productFromStock?.units || userInventory?.units || '',
+				totalQuantity: userInventory ? userInventory.totalQuantity : 0
+			};
+		});
+
+		return list.sort((a, b) => {
+			if (b.totalQuantity > 0 && a.totalQuantity === 0) return 1;
+			if (a.totalQuantity > 0 && b.totalQuantity === 0) return -1;
+			return a.name.localeCompare(b.name);
+		});
+	}, [stock, invoicesSummary, dynamicProductIds]);
+
+	const handleSearchByAgreement = async () => {
+		const term = searchAgreement.trim();
+		if (!term) {
+			alert("Введіть номер угоди для пошуку");
+			return;
+		}
+
+		try {
+			const promises = dynamicProductIds.map(productId =>
+				fetchUsedMaterialsHistory(selectedUser, productId).then(hist => ({
+					productId,
+					hist
+				}))
+			);
+
+			const results = await Promise.all(promises);
+			let foundMaterials = [];
+
+			for (const { productId, hist } of results) {
+				if (hist && hist.length > 0) {
+					const matches = hist.filter(log => String(log.agreement).trim() === term);
+					if (matches.length > 0) {
+						const productInfo = fullMaterialsList.find(s => Number(s.productId) === Number(productId));
+
+						// Збираємо дати та кількості для кожного окремого списання по цій угоді
+						matches.forEach(match => {
+							const date = match.createdAt
+								? new Date(match.createdAt).toLocaleString("uk-UA", { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' })
+								: "---";
+
+							foundMaterials.push({
+								name: productInfo?.name || `Товар #${productId}`,
+								quantity: Number(match.value || 0),
+								units: productInfo?.units || '',
+								date: date
+							});
+						});
+					}
+				}
+			}
+
+			if (foundMaterials.length === 0) {
+				alert(`По угоді №${term} не списано товарів`);
+			} else {
+				// Формуємо текст: тепер додаємо дату в кожен рядок
+				const listText = foundMaterials
+					.map(m => `• [${m.date}] ${m.name}: ${m.quantity} ${m.units}`)
+					.join('\n');
+
+				alert(`📦 Товари списані на угоду №${term}:\n\n${listText}`);
+			}
+		} catch (err) {
+			console.error("Помилка пошуку:", err);
+			alert("Помилка при пошуку даних");
+		}
+	};
+
+	const handleSaveIds = async () => {
+		const idsArray = newIdsString
+			.split(',')
+			.map(id => id.trim())
+			.filter(id => id !== "")
+			.map(Number);
+
+		if (idsArray.some(isNaN)) {
+			alert("Помилка: вводити можна тільки числа, розділені комою.");
+			return;
+		}
+
+		if (window.confirm("Оновити список товарів для всіх користувачів?")) {
+			try {
+				await firebase.database().ref('settings/productsForWorkOrders').set(idsArray);
+				setDynamicProductIds(idsArray);
+				setIsEditingIds(false);
+				alert("Список оновлено!");
+			} catch (err) {
+				alert("Помилка збереження.");
+			}
+		}
+	};
+
 	const handleAddMaterial = async (productId) => {
 		const valueToAdd = Number(inputValues[productId]);
-		// Беремо номер угоди з локального стану за ID продукту
-		const agreement = agreementValues[productId] || "";
+		const localAgreement = (agreementValues[productId] || "").trim();
+		const agreement = localAgreement !== "" ? localAgreement : commonAgreement;
 
 		if (!valueToAdd || valueToAdd <= 0) {
 			alert("Введіть коректну кількість");
 			return;
 		}
+		if (!agreement || agreement.trim() === "") {
+			alert("Введіть номер угоди (загальний або для цього товару)");
+			return;
+		}
 
 		try {
-			console.log(`Відправка: Продукт ${productId}, К-сть: ${valueToAdd}, Угода: ${agreement}`);
-
-			// Передаємо agreement третім або четвертим параметром (залежно від вашого API)
-			// Зазвичай структура: (userId, productId, value, agreement)
 			await addUsedMaterial(selectedUser, productId, valueToAdd, agreement);
-
-			// Оновлюємо дані на екрані
 			await fetchUsedMaterials(selectedUser);
-
-			// Очищаємо обидва інпути після успішного додавання
 			setInputValues(prev => ({ ...prev, [productId]: "" }));
-			setAgreementValues(prev => ({ ...prev, [productId]: "" }));
-
 			alert("Дані успішно додано");
 		} catch (err) {
 			console.error("Помилка додавання:", err);
-			alert("Не вдалося зберегти дані");
 		}
 	};
 
-	// --- ІСТОРІЯ (Виправлено логіку отримання) ---
 	const handleHistory = async (productId) => {
 		try {
-			// 1. Отримуємо дані з пропсів (Firebase)
 			const hist = await fetchUsedMaterialsHistory(selectedUser, productId);
-
-			console.log("LOG: Результат у компоненті:", hist);
+			const productInfo = fullMaterialsList.find(s => Number(s.productId) === Number(productId));
+			const productName = productInfo?.name || `Товар #${productId}`;
+			const units = productInfo?.units || '';
 
 			if (!hist || hist.length === 0) {
-				alert(`Історія для товару №${productId} відсутня у базі.`);
+				alert(`Історія для "${productName}" порожня.`);
 				return;
 			}
 
-			// Знаходимо назву товару для заголовка (якщо є доступ до списку summary)
-			const productInfo = invoicesSummary.find(s => s.productId === productId);
-			const productName = productInfo?.name || `Товар №${productId}`;
-			const units = productInfo?.units || 'од.';
+			const sortedLogs = [...hist].sort((a, b) => a.createdAt - b.createdAt);
+			let runningTotal = 0;
 
-			// 2. Формуємо текст історії
-			// .slice() робимо, щоб не мутувати оригінальний масив
-			// .reverse() щоб нові записи були зверху
-			const historyText = hist
-				.slice()
-				.reverse()
-				.map(h => {
-					const date = h.createdAt ? new Date(h.createdAt).toLocaleString("uk-UA") : "---";
-					// Формат: [Дата] — Списано: X (Сумарно: Y) [Угода: Z]
-					return `${date} — Списано: ${h.value} ${units} (Сумарно: ${h.currentValue}) ${h.agreement ? `[Угода: ${h.agreement}]` : '[без угоди]'}`;
-				})
-				.join("\n");
+			const historyLines = sortedLogs.map(log => {
+				const val = Number(log.value || 0);
+				runningTotal += val;
+				const date = log.createdAt ? new Date(log.createdAt).toLocaleString("uk-UA") : "---";
+				return `${date} — Списано: ${val} ${units} (Сумарно: ${runningTotal}) ${log.agreement ? `[Угода: ${log.agreement}]` : ''}`;
+			});
 
-			const fullMessage = `📜 Історія списань для: ${productName}\n\n${historyText}`;
+			const historyText = historyLines.reverse().join('\n');
+			const fullMessage = `📜 Історія списань для: ${productName}\n📊 Всього списано: ${runningTotal} ${units}\n\n${historyText}`;
 
-			// 3. Перевірка на довжину тексту (щоб не було "...")
 			if (fullMessage.length > 1000) {
-				// Якщо текст занадто довгий для alert, відкриваємо у новому вікні
 				const newWindow = window.open("", "_blank", "width=700,height=500");
-				newWindow.document.write(`
-                <html>
-                    <head><title>Історія списань</title></head>
-                    <body style="font-family: sans-serif; padding: 20px; line-height: 1.6;">
-                        <h2 style="border-bottom: 2px solid #eee; padding-bottom: 10px;">${productName}</h2>
-                        <pre style="background: #f8f9fa; padding: 15px; border-radius: 5px; white-space: pre-wrap;">${fullMessage}</pre>
-                        <button onclick="window.close()" style="padding: 10px 20px; cursor: pointer;">Закрити</button>
-                    </body>
-                </html>
-            `);
-			} else {
-				alert(fullMessage);
-			}
-
-		} catch (err) {
-			console.error("LOG: Помилка в handleHistory:", err);
-			alert("Не вдалося завантажити історію.");
-		}
+				if (newWindow) {
+					newWindow.document.write(`<html><head><title>Історія</title></head><body style="padding:20px; font-family:monospace; background:#f4f4f4;"><pre>${fullMessage}</pre></body></html>`);
+					newWindow.document.close();
+				} else { alert(fullMessage); }
+			} else { alert(fullMessage); }
+		} catch (err) { alert("Не вдалося завантажити історію."); }
 	};
 
-	// 1. Обов'язково стрілочна функція
 	const handleUndo = async (productId) => {
-		console.log("%c --- СТАРТ handleUndo ---", "color: blue; font-weight: bold;");
-
 		try {
-			// ПОМИЛКА 1: Ви використовували this.props, але UsedMaterialsTable — це ФУНКЦІЯ.
-			// У функціях пропси беруться прямо з аргументів (вони вже є у вас зверху).
-			console.log("1. Продукт:", productId, "| Користувач:", selectedUser);
-
-			// Крок історії
-			// ПОМИЛКА 2: customerId був undefined, використовуємо selectedUser
 			const hist = await fetchUsedMaterialsHistory(selectedUser, productId);
-			console.log("2. Отримана історія:", hist);
-
-			const currentTotal = (usedMaterials || {})[productId] || 0;
-			console.log("3. Поточна сума в Redux:", currentTotal);
-
-			if (!hist || hist.length === 0) {
-				alert("Зупинка: Історія порожня або не знайдена");
-				return;
-			}
+			const currentTotal = usedMaterials?.[productId] || 0;
+			if (!hist || hist.length === 0) return;
 
 			const lastEntry = hist[hist.length - 1];
 			const rollbackValue = currentTotal - lastEntry.value;
-			console.log("4. Останній запис:", lastEntry.value, "| Результат після відкату:", rollbackValue);
 
-			if (window.confirm(`Відмінити дію (+${lastEntry.value})? Поточне значення ${currentTotal} стане ${rollbackValue}`)) {
-				console.log("5. Підтверджено. Запис у базу...");
-
-				// ПОМИЛКА 3: Викликаємо функції прямо, без this.props
+			if (window.confirm(`Відмінити останню дію (+${lastEntry.value})?`)) {
 				await addUsedMaterial(selectedUser, productId, null, null, rollbackValue);
-
-				console.log("6. Оновлення даних на екрані...");
 				await fetchUsedMaterials(selectedUser);
-				console.log("%c --- УСПІШНО ЗАВЕРШЕНО ---", "color: green; font-weight: bold;");
 			}
-
-		} catch (err) {
-			console.error("ПОМИЛКА в handleUndo:", err);
-			alert("Помилка при спробі відкату");
-		}
+		} catch (err) { alert("Помилка при відкаті"); }
 	};
 
 	return (
 		<div className={classes.usedMaterialsSection}>
-			<h3 className={classes.sectionTitle}>🛠 Використані матеріали</h3>
+			<div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+				<h3 className={classes.sectionTitle}>🛠 Використані матеріали</h3>
+				{/* Кнопка видима тільки якщо адмін має повний доступ */}
+				{isAdminFullAccess && (
+					<button
+						onClick={() => {
+							setIsEditingIds(!isEditingIds);
+							setNewIdsString(dynamicProductIds.join(', '));
+						}}
+						style={{ fontSize: '12px', padding: '5px 10px', cursor: 'pointer', background: '#28a745' }}
+					>
+						{isEditingIds ? "✖ Закрити налаштування" : "⚙ Налаштувати список ID (productsForWorkOrders)"}
+					</button>
+				)}
+			</div>
+
+			{isEditingIds && (
+				<div style={{ marginBottom: '15px', padding: '15px', background: '#fff3cd', border: '1px solid #ffeeba', borderRadius: '8px' }}>
+					<p style={{ margin: '0 0 10px 0', fontSize: '14px', fontWeight: 'bold' }}>🔧 Редагування списку ID товарів (через кому):</p>
+					<textarea
+						value={newIdsString}
+						onChange={(e) => setNewIdsString(e.target.value)}
+						style={{ width: '100%', minHeight: '60px', padding: '10px', borderRadius: '4px', border: '1px solid #ccc' }}
+					/>
+					<button
+						onClick={handleSaveIds}
+						className={classes.btnAdd}
+						style={{ marginTop: '10px', width: 'auto', background: '#28a745', borderColor: '#28a745' }}
+					>
+						💾 Зберегти зміни в Firebase
+					</button>
+				</div>
+			)}
+
+			<div className={classes.globalAgreementWrapper} style={{
+				marginBottom: '15px',
+				padding: '15px',
+				background: '#f1f4f9',
+				border: '1px solid #cbd5e0',
+				borderRadius: '8px',
+				display: 'flex',
+				flexDirection: 'column', // За замовчуванням стовпчиком (для мобілок)
+				gap: '15px'
+			}}>
+				{/* Блок: Загальна угода */}
+				<div style={{
+					display: 'flex',
+					flexDirection: 'column', // Лейбл над інпутом на мобілці
+					gap: '8px'
+				}}>
+					<label style={{ fontWeight: 'bold', color: '#2d3748' }}>📄 Загальна угода:</label>
+					<input
+						type="text"
+						placeholder="Номер для всіх товарів..."
+						value={commonAgreement}
+						onChange={(e) => setCommonAgreement(e.target.value)}
+						className={classes.inputAgreement}
+						style={{
+							width: '100%', // На мобілці на всю ширину
+							maxWidth: '300px', // На десктопі не розтягуватиметься надто сильно
+							padding: '8px 12px',
+							borderRadius: '4px',
+							border: '1px solid #ccc',
+							boxSizing: 'border-box' // Важливо, щоб padding не додавався до ширини
+						}}
+					/>
+				</div>
+
+				{/* Блок: Перевірка угоди */}
+				<div style={{
+					display: 'flex',
+					flexDirection: 'column',
+					gap: '10px',
+					background: '#ffffff',
+					padding: '12px',
+					borderRadius: '6px',
+					boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
+					border: '1px solid #e2e8f0'
+				}}>
+					<label style={{ fontWeight: 'bold', color: '#2d3748' }}>🔍 Перевірка угоди:</label>
+					<div style={{
+						display: 'flex',
+						gap: '8px',
+						flexWrap: 'wrap' // Якщо кнопка не влізе — вона перенесеться вниз
+					}}>
+						<input
+							type="text"
+							placeholder="Введіть № угоди..."
+							value={searchAgreement}
+							onChange={(e) => setSearchAgreement(e.target.value)}
+							className={classes.inputAgreement}
+							style={{
+								flex: '1', // Інпут забирає весь вільний простір
+								minWidth: '140px', // Але не стає меншим за це значення
+								padding: '8px',
+								borderRadius: '4px',
+								border: '1px solid #ccc'
+							}}
+						/>
+						<button
+							onClick={handleSearchByAgreement}
+							className={classes.btnAdd}
+							style={{
+								width: 'auto',
+								flexGrow: '1', // На дуже малих екранах кнопка теж розтягнеться
+								padding: '8px 15px',
+								backgroundColor: '#3498db',
+								borderColor: '#2980b9',
+								fontSize: '14px',
+								whiteSpace: 'nowrap'
+							}}
+						>
+							Знайти товари
+						</button>
+					</div>
+				</div>
+			</div>
+
 			<table className={classes.table}>
 				<thead>
 					<tr>
-						<th style={{ width: "50%" }}>Товар</th>
-						<th>Управління</th>
+						<th style={{ width: "35%", textAlign: "left" }}>Товар</th>
+						<th style={{ width: "15%", textAlign: "center" }}>Взято</th>
+						<th style={{ width: "50%", textAlign: "center" }}>Управління</th>
 					</tr>
 				</thead>
 				<tbody>
-					{invoicesSummary.map((item) => {
-						const { productId, name } = item;
-						// Зчитуємо число прямо з об'єкта usedMaterials
-						const value = usedMaterials?.[productId] ?? 0;
+					{fullMaterialsList.map((item) => {
+						const { productId, name, totalQuantity, units } = item;
+						const valueInRedux = usedMaterials?.[productId] ?? 0;
 
 						return (
 							<tr key={productId}>
-								<td>{name}</td>
-								<td>
-									<div className={classes.usedWrapper}>
-										<span className={classes.totalBadge}>{value}</span>
+								<td style={{ verticalAlign: "middle" }}>{name}</td>
+								<td style={{ textAlign: "center", fontWeight: "bold", color: "#555" }}>
+									{totalQuantity} {units}
+								</td>
+								<td style={{ verticalAlign: "middle" }}>
+									<div className={classes.usedWrapper} style={{ justifyContent: "center" }}>
+										<span className={classes.totalBadge}>{valueInRedux}</span>
 										<input
 											type="number"
 											value={inputValues[productId] ?? ""}
-											onChange={e => setInputValues(prev => ({
-												...prev, [productId]: e.target.value
-											}))}
+											onChange={e => setInputValues(prev => ({ ...prev, [productId]: e.target.value }))}
 											className={classes.inputSmall}
 											placeholder="К-сть"
 										/>
 										<input
 											type="text"
+											placeholder={commonAgreement || "Угода №"}
 											value={agreementValues[productId] ?? ""}
-											onChange={e => setAgreementValues(prev => ({
-												...prev, [productId]: e.target.value
-											}))}
-											className={classes.inputAgreement} // Стилі, які ми розібрали раніше
-											placeholder="Угода №"
+											onChange={e => setAgreementValues(prev => ({ ...prev, [productId]: e.target.value }))}
+											className={classes.inputAgreement}
 										/>
-										<button className={classes.btnAdd} onClick={() => handleAddMaterial(productId)}>
-											Додати
-										</button>
-										<button
-											className={classes.btnUndo}
-											onClick={() => handleUndo(productId)}
-										>
-											<span className="undoIcon">↩</span>
-										</button>
-										<button className={classes.btnHistory} onClick={() => handleHistory(productId)}>
-											🕒
-										</button>
+										<button className={classes.btnAdd} onClick={() => handleAddMaterial(productId)}>Додати</button>
+										<button className={classes.btnUndo} onClick={() => handleUndo(productId)}><span className="undoIcon">↩</span></button>
+										<button className={classes.btnHistory} onClick={() => handleHistory(productId)}>📜</button>
 									</div>
 								</td>
 							</tr>
@@ -211,53 +402,27 @@ const UsedMaterialsTable = ({
 };
 
 const InvoicesPage = ({
-	hasAccount,
-	customerName,
-	customerId,
-	invoices,
-	invoicesSummary,
-	fetchInvoices,
-	fetchInvoicesSummary,
-	customers,
-	notifications,
-	fetchOrderNotifications,
-	deleteNotification,
-	clearNotifications,
-	usedMaterials,
-	fetchUsedMaterials,
-	addUsedMaterial,
-	archiveAllDataMonthly,
-	stock
+	hasAccount, customerName, customerId, invoices, invoicesSummary, fetchInvoices, fetchInvoicesSummary,
+	customers, notifications, fetchOrderNotifications, deleteNotification, clearNotifications,
+	usedMaterials, fetchUsedMaterials, addUsedMaterial, archiveAllDataMonthly, stock
 }) => {
 
-	const [inputValues, setInputValues] = useState({});
 	const [selectedUser, setSelectedUser] = useState(customerId || '');
-	const [admins, setAdmins] = useState({}); // ← стан для доступів з Firebase
+	const [admins, setAdmins] = useState({});
 
-	const authAdmin = window.localStorage.getItem("authAdmin");
 	const idThisCustomers = window.localStorage.getItem("idThisCustomers");
 
-	// --- завантаження доступів з Firebase ---
 	useEffect(() => {
 		const ref = firebase.database().ref('settings/admins');
-		ref.on('value', snapshot => {
-			setAdmins(snapshot.val() || {});
-		});
+		ref.on('value', snapshot => { setAdmins(snapshot.val() || {}); });
 		return () => ref.off();
 	}, []);
 
-	// --- перевірка доступів ---
-	const isAdminInvoices = (hasAccount && authAdmin === "true") ||
-		(!!admins[idThisCustomers]?.invoices);
+	// Перевіряємо: користувач залогінений ТА має відповідне поле "true" у базі адмінів
+	const isAdminInvoices = hasAccount && !!admins[idThisCustomers]?.invoices;
+	const isAdminUsedMaterials = hasAccount && !!admins[idThisCustomers]?.usedMaterials;
+	const isAdminFullAccess = hasAccount && !!admins[idThisCustomers]?.fullAccess;
 
-	const isAdminUsedMaterials = (hasAccount && authAdmin === "true") ||
-		(!!admins[idThisCustomers]?.usedMaterials);
-
-	// ✅ перевірка, чи користувач має fullAccess	
-	const isAdminFullAccess = (hasAccount && authAdmin === "true") ||
-		(!!admins[idThisCustomers]?.fullAccess);
-
-	// --- Вибраний користувач ---
 	useEffect(() => {
 		const savedId = window.localStorage.getItem('idSelectedCustomer') || idThisCustomers;
 		if (savedId) {
@@ -266,107 +431,54 @@ const InvoicesPage = ({
 		}
 	}, []);
 
-	// --- Завантаження накладних та повідомлень ---
 	useEffect(() => {
 		if (hasAccount && selectedUser) {
 			fetchInvoices(selectedUser);
 			fetchInvoicesSummary(selectedUser);
 			fetchOrderNotifications(selectedUser);
 		}
-	}, [selectedUser, hasAccount, fetchInvoices, fetchInvoicesSummary, fetchOrderNotifications]);
+	}, [selectedUser, hasAccount]);
 
-	// --- Завантаження використаних матеріалів ---
 	useEffect(() => {
-		if (selectedUser) {
-			fetchUsedMaterials(selectedUser);
-		}
+		if (selectedUser) { fetchUsedMaterials(selectedUser); }
 	}, [selectedUser]);
 
 	return (
 		<div className={classes.wrapper}>
-
-			{/* ПОВІДОМЛЕННЯ */}
 			{isAdminUsedMaterials && notifications.length > 0 && (
 				<div className={classes.notificationsBlock}>
-
 					<div className={classes.notificationsHeader}>
 						<h3>🔔 Підтверджені замовлення</h3>
-
-						<button
-							className={classes.clearBtn}
-							onClick={() => {
-								if (window.confirm("Очистити всі повідомлення?")) {
-									clearNotifications(isAdminInvoices ? null : selectedUser);
-								}
-							}}
-						>
-							❌ Очистити всі
-						</button>
-
+						<button className={classes.clearBtn} onClick={() => { if (window.confirm("Очистити всі?")) clearNotifications(isAdminInvoices ? null : selectedUser); }}>❌ Очистити всі</button>
 					</div>
-
 					<div className={classes.notificationsList}>
 						{notifications.map((n) => (
 							<div key={n.orderId} className={classes.notificationItem}>
-
 								<div>
 									<strong>Замовлення #{n.orderId}</strong>
-									<div className={classes.meta}>
-										👤 {n.customerId} ({customers.find(c => c.id === n.customerId)?.name || 'Без імені'}) | 📅 {n.date}
-									</div>
+									<div className={classes.meta}>👤 {n.customerId} ({customers.find(c => c.id === n.customerId)?.name}) | 📅 {n.date}</div>
 								</div>
-
-								<button
-									className={classes.deleteBtn}
-									onClick={() => {
-										if (window.confirm(`Видалити замовлення #${n.orderId}?`)) {
-											deleteNotification(n);
-										}
-									}}
-								>
-									🗑
-								</button>
-
+								<button className={classes.deleteBtn} onClick={() => { if (window.confirm("Видалити?")) deleteNotification(n); }}>🗑</button>
 							</div>
 						))}
 					</div>
-
 				</div>
 			)}
 
-			{/* HEADER */}
 			<div className={classes.pageHeader}>
-				<h2 className={classes.pageTitle}>
-					🧾 Накладні: {customerName}
-				</h2>
-
+				<h2 className={classes.pageTitle}>🧾 Накладні: {customerName}</h2>
 				{isAdminInvoices && (
-
 					<div className={classes.selectWrapper}>
 						<label className={classes.label}>👤 Виберіть отримувача:</label>
-						<select
-							className={classes.select}
-							value={selectedUser}
-							onChange={e => {
-								const userId = e.target.value;
-								setSelectedUser(userId);
-								window.localStorage.setItem('idSelectedCustomer', userId);
-							}}
-						>
+						<select className={classes.select} value={selectedUser} onChange={e => { setSelectedUser(e.target.value); window.localStorage.setItem('idSelectedCustomer', e.target.value); }}>
 							<option value="">--Choose customer--</option>
-							{customers
-								.filter(c => (c.id === 7 || c.id > 127) && c.name !== "Шановний клієнт")
-								.map(c => (
-									<option key={c.id} value={c.id}>
-										{c.name} ({c.email})
-									</option>
-								))}
+							{customers.filter(c => (c.id === 7 || c.id > 127) && c.name !== "Шановний клієнт").map(c => (
+								<option key={c.id} value={c.id}>{c.name} ({c.email})</option>
+							))}
 						</select>
 					</div>
 				)}
 			</div>
-
-			{invoices.length === 0 && <p>Накладних ще немає.</p>}
 
 			<h3 className={classes.sectionTitle}>📑 Замовлення:</h3>
 
@@ -402,76 +514,46 @@ const InvoicesPage = ({
 				</tbody>
 			</table>
 
-			{/* TABLE: ПІДСУМКИ */}
-			<h3 className={classes.sectionTitle}>📊 Загальна кількість товарів взятих на складі:</h3>
-			{invoicesSummary.length === 0 && <p>Підсумків ще немає.</p>}
-
+			<h3 className={classes.sectionTitle}>📊 Загальна кількість взятих товарів:</h3>
 			<table className={classes.table}>
-				<thead>
-					<tr>
-						<th style={{ width: "75%" }}>Товари</th>
-						<th style={{ width: "25%" }} className={classes.alignRight}>Кі-сть</th>
-					</tr>
-				</thead>
+				<thead><tr><th>Товари</th><th className={classes.alignRight}>Кі-сть</th></tr></thead>
 				<tbody>
 					{invoicesSummary.map((item, index) => (
-						<tr key={index}>
-							<td>{item.name}</td>
-							<td className={classes.alignRight}>{item.totalQuantity} {item.units}</td>
-						</tr>
+						<tr key={index}><td>{item.name}</td><td className={classes.alignRight}>{item.totalQuantity} {item.units}</td></tr>
 					))}
 				</tbody>
 			</table>
 
-			{/* Використані матеріали */}
-			{isAdminUsedMaterials && invoicesSummary.length > 0 && (
+			{isAdminUsedMaterials && selectedUser && (
 				<UsedMaterialsTable
 					selectedUser={selectedUser}
 					invoicesSummary={invoicesSummary}
 					usedMaterials={usedMaterials}
 					fetchUsedMaterials={fetchUsedMaterials}
 					addUsedMaterial={addUsedMaterial}
+					stock={stock}
 					fetchUsedMaterialsHistory={fetchUsedMaterialsHistory}
+					isAdminFullAccess={isAdminFullAccess}
 				/>
 			)}
 
-			{/* TABLE: ЗАЛИШКИ */}
 			{isAdminInvoices && stock && (
 				<>
 					<h3 className={classes.sectionTitle}>📦 Залишки на складі:</h3>
 					<table className={classes.table}>
-						<thead>
-							<tr>
-								<th style={{ width: "75%" }}>Товари</th>
-								<th style={{ width: "25%" }} className={classes.alignRight}>Кі-сть</th>
-							</tr>
-						</thead>
+						<thead><tr><th>Товари</th><th className={classes.alignRight}>Кі-сть</th></tr></thead>
 						<tbody>
-							{stock.filter(s => s.visibleproduct).map((s, index) => (
-								<tr key={index}>
-									<td>{s.name}</td>
-									<td className={classes.alignRight}>{s.quantity} {s.units}</td>
-								</tr>
+							{stock?.filter(s => !!s.visibleproduct).map((s, index) => (
+								<tr key={s.id}><td>{s.name}</td><td className={classes.alignRight}>{s.quantity} {s.units}</td></tr>
 							))}
 						</tbody>
 					</table>
 				</>
 			)}
+
 			{isAdminFullAccess && (
-				<button
-					className={classes.btnAdd}
-					style={{
-						backgroundColor: '#f39c12', // Прибрали !important, тут він не працює
-						width: 'auto',
-						marginBottom: '20px',
-						borderColor: '#e67e22'
-					}}
-					onClick={() => {
-						if (window.confirm("УВАГА! Буде створено повну копію всіх даних (накладні, підсумки, списання) за поточний місяць у вузол 'archive'. Продовжити?")) {
-							archiveAllDataMonthly();
-						}
-					}}
-				>
+				<button className={classes.btnAdd} style={{ backgroundColor: '#f39c12', width: 'auto', marginBottom: '20px', borderColor: '#e67e22' }}
+					onClick={() => { if (window.confirm("Створити архів?")) archiveAllDataMonthly(); }}>
 					📦 Створити архів за поточний місяць
 				</button>
 			)}
@@ -492,13 +574,6 @@ const mapStateToProps = state => ({
 });
 
 export default connect(mapStateToProps, {
-	fetchInvoices,
-	fetchInvoicesSummary,
-	fetchOrderNotifications,
-	deleteNotification,
-	clearNotifications,
-	fetchUsedMaterials,
-	addUsedMaterial,
-	fetchUsedMaterialsHistory,
-	archiveAllDataMonthly
+	fetchInvoices, fetchInvoicesSummary, fetchOrderNotifications, deleteNotification, clearNotifications,
+	fetchUsedMaterials, addUsedMaterial, fetchUsedMaterialsHistory, archiveAllDataMonthly
 })(InvoicesPage);

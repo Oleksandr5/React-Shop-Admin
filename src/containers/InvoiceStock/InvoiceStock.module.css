@@ -1,0 +1,93 @@
+.InvoiceStock {
+    padding-top: 1rem;
+    padding-bottom: 5vh;
+}
+
+/* Контейнер, який обмежує висоту для появи внутрішнього скролу */
+.renderOrders {
+    max-height: 70vh; /* Це важливо для роботи onScroll */
+    padding: 15px;
+    background-color: #fff;
+    border-radius: 4px;
+}
+
+/* Стиль для фото товару в списку (якщо ви будете виводити їх як у замовленнях) */
+.productFoto {
+    height: 100px;
+    width: 100px;
+    background-repeat: no-repeat;
+    background-position: center;
+    border: 1px solid #eee;
+    border-radius: 4px;
+}
+
+/* Кнопка "Вгору" */
+.btnTop {
+    z-index: 99;
+    position: fixed; /* Щоб вона була поверх контенту при скролі */
+    bottom: 50px;
+    right: 30px; /* Зазвичай кнопка вгору справа */
+    opacity: 0.8;
+    border-radius: 50%;
+    width: 50px;
+    height: 50px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+}
+
+.btnTop:hover {
+    opacity: 1;
+}
+
+/* Заголовки */
+.h5 {
+    font-size: 1.1rem;
+    font-weight: 600;
+    margin-bottom: 0.5rem;
+}
+
+/* Кнопка видалення (хрестик), якщо ви її додасте */
+.btnRemove {
+    top: 10px;
+    right: 10px;
+    background: transparent;
+    border: none;
+    color: #dc3545;
+    font-size: 1.2rem;
+    cursor: pointer;
+    transition: transform 0.2s;
+}
+
+.btnRemove:hover {
+    transform: scale(1.2);
+}
+
+/* Поле вводу кількості (якщо потрібно) */
+.inputPrice {
+    width: 70px;
+    text-align: center;
+}
+
+/* Адаптивність для мобільних пристроїв */
+@media (max-width: 575.98px) {
+    .h5 {
+        font-size: 0.9rem;
+    }
+    
+    .InvoiceStock {
+        padding: 10px;
+    }
+
+    .renderOrders {
+        max-height: 80vh; /* На мобільних можна дати більше простору */
+    }
+
+    .btnTop {
+        bottom: 20px;
+        right: 15px;
+        width: 40px;
+        height: 40px;
+    }
+}

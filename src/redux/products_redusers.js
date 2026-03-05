@@ -184,7 +184,7 @@ export default function products(state = initialState, action) {
 		case UPDATE_INVOICE_STOCK:
 			return {
 				...state,
-				invoiceStock: action.payload ? action.payload : []
+				invoiceStock: action.payload === null ? [] : action.payload
 			};
 
 

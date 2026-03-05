@@ -26,6 +26,22 @@ export function fetchInvoices(customerId) {
 	};
 }
 
+// ЗМІНЕНО: тепер повертає об'єкт для зручного пошуку за ID
+// export function fetchInvoicesSummary(customerId) {
+// 	return async (dispatch) => {
+// 		try {
+// 			const snapshot = await firebase.database().ref(`invoicesSummary/${customerId}`).once("value");
+// 			const data = snapshot.val();
+// 			dispatch({
+// 				type: UPDATE_INVOICES_SUMMARY,
+// 				payload: data || {}
+// 			});
+// 		} catch (error) {
+// 			console.log("Error fetching invoices summary:", error);
+// 		}
+// 	};
+// }
+
 export function fetchInvoicesSummary(customerId) {
 	return async (dispatch) => {
 		try {
@@ -34,7 +50,11 @@ export function fetchInvoicesSummary(customerId) {
 			console.log("Fetched raw invoicesSummary from Firebase:", data)
 			dispatch({
 				type: UPDATE_INVOICES_SUMMARY,
-				payload: data ? Object.values(data) : []
+				// Додаємо productId з ключа, якщо його немає в самому об'єкті
+				payload: data ? Object.keys(data).map(key => ({
+					...data[key],
+					productId: data[key].productId || Number(key)
+				})) : []
 			});
 			console.log("Fetched invoices summary:", data);
 		} catch (error) {
@@ -197,10 +217,16 @@ export const fetchUsedMaterialsHistory = async (customerId, productId) => {
 
 // Функція архівації
 export const archiveAllDataMonthly = () => {
-	return async (dispatch, getState) => { // Додаємо getState
+	return async (dispatch, getState) => {
 		try {
 			const date = new Date();
+
+			// Формуємо основний ключ місяця: "2026-03"
 			const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+
+			// Додаємо точний час для унікальності запису: "02_14-30" (день_години-хвилини)
+			const timeStamp = `${String(date.getDate()).padStart(2, '0')}_${String(date.getHours()).padStart(2, '0')}-${String(date.getMinutes()).padStart(2, '0')}`;
+
 			const db = firebase.database();
 
 			// Отримуємо поточний стан продуктів (складу) з Redux
@@ -215,22 +241,26 @@ export const archiveAllDataMonthly = () => {
 
 			const archiveData = {};
 
+			// Збираємо дані з усіх гілок паралельно
 			await Promise.all(Object.keys(paths).map(async (key) => {
 				const snapshot = await db.ref(paths[key]).once('value');
 				archiveData[key] = snapshot.val();
 			}));
 
-			// Записуємо в архів з урахуванням залишків
-			await db.ref(`archive/${monthKey}`).set({
+			// Записуємо в архів за шляхом: archive/2026-03/02_14-30
+			// Тепер кожен запис — це окрема папка всередині місяця
+			await db.ref(`archive/${monthKey}/${timeStamp}`).set({
+				archivedAt: date.toISOString(), // Додаємо точну дату для історії
 				invoicesHistory: archiveData.invoices || {},
 				invoicesSummaryHistory: archiveData.invoicesSummary || {},
 				usedMaterialsHistory: archiveData.usedMaterials || {},
 				usedMaterialsHistoryHistory: archiveData.usedMaterialsHistory || {},
-				stockAtThatTime: currentStock || {} // Фіксуємо склад!
+				stockAtThatTime: currentStock || {}
 			});
 
 			dispatch({ type: ARCHIVE_DATA_SUCCESS });
-			alert(`✅ Загальний архів за ${monthKey} успішно створено!`);
+			alert(`✅ Архів створено: archive/${monthKey}/${timeStamp}`);
+
 		} catch (error) {
 			console.error("Помилка архівації:", error);
 			alert("Помилка при створенні архіву: " + error.message);

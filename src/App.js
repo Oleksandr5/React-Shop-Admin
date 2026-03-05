@@ -18,6 +18,8 @@ import SubcategoriesListEdit from './containers/SubcategoriesListEdit/Subcategor
 import { Route, Switch, Redirect } from 'react-router-dom'
 import InvoicesPage from "./containers/CustomersOrders/Invoices/InvoicesPage"
 import ArchivePage from './containers/CustomersOrders/Invoices/ArchivePage';
+import SwitchInvoiceStock from './containers/InvoiceStock/SwitchInvoiceStock/SwitchInvoiceStock'
+import InvoiceStock from './containers/InvoiceStock/InvoiceStock'
 import firebase from 'firebase/app'  // <-- Додано для Firebase ⬅
 import 'firebase/database'           // <-- Додано для Firebase ⬅
 
@@ -73,6 +75,9 @@ class App extends Component {
 					<Route path="/customers-carts" component={CustomersCarts} />
 					<Route path="/invoices" component={InvoicesPage} />
 					<Route path="/archive" component={ArchivePage} />
+
+					<Route path="/invoice-stock/:id" component={InvoiceStock} />
+					<Route path="/invoice-stock" component={SwitchInvoiceStock} />
 
 					<Route path="/customerslistedit" component={CustomersListEdit} />
 					<Route path="/categorieslistedit" component={CategoriesListEdit} />

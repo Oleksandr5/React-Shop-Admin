@@ -15,6 +15,7 @@ const initialState = {
 		{ to: '/your-orders', name: 'Ваші замовлення', exact: true },
 		{ to: '/switchcustomersorders', name: 'Замовлення клієнтів', exact: true },
 		{ to: '/switchcustomerscarts', name: 'Кошики клієнтів', exact: true },
+		{ to: '/invoice-stock', name: '📦 Накладні складу', exact: true, adminOnly: true },
 		{ to: '/invoices', name: 'Накладні', exact: true },
 		{ to: '/archive', name: '📦 Архів', exact: true, adminOnly: true },
 		{ to: '/customerslistedit', name: 'Список користувачів', exact: true },

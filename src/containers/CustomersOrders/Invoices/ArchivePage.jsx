@@ -7,9 +7,13 @@ import classes from './InvoicesPage.module.css';
 const ArchivePage = ({ customers, products }) => {
 	const [months, setMonths] = useState([]);
 	const [selectedMonth, setSelectedMonth] = useState('');
+	const [availableSnapshots, setAvailableSnapshots] = useState([]); // Списк записів за місяць
+	const [selectedSnapshot, setSelectedSnapshot] = useState('');   // Обраний час
 	const [selectedUser, setSelectedUser] = useState('');
 	const [fullArchive, setFullArchive] = useState(null);
+	const [searchAgreement, setSearchAgreement] = useState('');
 
+	// Завантаження списку місяців при старті
 	useEffect(() => {
 		const ref = firebase.database().ref('archive');
 		const handleValue = (snapshot) => {
@@ -20,16 +24,76 @@ const ArchivePage = ({ customers, products }) => {
 		return () => ref.off('value', handleValue);
 	}, []);
 
-	const handleMonthChange = async (month) => {
+	// Діагностика даних у консолі
+	useEffect(() => {
+		if (selectedSnapshot && fullArchive) {
+			console.group("🔍 Діагностика Архіву");
+			console.log("Обраний Snapshot:", selectedSnapshot);
+			console.log("Обраний ID Клієнта (userId):", selectedUser);
+
+			if (fullArchive.invoicesHistory) {
+				console.log("Всі ID клієнтів в історії замовлень:", Object.keys(fullArchive.invoicesHistory));
+				console.log("Дані саме для клієнта " + selectedUser + ":", fullArchive.invoicesHistory[selectedUser]);
+			} else {
+				console.error("❌ Поле invoicesHistory відсутнє в цьому архіві!");
+			}
+
+			if (fullArchive.invoicesSummaryHistory) {
+				console.log("Дані Summary для " + selectedUser + ":", fullArchive.invoicesSummaryHistory[selectedUser]);
+			}
+
+			console.groupEnd();
+		}
+	}, [selectedSnapshot, fullArchive, selectedUser]);
+
+	// Коли змінили місяць — отримуємо список доступних зрізів часу
+	const handleMonthChange = (month) => {
 		setSelectedMonth(month);
+		setSelectedSnapshot('');
 		setSelectedUser('');
-		if (!month) { setFullArchive(null); return; }
-		const snapshot = await firebase.database().ref(`archive/${month}`).once('value');
+		setFullArchive(null);
+		setAvailableSnapshots([]);
+
+		if (month) {
+			firebase.database().ref(`archive/${month}`).once('value', (snapshot) => {
+				const data = snapshot.val();
+				if (data) {
+					// Сортуємо записи: новіші зверху
+					setAvailableSnapshots(Object.keys(data).sort().reverse());
+				}
+			});
+		}
+	};
+
+	// Коли змінили конкретний запис (час) — завантажуємо дані цього зрізу
+	const handleSnapshotChange = async (snapshotKey) => {
+		setSelectedSnapshot(snapshotKey);
+		setSelectedUser('');
+		if (!snapshotKey) {
+			setFullArchive(null);
+			return;
+		}
+		const snapshot = await firebase.database().ref(`archive/${selectedMonth}/${snapshotKey}`).once('value');
 		setFullArchive(snapshot.val());
 	};
 
+	const handleSearchByAgreement = () => {
+		const term = searchAgreement.trim();
+		if (!term || !userData.historyLog) return;
+
+		// В вашому JSON historyLog — це об'єкт з ключами-id від Firebase
+		const logsArray = Object.values(userData.historyLog);
+		const matches = logsArray.filter(log => String(log.agreement || '') === term);
+
+		if (matches.length > 0) {
+			const total = matches.reduce((sum, log) => sum + Number(log.value || 0), 0);
+			alert(`📋 По угоді №${term} всього списано: ${total} од. за цим записом.`);
+		} else {
+			alert("Нічого не знайдено");
+		}
+	};
+
 	const showHistoryAlert = (productId, productName) => {
-		// 1. Отримуємо логи та сортуємо їх від НАЙСТАРІШИХ до НОВИХ для математики
 		const logs = userData.historyLog[productId]
 			? Object.values(userData.historyLog[productId]).sort((a, b) => a.createdAt - b.createdAt)
 			: [];
@@ -43,23 +107,16 @@ const ArchivePage = ({ customers, products }) => {
 		}
 
 		let runningTotal = 0;
-
-		// 2. Формуємо масив рядків з індивідуальним "Сумарно" для кожного запису
 		const historyLines = logs.map(log => {
-			runningTotal += Number(log.value || 0); // Додаємо до накопичувального підсумку
+			runningTotal += Number(log.value || 0);
 			const date = new Date(log.createdAt).toLocaleString();
-
 			return `${date} — Списано: ${log.value} ${units} (Сумарно: ${runningTotal}) ${log.agreement ? `[Угода: ${log.agreement}]` : ''}`;
 		});
 
-		// 3. Перевертаємо, щоб нові були зверху
 		const historyText = historyLines.reverse().join('\n');
-
-		// 4. ПЕРЕВІРКА НА ДОВЖИНУ: якщо тексту забагато для alert, виводимо в консоль або нове вікно
 		const fullMessage = `📜 Історія списань для: ${productName} (Всього: ${runningTotal} ${units})\n\n${historyText}`;
 
 		if (fullMessage.length > 1000) {
-			// Якщо історія гігантська — відкриваємо її в окремому вікні, щоб не обрізало
 			const newWindow = window.open("", "_blank", "width=600,height=400");
 			newWindow.document.write(`<pre style="font-family: monospace; padding: 20px;">${fullMessage}</pre>`);
 			newWindow.document.title = "Історія списань";
@@ -81,9 +138,20 @@ const ArchivePage = ({ customers, products }) => {
 			}));
 		})(),
 		summary: fullArchive.invoicesSummaryHistory?.[userId] ? Object.values(fullArchive.invoicesSummaryHistory[userId]) : [],
-		used: fullArchive.usedMaterialsHistory?.[userId] || {},
-		historyLog: fullArchive.usedMaterialsHistoryHistory?.[userId] || {},
-		stock: fullArchive.stockAtThatTime || products || {}
+
+		// ВИПРАВЛЕНО: Звертаємось напряму до вузла з ID клієнта в корені архіву
+		historyLog: fullArchive[userId] || {},
+
+		// Якщо у вас немає окремого підсумку 'used', його можна вирахувати з historyLog
+		used: (() => {
+			const logs = fullArchive[userId] || {};
+			const summary = {};
+			// Оскільки в логах немає явного productId (тільки agreement), 
+			// логіка usedMaterials може потребувати перегляду структури збереження
+			return summary;
+		})(),
+
+		stock: fullArchive.stockAtThatTime || {}
 	} : null;
 
 	return (
@@ -102,12 +170,26 @@ const ArchivePage = ({ customers, products }) => {
 						{months.map(m => <option key={m} value={m}>{m}</option>)}
 					</select>
 
+					{/* Вибір конкретного часу запису */}
+					<label className={classes.label}>🕒 Запис від:</label>
+					<select
+						value={selectedSnapshot}
+						onChange={(e) => handleSnapshotChange(e.target.value)}
+						className={classes.select}
+						disabled={!availableSnapshots.length}
+					>
+						<option value="">-- Час створення --</option>
+						{availableSnapshots.map(s => (
+							<option key={s} value={s}>{s.replace('_', ' о ')}</option>
+						))}
+					</select>
+
 					<label className={classes.label}>👤 Клієнт:</label>
 					<select
 						value={selectedUser}
 						onChange={(e) => setSelectedUser(e.target.value)}
 						className={classes.select}
-						disabled={!selectedMonth}
+						disabled={!selectedSnapshot}
 					>
 						<option value="">-- Оберіть клієнта --</option>
 						{customers && Object.values(customers)
@@ -156,7 +238,78 @@ const ArchivePage = ({ customers, products }) => {
 						</tbody>
 					</table>
 
-					<h3 className={classes.sectionTitle}>🛠 Використані матеріали:</h3>
+					<div style={{
+						display: 'flex',
+						justifyContent: 'space-between',
+						alignItems: 'center',
+						marginTop: '30px',
+						marginBottom: '15px',
+						flexWrap: 'wrap',
+						gap: '10px'
+					}}>
+						<h3 className={classes.sectionTitle} style={{ margin: 0 }}>🛠 Використані матеріали:</h3>
+
+						<div style={{
+							display: 'flex',
+							alignItems: 'center',
+							gap: '8px',
+							flexWrap: 'wrap', // Дозволяє елементам перестрибувати на новий рядок
+							background: '#f8f9fa',
+							padding: '8px 12px', // Трохи збільшив відступ для мобілок
+							borderRadius: '6px',
+							border: '1px solid #dee2e6'
+						}}>
+							<span style={{
+								fontSize: '13px',
+								fontWeight: '600',
+								color: '#495057',
+								whiteSpace: 'nowrap' // Забороняє розрив тексту "Пошук по угоді"
+							}}>
+								🔍 Пошук по угоді:
+							</span>
+
+							<input
+								type="text"
+								placeholder="№ угоди..."
+								value={searchAgreement}
+								onChange={(e) => setSearchAgreement(e.target.value)}
+								className={classes.select}
+								style={{
+									width: '130px',
+									flexGrow: 1, // Інпут буде розтягуватися, щоб заповнити місце
+									minWidth: '100px', // Мінімальна ширина для зручності
+									height: '30px',
+									margin: 0,
+									padding: '2px 8px',
+									fontSize: '13px'
+								}}
+							/>
+
+							<button
+								onClick={handleSearchByAgreement}
+								className={classes.btnHistory}
+								style={{
+									height: '30px',
+									padding: '0 15px',
+									display: 'flex',
+									alignItems: 'center',
+									justifyContent: 'center',
+									fontSize: '12px',
+									fontWeight: 'bold',
+									background: '#17a2b8',
+									color: '#fff',
+									border: 'none',
+									borderRadius: '4px',
+									cursor: 'pointer',
+									flexGrow: 1, // Кнопка також може розтягуватися на весь рядок у мобільній версії
+									whiteSpace: 'nowrap'
+								}}
+							>
+								ПЕРЕВІРИТИ
+							</button>
+						</div>
+					</div>
+
 					<table className={classes.table}>
 						<thead>
 							<tr>
@@ -209,7 +362,7 @@ const ArchivePage = ({ customers, products }) => {
 				</>
 			) : (
 				<div style={{ textAlign: 'center', marginTop: '50px', color: '#999', padding: '40px' }}>
-					{selectedMonth ? "Оберіть клієнта" : "Будь ласка, оберіть місяць"}
+					{!selectedMonth ? "Будь ласка, оберіть місяць" : !selectedSnapshot ? "Оберіть конкретний запис часу" : "Оберіть клієнта"}
 				</div>
 			)}
 		</div>
