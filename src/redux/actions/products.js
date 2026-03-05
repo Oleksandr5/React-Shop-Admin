@@ -37,7 +37,12 @@ export function fetchProductsData() {
 
 			// ➕ ДОДАЄМО ЗАПИТ ДЛЯ СКЛАДСЬКИХ НАКЛАДНИХ
 			const responseInvoiceStock = await axios.get('invoiceStock.json')
-			const invoiceStockData = responseInvoiceStock.data ? (Array.isArray(responseInvoiceStock.data) ? responseInvoiceStock.data : Object.values(responseInvoiceStock.data)) : []
+			// Більш надійна перевірка на масив
+			const invoiceStockData = responseInvoiceStock.data
+				? (Array.isArray(responseInvoiceStock.data)
+					? responseInvoiceStock.data
+					: Object.values(responseInvoiceStock.data))
+				: []
 
 			dispatch(fetchProductsDataSuccess(categoriesData, products, productsDeleted, ordersData, ordersHistoryData, invoiceStockData))
 
@@ -53,10 +58,17 @@ export function fetchProductsDataStart() {
 	}
 }
 
-export function fetchProductsDataSuccess(categories, products, productsDeleted, orders, ordersHistory) {
+export function fetchProductsDataSuccess(categories, products, productsDeleted, orders, ordersHistory, invoiceStock) {
 	return {
 		type: FETCH_PRODUCTS_DATA_SUCCESS,
-		payload: { categories, products, productsDeleted, orders, ordersHistory }
+		payload: {
+			categories,
+			products,
+			productsDeleted,
+			orders,
+			ordersHistory,
+			invoiceStock // 🔥 Тепер це поле передається в Reducer
+		}
 	}
 }
 
@@ -2138,26 +2150,30 @@ export function changeStatusInvoiceStock(customerId, invoiceStockId, valueSelect
 	return async (dispatch, getState) => {
 		const db = firebase.database();
 
-		// 1. Глибока копія, щоб уникнути помилок мутації
+		/* ========= 1️⃣ Invoice Stock (Архів поставок) ========= */
+		// Робимо глибоку копію для безпеки
 		const invoiceStock = JSON.parse(JSON.stringify(getState().products.invoiceStock));
-		const products = JSON.parse(JSON.stringify(getState().products.products));
-
 		const adminIndex = invoiceStock.findIndex(s => String(s.customerId) === String(customerId));
+
 		if (adminIndex === -1) return;
 
 		const adminData = invoiceStock[adminIndex];
-		const invoice = adminData.cartsHistory.find(inv => inv.invoiceStockId === invoiceStockId);
-		if (!invoice) return;
+		const currentInvoice = adminData.cartsHistory.find(inv => inv.invoiceStockId === invoiceStockId);
 
-		const oldStatus = invoice.status;
+		if (!currentInvoice) return;
+
+		const oldStatus = currentInvoice.status;
 		if (oldStatus === valueSelectedStatusOrder) return;
 
-		// Створюємо Map з примусовим перетворенням ключа в String
+		/* ========= 2️⃣ Products (Актуальні товари на складі) ========= */
+		const products = JSON.parse(JSON.stringify(getState().products.products));
 		const productsMap = new Map(products.map(p => [String(p.id), p]));
 
-		/* ========= 3️⃣ Перевірка залишків (якщо повертаємо в обробку) ========= */
+		/* ========= 3️⃣ Перевірка залишків (якщо вертаємо з "completed" в "in process") ========= */
+		// Коли ми скасовуємо поставку, ми маємо ВІДНЯТИ товар зі складу. 
+		// Треба перевірити, чи не піде залишок у мінус.
 		if (oldStatus === 'completed' && valueSelectedStatusOrder === 'in process...') {
-			const insufficient = invoice.cart.filter(item => {
+			const insufficient = currentInvoice.cart.filter(item => {
 				const product = productsMap.get(String(item.id));
 				return !product || Number(product.quantity) < Number(item.quantity);
 			});
@@ -2167,46 +2183,50 @@ export function changeStatusInvoiceStock(customerId, invoiceStockId, valueSelect
 					const product = productsMap.get(String(item.id));
 					return `${product?.name || 'Товар'}: на складі ${product?.quantity || 0}, потрібно відняти ${item.quantity}`;
 				}).join('\n');
-				alert(`Неможливо скасувати поставку:\n${msg}`);
+				alert(`Неможливо повернути в обробку:\nНедостатньо залишку на складі для списання поставленого товару!\n\n${msg}`);
 				return;
 			}
 		}
 
-		/* ========= 4️⃣ Логіка оновлення залишків на складі ========= */
-		invoice.cart.forEach(item => {
+		/* ========= 4️⃣ Нарахування / Списання товарів на склад ========= */
+		currentInvoice.cart.forEach(item => {
 			const product = productsMap.get(String(item.id));
 			if (!product) return;
 
 			const qty = Number(item.quantity);
+
+			// Якщо статус стає 'completed' — ДОДАЄМО товар на склад
 			if (oldStatus === 'in process...' && valueSelectedStatusOrder === 'completed') {
-				product.quantity = (Number(product.quantity) || 0) + qty;
-			} else if (oldStatus === 'completed' && valueSelectedStatusOrder === 'in process...') {
-				product.quantity = (Number(product.quantity) || 0) - qty;
+				product.quantity = Number((Number(product.quantity || 0) + qty).toFixed(2));
+			}
+			// Якщо повертаємо в 'in process' — ВІДНІМАЄМО товар зі складу
+			else if (oldStatus === 'completed' && valueSelectedStatusOrder === 'in process...') {
+				product.quantity = Number((Number(product.quantity || 0) - qty).toFixed(2));
 			}
 		});
 
-		invoice.status = valueSelectedStatusOrder;
+		/* ========= 5️⃣ Зміна статусу ========= */
+		currentInvoice.status = valueSelectedStatusOrder;
 
-		/* ========= 6️⃣ Firebase & Redux ========= */
-		/* ========= 6️⃣ Оновлення через Axios (щоб збігалося з fetch) ========= */
 		try {
-			// Використовуємо axios.put для повного перезапису актуальними даними
+			/* ========= 6️⃣ Firebase: products + invoiceStock ========= */
+			// Використовуємо методи firebase, як у вашому прикладі
 			await Promise.all([
-				axios.put('products.json', products),
-				axios.put('invoiceStock.json', invoiceStock)
+				db.ref('products').set(products),
+				db.ref('invoiceStock').set(invoiceStock)
 			]);
 
 			/* ========= 7️⃣ Redux: Оновлення стану ========= */
 			dispatch(updateProducts(products));
 			dispatch({
-				type: UPDATE_INVOICE_STOCK,
+				type: UPDATE_INVOICE_STOCK, // Переконайтесь, що цей тип імпортований
 				payload: invoiceStock
 			});
 
-			console.log('✅ Дані успішно збережені в Firebase через Axios');
+			console.log('✅ Статус поставки змінено:', oldStatus, '→', valueSelectedStatusOrder);
 		} catch (e) {
-			console.error("Помилка при збереженні:", e);
-			alert("Помилка при збереженні даних у Firebase (Axios)");
+			console.error("Помилка Firebase:", e);
+			alert("Помилка при оновленні бази даних!");
 		}
 	};
 }
@@ -2401,6 +2421,64 @@ export function removeOrderHistoryCustomer(idCustomer, indexorder) {
 
 	}
 
+}
+
+export function removeInvoicesStockCustomer(customerId) {
+	return async (dispatch, getState) => {
+		const db = firebase.database();
+		let invoiceStock = JSON.parse(JSON.stringify(getState().products.invoiceStock || []));
+
+		// Фільтруємо масив, залишаючи всіх КРІМ цього клієнта
+		invoiceStock = invoiceStock.filter(s => String(s.customerId) !== String(customerId));
+
+		try {
+			await db.ref('invoiceStock').set(invoiceStock);
+
+			// Оновлюємо локальний Redux
+			dispatch({
+				type: 'UPDATE_INVOICE_STOCK',
+				payload: invoiceStock
+			});
+			console.log('✅ Весь архів клієнта очищено');
+		} catch (e) {
+			console.error(e);
+		}
+	}
+}
+
+export function removeInvoiceStockCustomer(customerId, invoiceStockId) {
+	return async (dispatch, getState) => {
+		const db = firebase.database();
+		// 1. Копіюємо стан
+		let invoiceStock = JSON.parse(JSON.stringify(getState().products.invoiceStock || []));
+
+		// 2. Знаходимо адміна та видаляємо конкретну накладну
+		const adminIndex = invoiceStock.findIndex(s => String(s.customerId) === String(customerId));
+		if (adminIndex !== -1) {
+			invoiceStock[adminIndex].cartsHistory = invoiceStock[adminIndex].cartsHistory.filter(
+				inv => inv.invoiceStockId !== invoiceStockId
+			);
+
+			// Якщо накладних більше немає, можна видалити весь запис адміна
+			if (invoiceStock[adminIndex].cartsHistory.length === 0) {
+				invoiceStock.splice(adminIndex, 1);
+			}
+		}
+
+		try {
+			// 3. Оновлюємо базу
+			await db.ref('invoiceStock').set(invoiceStock);
+
+			// 4. ОБОВ'ЯЗКОВО ОНОВЛЮЄМО REDUX (щоб зникло з екрану)
+			dispatch({
+				type: 'UPDATE_INVOICE_STOCK', // Перевір назву типу у своєму actionTypes
+				payload: invoiceStock
+			});
+			console.log('✅ Накладна видалена');
+		} catch (e) {
+			console.error(e);
+		}
+	}
 }
 
 function getThisOrder(orders, customerId) {

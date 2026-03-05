@@ -28,7 +28,7 @@ const initialState = {
 	portionNumber: 1,
 	invoices: [],
 	invoicesSummary: [],
-	invoiceStock: []
+	invoiceStock: null
 }
 
 export default function products(state = initialState, action) {
@@ -46,7 +46,8 @@ export default function products(state = initialState, action) {
 				products: action.payload.products === null ? [] : action.payload.products,
 				productsDeleted: action.payload.productsDeleted === null ? [] : action.payload.productsDeleted,
 				orders: action.payload.orders === null ? [] : action.payload.orders,
-				ordersHistory: action.payload.ordersHistory === null ? [] : action.payload.ordersHistory
+				ordersHistory: action.payload.ordersHistory === null ? [] : action.payload.ordersHistory,
+				invoiceStock: action.payload.invoiceStock === null ? [] : action.payload.invoiceStock
 			}
 		case FETCH_PRODUCTS_DATA_ERROR:
 			return {

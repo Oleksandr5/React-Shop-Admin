@@ -16,6 +16,7 @@ class Cart extends Component {
 
 	state = {
 		show: false,
+		orderType: null, // може бути 'order' або 'stock'
 		disabledBtnSend: false,
 		successfulOrder: false,
 		authAndReg: false,
@@ -87,7 +88,7 @@ class Cart extends Component {
 		const { event, idThisCustomers } = obj;
 		if (event) event.preventDefault();
 
-		this.setState({ disabledBtnSend: true });
+		this.setState({ disabledBtnSend: true, orderType: 'stock' });
 
 		// Візуал
 		let blockInfo = document.getElementById('blockInfo');
@@ -135,7 +136,8 @@ class Cart extends Component {
 	sendOrders(obj) {
 
 		this.setState({
-			disabledBtnSend: true
+			disabledBtnSend: true,
+			orderType: 'order' // <--- ДОДАЄМО ЦЕЙ РЯДОК
 		})
 
 		const { hasAccount, event, idThisCustomers } = obj
@@ -788,64 +790,64 @@ class Cart extends Component {
 									: null}
 
 								{this.state.isFormValid ?
-
 									this.state.isOrdersThisCart ?
+										// --- БЛОК З КНОПКАМИ (Кошик ще не порожній) ---
 										<div>
 											<div className="d-flex flex-column flex-sm-row justify-content-between align-items-center py-2">
-
-												<p className="mr-sm-3 font-weight-bold">Загальна сума:&nbsp;
-													<span className="text-primary" id="totalPrice">
-														{this.calculationTotalPriceForCart()}
-													</span> <span className="text-primary">грн</span>
-												</p>
-
-
+												<p className="mr-sm-3 font-weight-bold">Загальна сума: {this.calculationTotalPriceForCart()} грн</p>
 												<Button
 													type="submit"
 													className="btn btn-success"
-													disabled={(this.props.hasAccount ? false : !this.state.isFormValid) || !this.state.isOrdersThisCart || this.state.disabledBtnSend}
+													disabled={this.state.disabledBtnSend}
+													// Додаємо тип 'order' при натисканні
+													onClick={() => this.setState({ orderType: 'order' })}
 												>
 													Оформити замовлення
 												</Button>
-
 											</div>
+
 											<div className="d-flex flex-column flex-sm-row justify-content-between align-items-center py-2">
-
-												<p className="mr-sm-3 font-weight-bold">Кількість позицій:&nbsp;
-													<span className="text-primary" id="totalQuantityOfInvoiceItems">
-														{this.calculationTotalQuantityOfInvoiceItems()}
-													</span> <span className="text-primary">шт</span>
-												</p>
-
-
+												<p className="mr-sm-3 font-weight-bold">Кількість позицій: {this.calculationTotalQuantityOfInvoiceItems()} шт</p>
 												<Button
 													type="button"
 													className="btn btn-success"
-													disabled={(this.props.hasAccount ? false : !this.state.isFormValid) || !this.state.isOrdersThisCart || this.state.disabledBtnSend}
-													// Передаємо event та інші дані
-													onClick={(event) => this.addProductToStock({
-														hasAccount: this.props.hasAccount,
-														event,
-														idThisCustomers
-													})}
+													disabled={this.state.disabledBtnSend}
+													onClick={(event) => {
+														// Встановлюємо тип 'stock'
+														this.setState({ orderType: 'stock' });
+														this.addProductToStock({
+															hasAccount: this.props.hasAccount,
+															event,
+															idThisCustomers
+														});
+													}}
 												>
 													Поповнити склад
 												</Button>
-
 											</div>
 										</div>
 
 										:
+
+										// --- БЛОК ПІСЛЯ ВІДПРАВКИ (Кошик порожній) ---
 										<div className="d-flex justify-content-center align-items-center py-2">
 
-											<NavLink to={'/your-orders'} className={`btn btn-success d-block mb-3 ${classes.btnBack}`} onClick={this.handleClose} >
-												Ваші оформлені замовлення!
-											</NavLink>
+											{/* Показуємо "Замовлення", якщо натиснули першу кнопку */}
+											{this.state.orderType === 'order' && (
+												<NavLink to={'/your-orders'} className={`btn btn-success d-block mb-3 ${classes.btnBack}`} onClick={this.handleClose}>
+													Ваші оформлені замовлення!
+												</NavLink>
+											)}
+
+											{/* Показуємо "Склад", якщо натиснули другу кнопку */}
+											{this.state.orderType === 'stock' && (
+												<NavLink to={'/invoice-stock'} className={`btn btn-success d-block mb-3 ${classes.btnBack}`} onClick={this.handleClose}>
+													Ваші поповнення складу!
+												</NavLink>
+											)}
 
 										</div>
-
 									: null
-
 								}
 
 								{this.state.authAndReg ?

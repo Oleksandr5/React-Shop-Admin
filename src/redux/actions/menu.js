@@ -13,27 +13,35 @@ export function menuCloseHandler() {
 }
 
 export function onScroll() {
-
 	return (dispatch, getState) => {
+		// 1. Спочатку знаходимо кнопку
+		const btnGoToTop = document.querySelector("#goToTop");
 
-		let scrollDiv = document.querySelector("#goToTop").closest(".scrollToTop")
+		// 2. Якщо кнопки немає (наприклад, зараз показується Loader), просто виходимо
+		if (!btnGoToTop) return;
 
-		//Get the button
-		let btnGoToTop = document.querySelector("#goToTop")
+		// 3. Знаходимо батьківський контейнер
+		const scrollDiv = btnGoToTop.closest(".scrollToTop");
 
-		// When the user scrolls down 20px from the top of the document, show the button
-		scrollDiv.onscroll = function () { scrollFunction() };
+		// 4. Якщо контейнер не знайдено, теж виходимо, щоб не було помилки
+		if (!scrollDiv) return;
+
+		// 5. Тільки тепер вішаємо подію
+		scrollDiv.onscroll = function () {
+			scrollFunction();
+		};
 
 		function scrollFunction() {
-			if (scrollDiv.scrollTop > 20) {
-				btnGoToTop.style.display = "block";
-			} else {
-				btnGoToTop.style.display = "none";
+			// Додаємо перевірку і тут, про всяк випадок
+			if (scrollDiv && btnGoToTop) {
+				if (scrollDiv.scrollTop > 20) {
+					btnGoToTop.style.display = "block";
+				} else {
+					btnGoToTop.style.display = "none";
+				}
 			}
 		}
-
 	}
-
 }
 
 export function onScrollCart() {

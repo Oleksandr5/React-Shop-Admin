@@ -1,65 +1,108 @@
 import React, { Component } from 'react'
-import classes from './SwitchInvoiceStock.module.css' // скопіюйте стилі з SwitchCustomersOrders
+import classes from './SwitchInvoiceStock.module.css'
 import { connect } from 'react-redux'
 import { NavLink } from 'react-router-dom'
 import Button from '../../../components/UI/Button/Button'
+import Loader from '../../../components/UI/Loader/Loader'
 import { onScroll, topFunction } from '../../../redux/actions/menu'
+import { fetchProductsData } from '../../../redux/actions/products'
 
 class SwitchInvoiceStock extends Component {
+
+	componentDidMount() {
+		// Оновлюємо дані при вході на сторінку вибору
+		this.props.fetchProductsData();
+	}
 
 	renderNavLink() {
 		const { invoiceStock, customers } = this.props;
 
-		if (invoiceStock && invoiceStock.length) {
-			return invoiceStock.map(stockEntry => {
-				// Знаходимо адміна в списку користувачів
-				const thisAdmin = customers.find(c => c.id === stockEntry.customerId);
-				const adminName = thisAdmin ? thisAdmin.name : `Admin ID: ${stockEntry.customerId}`;
+		// Повертаємо список накладних по клієнтах
+		return (invoiceStock || []).map(stockEntry => {
+			const thisAdmin = (customers || []).find(c => String(c.id) === String(stockEntry.customerId));
+			const adminName = thisAdmin ? thisAdmin.name : `Адмін ID: ${stockEntry.customerId}`;
 
-				// Отримуємо останню накладну для відображення дати
-				const lastInvoice = stockEntry.cartsHistory[stockEntry.cartsHistory.length - 1];
+			const lastInvoice = stockEntry.cartsHistory && stockEntry.cartsHistory.length
+				? stockEntry.cartsHistory[stockEntry.cartsHistory.length - 1]
+				: null;
 
-				return (
-					<li key={stockEntry.customerId} className="d-flex justify-content-between align-items-center border-top border-bottom p-2">
-						<NavLink to={`/invoice-stock/${stockEntry.customerId}`} className={classes.navLinkOrders}>
-							<p className="mb-0">
-								Поставки від: <span className="text-info">{adminName}</span>
-								<span className="d-block small text-muted">Остання: {lastInvoice ? lastInvoice.date : '---'}</span>
-							</p>
-						</NavLink>
-						{/* Кнопку видалення для складу краще не робити або зробити лише для SuperAdmin */}
-					</li>
-				)
-			})
-		} else {
-			return <li><h6 className="text-danger text-center">Історія поставок порожня</h6></li>
-		}
+			return (
+				<li key={stockEntry.customerId} className="mb-2">
+					<NavLink
+						to={`/invoice-stock/${stockEntry.customerId}`}
+						className={`${classes.navLinkOrders} d-flex justify-content-between align-items-center border rounded p-3 bg-white shadow-sm text-decoration-none`}
+					>
+						<div>
+							<span className="d-block font-weight-bold text-dark">
+								Поставки від: <span className="text-primary">{adminName}</span>
+							</span>
+							<small className="text-muted">
+								{lastInvoice ? `Остання накладна: ${lastInvoice.date}` : 'Історія порожня'}
+							</small>
+						</div>
+						<i className="fa fa-chevron-right text-secondary"></i>
+					</NavLink>
+				</li>
+			)
+		})
 	}
 
 	render() {
+		const { loading, invoiceStock, customers } = this.props;
+
+		// Показуємо Loader, поки дані не завантажені
+		if (loading || !customers || invoiceStock === null) {
+			return <Loader />;
+		}
+
 		return (
-			<div className={`wrapper overflow-auto ${classes.SwitchInvoiceStock}`} onScroll={this.props.onScroll}>
-				<h2 className="text-center my-3">Накладні складу</h2>
-				<ul className={'infoAboutCustomer'}>
-					{this.renderNavLink()}
-				</ul>
-				<Button
-					type="button" id={'goToTop'}
-					onClick={this.props.topFunction}
-					className={`btn btn-danger ${classes.btnTop}`}
+			<div className={`wrapper ${classes.SwitchInvoiceStock}`}>
+				<div
+					className={`overflow-auto webkit_scrollbar_width webkit_scrollbar_style scrollToTop ${classes.renderOrders}`}
+					onScroll={this.props.onScroll}
 				>
-					<i className="fa fa-arrow-up"></i>
-				</Button>
+					<h2 className="text-center my-4 font-weight-bold">Накладні складу</h2>
+
+					<div className="container">
+						<ul className="list-unstyled">
+							{invoiceStock.length > 0
+								? this.renderNavLink()
+								: <div className="alert alert-warning text-center shadow-sm">
+									<h6 className="mb-0 font-italic">Архів накладних порожній</h6>
+								</div>
+							}
+						</ul>
+					</div>
+
+					<Button
+						type="button"
+						style={{ display: 'none' }}
+						id={'goToTop'}
+						onClick={this.props.topFunction}
+						className={`btn btn-danger ${classes.btnTop}`}
+					>
+						<i className="fa fa-arrow-up" aria-hidden="true"></i>
+					</Button>
+				</div>
 			</div>
-		)
+		);
 	}
 }
 
 function mapStateToProps(state) {
 	return {
 		invoiceStock: state.products.invoiceStock,
-		customers: state.inform.customers
+		customers: state.inform.customers,
+		loading: state.products.loading
 	}
 }
 
-export default connect(mapStateToProps, { onScroll, topFunction })(SwitchInvoiceStock)
+function mapDispatchToProps(dispatch) {
+	return {
+		fetchProductsData: () => dispatch(fetchProductsData()),
+		onScroll: () => dispatch(onScroll()),
+		topFunction: () => dispatch(topFunction())
+	}
+}
+
+export default connect(mapStateToProps, mapDispatchToProps)(SwitchInvoiceStock)
