@@ -443,6 +443,418 @@ const InvoicesPage = ({
 		if (selectedUser) { fetchUsedMaterials(selectedUser); }
 	}, [selectedUser]);
 
+	// const handleOrderDetails = async (notification) => {
+	// 	const customerId = notification.customerId;
+	// 	const orderId = notification.orderId;
+
+	// 	console.log(`--- ПОШУК ЗАМОВЛЕННЯ №${orderId} ---`);
+
+	// 	try {
+	// 		const path = `invoices/${customerId}/${orderId}`;
+	// 		const snapshot = await firebase.database().ref(path).once('value');
+	// 		const orderData = snapshot.val();
+
+	// 		if (!orderData) {
+	// 			console.error("❌ Дані відсутні");
+	// 			alert(`Замовлення #${orderId} не знайдено.`);
+	// 			return;
+	// 		}
+
+	// 		const items = orderData.items || [];
+	// 		if (items.length === 0) {
+	// 			alert(`Замовлення #${orderId} порожнє.`);
+	// 			return;
+	// 		}
+
+	// 		const itemsText = items.map(item => `• ${item.name}: ${item.quantity} ${item.units}`).join('\n');
+
+	// 		// Спроба знайти клієнта (якщо customers доступний)
+	// 		let clientName = "ID " + customerId;
+	// 		try {
+	// 			if (typeof customers !== 'undefined') {
+	// 				const customer = customers.find(c => String(c.id) === String(customerId));
+	// 				if (customer) clientName = customer.name;
+	// 			}
+	// 		} catch (e) { /* ignore */ }
+
+	// 		const fullMessage = `📦 Деталі замовлення #${orderId}\n` +
+	// 			`👤 Клієнт: ${clientName}\n` +
+	// 			`📅 Дата: ${orderData.date || notification.date}\n` +
+	// 			`✅ Статус: ${orderData.status || 'не вказано'}\n` +
+	// 			`--------------------------\n` +
+	// 			`${itemsText}`;
+
+	// 		// ЛОГІКА ЯК У handleHistory:
+	// 		// Якщо символів більше 800 (або якщо позицій більше 15), відкриваємо вікно
+	// 		if (fullMessage.length > 800 || items.length > 15) {
+	// 			const newWindow = window.open("", "_blank", "width=700,height=600");
+	// 			if (newWindow) {
+	// 				newWindow.document.write(`
+	//                 <html>
+	//                     <head><title>Замовлення #${orderId}</title></head>
+	//                     <body style="padding:20px; font-family:monospace; background:#f4f4f4; color:#333;">
+	//                         <div style="background:white; padding:20px; border-radius:8px; shadow: 0 4px 6px rgba(0,0,0,0.1); border: 1px solid #ddd;">
+	//                             <h2 style="margin-top:0;">📋 Накладна замовлення</h2>
+	//                             <pre style="white-space:pre-wrap; font-size:14px; line-height:1.6;">${fullMessage}</pre>
+	//                             <hr>
+	//                             <button onclick="window.print()" style="padding:10px 20px; cursor:pointer;">Друк</button>
+	//                         </div>
+	//                     </body>
+	//                 </html>
+	//             `);
+	// 				newWindow.document.close();
+	// 			} else {
+	// 				alert(fullMessage);
+	// 			}
+	// 		} else {
+	// 			alert(fullMessage);
+	// 		}
+
+	// 	} catch (error) {
+	// 		console.error("Помилка:", error);
+	// 		alert("Сталася помилка при завантаженні.");
+	// 	}
+	// };
+
+	const currentDate = new Date().toLocaleString('uk-UA', {
+		day: '2-digit',
+		month: '2-digit',
+		year: 'numeric',
+		hour: '2-digit',
+		minute: '2-digit'
+	});
+
+	const handleOrderDetails = async (notification) => {
+		const customerId = notification.customerId;
+		const orderId = notification.orderId;
+
+		try {
+			const path = `invoices/${customerId}/${orderId}`;
+			const snapshot = await firebase.database().ref(path).once('value');
+			const orderData = snapshot.val();
+
+			if (!orderData) {
+				alert(`Замовлення #${orderId} не знайдено.`);
+				return;
+			}
+
+			const items = orderData.items || [];
+			const itemsText = items.map(item => `• ${item.name}: ${item.quantity} ${item.units}`).join('\n');
+
+			let clientName = "ID " + customerId;
+			try {
+				if (typeof customers !== 'undefined') {
+					const customer = customers.find(c => String(c.id) === String(customerId));
+					if (customer) clientName = customer.name;
+				}
+			} catch (e) { /* ignore */ }
+
+			const fullMessage = `📦 Деталі замовлення #${orderId}\n` +
+				`👤 Клієнт: ${clientName}\n` +
+				`📅 Дата: ${orderData.date || notification.date}\n` +
+				`✅ Статус: ${orderData.status || 'Виконано'}\n` +
+				`--------------------------\n` +
+				`${itemsText}`;
+
+			// Відкриваємо вікно ЗАВЖДИ замість alert
+			const newWindow = window.open("", "_blank", "width=800,height=700");
+
+			if (newWindow) {
+				newWindow.document.write(`
+                <html>
+                    <head>
+                        <title>Замовлення #${orderId}</title>
+                        <style>
+                            body { 
+                                padding: 40px; 
+                                font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+                                background: #f0f2f5; 
+                                color: #333; 
+                            }
+                            .invoice-card { 
+                                background: white; 
+                                padding: 30px; 
+                                border-radius: 12px; 
+                                box-shadow: 0 4px 15px rgba(0,0,0,0.1); 
+                                max-width: 600px; 
+                                margin: 0 auto; 
+                            }
+                            pre { 
+                                white-space: pre-wrap; 
+                                font-family: 'Courier New', monospace; 
+                                font-size: 15px; 
+                                line-height: 1.6; 
+                                background: #fafafa; 
+                                padding: 15px; 
+                                border: 1px solid #eee; 
+                                border-radius: 6px;
+                            }
+                            .btn-group { margin-top: 20px; display: flex; gap: 10px; }
+                            button { 
+                                padding: 10px 25px; 
+                                border: none; 
+                                border-radius: 6px; 
+                                cursor: pointer; 
+                                font-weight: bold; 
+                                transition: 0.3s;
+                            }
+                            .print-btn { background: #007bff; color: white; }
+                            .print-btn:hover { background: #0056b3; }
+                            .close-btn { background: #e0e0e0; color: #333; }
+                            
+                            @media print {
+                                body { background: white; padding: 0; }
+                                .invoice-card { box-shadow: none; border: none; width: 100%; max-width: 100%; }
+                                .btn-group { display: none; }
+                            }
+                        </style>
+                    </head>
+                    <body>
+                        <div class="invoice-card">
+                            <h2 style="margin-top:0; color:#007bff;">📄 Накладна замовлення</h2>
+                            <pre>${fullMessage}</pre>
+                            <div class="btn-group">
+                                <button class="print-btn" onclick="window.print()">🖨️ Друк</button>
+                                <button class="close-btn" onclick="window.close()">Закрити</button>
+                            </div>
+                        </div>
+                    </body>
+                </html>
+            `);
+				newWindow.document.close();
+			} else {
+				// Резервний варіант, якщо браузер заблокував вікно
+				alert("Браузер заблокував спливаюче вікно. Будь ласка, дозвольте їх для цього сайту, щоб бачити накладну.");
+			}
+
+		} catch (error) {
+			console.error("Помилка:", error);
+		}
+	};
+
+	const handlePrintOrderTable = (invoices, name) => {
+		// 1. Формуємо дати: початок місяця та поточний час
+		const now = new Date();
+		const currentFullDate = now.toLocaleString('uk-UA', {
+			day: '2-digit',
+			month: '2-digit',
+			year: 'numeric',
+			hour: '2-digit',
+			minute: '2-digit',
+			second: '2-digit'
+		});
+
+		const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+		const startOfMonthFormatted = startOfMonth.toLocaleString('uk-UA', {
+			day: '2-digit',
+			month: '2-digit',
+			year: 'numeric',
+			hour: '2-digit',
+			minute: '2-digit',
+			second: '2-digit'
+		});
+
+		const periodString = `${startOfMonthFormatted} — ${currentFullDate}`;
+
+		// 2. Формуємо рядки таблиці
+		const tableRowsHtml = invoices.map((invoice) => {
+			const itemsArray = invoice.items ? Object.entries(invoice.items) : [];
+			return itemsArray.map(([id, item], itemIndex) => {
+				return `
+                <tr>
+                    ${itemIndex === 0 ? `<td rowspan="${itemsArray.length}">${invoice.idOrderHistory}</td>` : ''}
+                    <td>${item.name}</td>
+                    <td style="text-align: right;">${item.quantity} ${item.units}</td>
+                    ${itemIndex === 0 ? `<td rowspan="${itemsArray.length}">${invoice.date}</td>` : ''}
+                </tr>
+            `;
+			}).join('');
+		}).join('');
+
+		// 3. Відкриваємо вікно друку
+		const newWindow = window.open("", "_blank", "width=900,height=800");
+
+		if (newWindow) {
+			newWindow.document.write(`
+            <html>
+                <head>
+                    <title>Друк замовлень: ${name}</title>
+                    <style>
+                        body { font-family: sans-serif; padding: 20px; color: #333; }
+                        h2 { text-align: center; margin-bottom: 5px; }
+                        .period { text-align: center; font-size: 13px; color: #666; margin-bottom: 20px; border-bottom: 1px solid #ddd; padding-bottom: 10px; }
+                        table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+                        th, td { border: 1px solid #999; padding: 8px; text-align: left; font-size: 13px; }
+                        th { background-color: #f2f2f2; }
+                        .customer-info { margin-bottom: 10px; font-size: 15px; }
+                        .no-print { text-align: center; margin-top: 30px; }
+                        button { padding: 10px 20px; cursor: pointer; background: #007bff; color: white; border: none; border-radius: 4px; font-weight: bold; }
+                        @media print { .no-print { display: none; } }
+                    </style>
+                </head>
+                <body>
+                    <h2>📑 Звіт по замовленням</h2>
+                    <div class="period"><strong>Період:</strong> ${periodString}</div>
+                    
+                    <div class="customer-info"><strong>Клієнт:</strong> ${name || 'Не вказано'}</div>
+                    
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>ID Замовлення</th>
+                                <th>Назва товару</th>
+                                <th style="text-align: right;">Кількість</th>
+                                <th>Дата замовлення</th>
+                            </tr>
+                        </thead>
+                        <tbody>${tableRowsHtml}</tbody>
+                    </table>
+
+                    <div style="margin-top: 20px; font-size: 11px; color: #888; text-align: right;">
+                        Дата друку: ${currentFullDate}
+                    </div>
+
+                    <div class="no-print">
+                        <button onclick="window.print()">🖨️ Друкувати накладну</button>
+                        <button onclick="window.close()" style="background: #6c757d; margin-left: 10px;">Закрити</button>
+                    </div>
+                </body>
+            </html>
+        `);
+			newWindow.document.close();
+		}
+	};
+
+	const handlePrintSummary = (summaryData, name) => {
+		// 1. Отримуємо поточну дату та час
+		const now = new Date();
+		const currentFullDate = now.toLocaleString('uk-UA', {
+			day: '2-digit',
+			month: '2-digit',
+			year: 'numeric',
+			hour: '2-digit',
+			minute: '2-digit',
+			second: '2-digit'
+		});
+
+		// 2. Формуємо початок місяця (01 число, 00:00:00)
+		const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+		const startOfMonthFormatted = startOfMonth.toLocaleString('uk-UA', {
+			day: '2-digit',
+			month: '2-digit',
+			year: 'numeric',
+			hour: '2-digit',
+			minute: '2-digit',
+			second: '2-digit'
+		}).replace(/\./g, '.'); // Забезпечуємо правильний формат точок
+
+		const periodString = `${startOfMonthFormatted} — ${currentFullDate}`;
+
+		const tableRowsHtml = summaryData.map((item) => `
+        <tr>
+            <td>${item.name}</td>
+            <td style="text-align: right; font-weight: bold;">${item.totalQuantity} ${item.units}</td>
+        </tr>
+    `).join('');
+
+		const newWindow = window.open("", "_blank", "width=800,height=600");
+
+		if (newWindow) {
+			newWindow.document.write(`
+            <html>
+                <head>
+                    <title>Звіт по товарах: ${name}</title>
+                    <style>
+                        body { font-family: sans-serif; padding: 20px; color: #333; line-height: 1.5; }
+                        h2 { text-align: center; margin-bottom: 5px; }
+                        .period { text-align: center; font-size: 14px; color: #555; margin-bottom: 20px; border-bottom: 1px solid #eee; padding-bottom: 10px; }
+                        table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+                        th, td { border: 1px solid #999; padding: 10px; text-align: left; }
+                        th { background-color: #f2f2f2; text-transform: uppercase; font-size: 12px; }
+                        .info-row { margin-bottom: 10px; font-size: 15px; }
+                        .no-print { text-align: center; margin-top: 30px; }
+                        button { padding: 10px 20px; background: #28a745; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; }
+                        @media print { .no-print { display: none; } }
+                    </style>
+                </head>
+                <body>
+                    <h2>📊 Загальна кількість товарів</h2>
+                    <div class="period"><strong>Період:</strong> ${periodString}</div>
+                    
+                    <div class="info-row"><strong>Клієнт:</strong> ${name || 'Не вказано'}</div>
+                    
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Назва товару</th>
+                                <th style="text-align: right;">Загальна кількість</th>
+                            </tr>
+                        </thead>
+                        <tbody>${tableRowsHtml}</tbody>
+                    </table>
+
+                    <div style="margin-top: 20px; font-size: 11px; color: #888; text-align: right;">
+                        Документ сформовано: ${currentFullDate}
+                    </div>
+
+                    <div class="no-print">
+                        <button onclick="window.print()">🖨️ Друкувати звіт</button>
+                        <button onclick="window.close()" style="background: #6c757d; margin-left: 10px;">Закрити</button>
+                    </div>
+                </body>
+            </html>
+        `);
+			newWindow.document.close();
+		}
+	};
+
+	const handlePrintStock = (stockData) => {
+		const currentDate = new Date().toLocaleString('uk-UA');
+		const filteredStock = (stockData || []).filter(s => !!s.visibleproduct);
+
+		const tableRowsHtml = filteredStock.map((s) => `
+				<tr tr >
+            <td>${s.name}</td>
+            <td style="text-align: right;">${s.quantity} ${s.units}</td>
+        </tr >
+	`).join('');
+
+		const newWindow = window.open("", "_blank", "width=800,height=600");
+		if (newWindow) {
+			newWindow.document.write(`
+	<html html >
+                <head>
+                    <title>Залишки на складі</title>
+                    <style>
+                        body { font-family: sans-serif; padding: 20px; }
+                        .header-info { display: flex; justify-content: space-between; align-items: baseline; border-bottom: 2px solid #333; margin-bottom: 20px; }
+                        table { width: 100%; border-collapse: collapse; }
+                        th, td { border: 1px solid #999; padding: 10px; text-align: left; }
+                        th { background-color: #f2f2f2; }
+                        .footer-date { margin-top: 15px; font-size: 12px; color: #555; text-align: right; }
+                        @media print { .no-print { display: none; } }
+                    </style>
+                </head>
+                <body>
+                    <div class="header-info">
+                        <h2>📦 Залишки на складі</h2>
+                        <span>Дата: ${currentDate}</span>
+                    </div>
+                    <table>
+                        <thead><tr><th>Назва товару</th><th style="text-align: right;">Кількість</th></tr></thead>
+                        <tbody>${tableRowsHtml}</tbody>
+                    </table>
+                    <p class="footer-date">Звіт сформовано автоматично: ${currentDate}</p>
+                    <div class="no-print" style="text-align: center; margin-top: 20px;">
+                        <button onclick="window.print()" style="padding: 10px 20px; background: #fb8c00; color: white; border: none; border-radius: 4px; cursor: pointer;">🖨️ Друкувати</button>
+                    </div>
+                </body>
+            </html >
+	`);
+			newWindow.document.close();
+		}
+	};
+
 	return (
 		<div className={classes.wrapper}>
 			{isAdminUsedMaterials && notifications.length > 0 && (
@@ -454,7 +866,11 @@ const InvoicesPage = ({
 					<div className={classes.notificationsList}>
 						{notifications.map((n) => (
 							<div key={n.orderId} className={classes.notificationItem}>
-								<div>
+								<div
+									onClick={() => handleOrderDetails(n)}
+									style={{ cursor: 'pointer', flex: 1 }}
+									title="Натисніть, щоб побачити деталі"
+								>
 									<strong>Замовлення #{n.orderId}</strong>
 									<div className={classes.meta}>👤 {n.customerId} ({customers.find(c => c.id === n.customerId)?.name}) | 📅 {n.date}</div>
 								</div>
@@ -483,7 +899,20 @@ const InvoicesPage = ({
 			<h3 className={classes.sectionTitle}>📑 Замовлення:</h3>
 
 			{/* TABLE: НАКЛАДНІ */}
-			<table className={classes.table}>
+			<table
+				className={classes.table}
+				style={{ cursor: 'pointer' }}
+				onClick={(e) => {
+					e.stopPropagation();
+
+					// Знаходимо ім'я клієнта зі списку customers за вибраним ID
+					const selectedCustomerObj = customers.find(c => String(c.id) === String(selectedUser));
+					const finalName = selectedCustomerObj ? selectedCustomerObj.name : "Клієнт";
+
+					// Викликаємо функцію БЕЗ "this."
+					handlePrintOrderTable(invoices, finalName);
+				}}
+			>
 				<thead>
 					<tr>
 						<th style={{ width: "12%" }}>ID</th>
@@ -502,7 +931,7 @@ const InvoicesPage = ({
 							const shouldHaveBorder = isLastRowInInvoice && isNotLastInvoice;
 
 							return (
-								<tr key={`${index}-${id}`} className={shouldHaveBorder ? classes.invoiceDivider : ""}>
+								<tr key={`${index} -${id} `} className={shouldHaveBorder ? classes.invoiceDivider : ""}>
 									{itemIndex === 0 && <td rowSpan={itemsArray.length}>{invoice.idOrderHistory}</td>}
 									<td>{item.name}</td>
 									<td className={classes.alignRight}>{item.quantity} {item.units}</td>
@@ -515,7 +944,18 @@ const InvoicesPage = ({
 			</table>
 
 			<h3 className={classes.sectionTitle}>📊 Загальна кількість взятих товарів:</h3>
-			<table className={classes.table}>
+			<table
+				className={classes.table}
+				style={{ cursor: 'pointer' }}
+				onClick={(e) => {
+					e.stopPropagation();
+					// Знаходимо ім'я для заголовка
+					const selectedCustomerObj = customers.find(c => String(c.id) === String(selectedUser));
+					const finalName = selectedCustomerObj ? selectedCustomerObj.name : "Клієнт";
+
+					handlePrintSummary(invoicesSummary, finalName);
+				}}
+			>
 				<thead><tr><th>Товари</th><th className={classes.alignRight}>Кі-сть</th></tr></thead>
 				<tbody>
 					{invoicesSummary.map((item, index) => (
@@ -540,7 +980,14 @@ const InvoicesPage = ({
 			{isAdminInvoices && stock && (
 				<>
 					<h3 className={classes.sectionTitle}>📦 Залишки на складі:</h3>
-					<table className={classes.table}>
+					<table
+						className={classes.table}
+						style={{ cursor: 'pointer' }}
+						onClick={(e) => {
+							e.stopPropagation();
+							handlePrintStock(stock);
+						}}
+					>
 						<thead><tr><th>Товари</th><th className={classes.alignRight}>Кі-сть</th></tr></thead>
 						<tbody>
 							{stock?.filter(s => !!s.visibleproduct).map((s, index) => (

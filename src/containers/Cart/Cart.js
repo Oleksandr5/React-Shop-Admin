@@ -67,7 +67,9 @@ class Cart extends Component {
 				}
 			}
 		},
-		email: ''
+		email: '',
+		fullAccess: false, // 🔹 новий вид доступу
+		admins: {}
 	}
 
 	handleClose = () => {
@@ -691,6 +693,11 @@ class Cart extends Component {
 
 		const orders = [...this.props.orders]
 		let idThisCustomers = this.props.customerId
+		const { fullAccess, admins } = this.state;
+		const { hasAccount } = this.props
+
+		// ✅ перевірка, чи користувач має fullAccess		
+		const isAdminFullAccess = hasAccount && admins[idThisCustomers]?.fullAccess;
 
 		let { ordersThis } = this.getThisOrder(orders, idThisCustomers)
 
@@ -805,26 +812,27 @@ class Cart extends Component {
 													Оформити замовлення
 												</Button>
 											</div>
-
-											<div className="d-flex flex-column flex-sm-row justify-content-between align-items-center py-2">
-												<p className="mr-sm-3 font-weight-bold">Кількість позицій: {this.calculationTotalQuantityOfInvoiceItems()} шт</p>
-												<Button
-													type="button"
-													className="btn btn-success"
-													disabled={this.state.disabledBtnSend}
-													onClick={(event) => {
-														// Встановлюємо тип 'stock'
-														this.setState({ orderType: 'stock' });
-														this.addProductToStock({
-															hasAccount: this.props.hasAccount,
-															event,
-															idThisCustomers
-														});
-													}}
-												>
-													Поповнити склад
-												</Button>
-											</div>
+											{isAdminFullAccess && (
+												<div className="d-flex flex-column flex-sm-row justify-content-between align-items-center py-2">
+													<p className="mr-sm-3 font-weight-bold">Кількість позицій: {this.calculationTotalQuantityOfInvoiceItems()} шт</p>
+													<Button
+														type="button"
+														className="btn btn-success"
+														disabled={this.state.disabledBtnSend}
+														onClick={(event) => {
+															// Встановлюємо тип 'stock'
+															this.setState({ orderType: 'stock' });
+															this.addProductToStock({
+																hasAccount: this.props.hasAccount,
+																event,
+																idThisCustomers
+															});
+														}}
+													>
+														Поповнити склад
+													</Button>
+												</div>
+											)}
 										</div>
 
 										:
@@ -925,56 +933,109 @@ class Cart extends Component {
 
 	}
 
+	getCurrentCart() {
+		const orders = [...this.props.orders];
+		const { ordersThis } = this.getThisOrder(orders, this.props.customerId);
+		return ordersThis && ordersThis.cart ? ordersThis.cart : [];
+	}
+
 	calculationTotalPriceForCart() {
+		const cart = this.getCurrentCart();
+		if (cart.length === 0) return 0;
 
-		const orders = [...this.props.orders]
-		const customerId = this.props.customerId
-		let { ordersThis } = this.getThisOrder(orders, customerId)
+		const total = cart.reduce((sum, item) => {
+			// Шукаємо товар у загальному списку, щоб знати ціну та акцію
+			const productData = this.props.products.find(p => p.id === item.id);
 
-		if (ordersThis) {
-			return (
-				ordersThis.customerId === this.props.customerId
-					? ordersThis.cart
+			if (!productData) return sum; // Якщо товар раптом не знайшли
 
-						? +(ordersThis.cart.map(product => {
+			const priceWithPromo = this.props.priceIncludedPromotion(productData.price, productData.promotion);
+			return sum + (item.quantity * priceWithPromo);
+		}, 0);
 
-							const { id } = product
-							const thisProduct = this.props.products.filter(product => {
-								return (
-									product.id === id
-								)
-							})[0]
-
-							let totalPrice = +(product.quantity * this.props.priceIncludedPromotion(thisProduct.price, thisProduct.promotion)).toFixed(1)
-
-							return totalPrice
-
-							//                        if (thisProduct) {
-							//                            let totalPrice = product.quantity*thisProduct.price
-							//
-							//                            return totalPrice
-							//                        } else {
-							//                            return 0
-							//                        }
-
-						}
-
-						).reduce((sum, val) => sum + val, 0)).toFixed(1)
-						: null
-					: null
-			)
-		} else {
-			return null
-		}
-
+		const formattedTotal = total.toFixed(1);
+		return Number(formattedTotal); // "0.0" перетвориться на 0, а "10.5" залишиться 10.5
 	}
 
 	calculationTotalQuantityOfInvoiceItems() {
-
+		const cart = this.getCurrentCart();
+		// Рахуємо суму всіх quantity у кошику
+		return cart.reduce((sum, item) => sum + (Number(item.quantity) || 0), 0);
 	}
 
-	componentDidMount() {
 
+	// calculationTotalPriceForCart() {
+
+	// 	const orders = [...this.props.orders]
+	// 	const customerId = this.props.customerId
+	// 	let { ordersThis } = this.getThisOrder(orders, customerId)
+
+	// 	if (ordersThis) {
+	// 		return (
+	// 			ordersThis.customerId === this.props.customerId
+	// 				? ordersThis.cart
+
+	// 					? +(ordersThis.cart.map(product => {
+
+	// 						const { id } = product
+	// 						const thisProduct = this.props.products.filter(product => {
+	// 							return (
+	// 								product.id === id
+	// 							)
+	// 						})[0]
+
+	// 						let totalPrice = +(product.quantity * this.props.priceIncludedPromotion(thisProduct.price, thisProduct.promotion)).toFixed(1)
+
+	// 						return totalPrice
+
+	// 						//                        if (thisProduct) {
+	// 						//                            let totalPrice = product.quantity*thisProduct.price
+	// 						//
+	// 						//                            return totalPrice
+	// 						//                        } else {
+	// 						//                            return 0
+	// 						//                        }
+
+	// 					}
+
+	// 					).reduce((sum, val) => sum + val, 0)).toFixed(1)
+	// 					: null
+	// 				: null
+	// 		)
+	// 	} else {
+	// 		return null
+	// 	}
+
+	// }
+
+	// calculationTotalQuantityOfInvoiceItems() {
+	// 	const orders = [...this.props.orders];
+	// 	const customerId = this.props.customerId;
+	// 	let { ordersThis } = this.getThisOrder(orders, customerId);
+
+	// 	// Перевіряємо, чи є замовлення і чи є в ньому кошик (cart)
+	// 	if (ordersThis && ordersThis.cart) {
+	// 		// Використовуємо reduce для підсумовування кількості
+	// 		return ordersThis.cart.reduce((total, product) => {
+	// 			return total + (product.quantity || 0);
+	// 		}, 0);
+	// 	} else {
+	// 		return 0; // Якщо кошик порожній або замовлення немає
+	// 	}
+	// }
+
+	componentDidMount() {
+		this.adminsRef = firebase.database().ref('settings/admins');
+		this.adminsRef.on('value', snapshot => {
+			let admins = snapshot.val() || {};
+			this.setState({ admins });
+		});
+	}
+
+	// Маленька рекомендація (правильна очистка listener) Щоб не було витоків пам’яті. Це зніме listener при виході з компонента.
+
+	componentWillUnmount() {
+		if (this.adminsRef) this.adminsRef.off();
 	}
 
 	render() {

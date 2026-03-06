@@ -34,13 +34,17 @@ class InvoiceStock extends Component {
 
 	// Окремий метод для рендеру карток накладних
 	renderInvoicesList(invoices, customerId) {
-		const { products, productsDeleted } = this.props
+		const { products, productsDeleted, customers } = this.props;
+		const thisCustomer = (customers || []).find(c => c.id === customerId);
+		const customerName = thisCustomer ? thisCustomer.name : `Клієнт ID: ${customerId}`;
 
 		return invoices.slice().reverse().map((invoice) => {
 			return (
 				<div
 					key={invoice.invoiceStockId}
 					className={`position-relative border border-primary p-3 mb-5 bg-white shadow-sm`}
+					style={{ cursor: 'pointer' }} // Робимо курсор вказівним
+					onClick={() => this.handlePrintInvoice(invoice, customerName)} // Виклик вікна друку
 				>
 					<h5 className={`text-primary ${classes.h5}`}>
 						Накладна №{invoice.invoiceStockId}
@@ -98,7 +102,8 @@ class InvoiceStock extends Component {
 					<button
 						className="btn btn-outline-danger btn-sm position-absolute"
 						style={{ top: '10px', right: '10px' }}
-						onClick={() => {
+						onClick={(e) => {
+							e.stopPropagation();
 							// Використовуємо `${}` для вставки номера накладної
 							if (window.confirm(`Видалити накладну №${invoice.invoiceStockId}?`)) {
 								this.props.removeInvoiceStockCustomer(customerId, invoice.invoiceStockId);
@@ -110,6 +115,56 @@ class InvoiceStock extends Component {
 				</div>
 			)
 		})
+	}
+
+	handlePrintInvoice = (invoice, customerName) => {
+		const { products, productsDeleted } = this.props;
+
+		const itemsText = invoice.cart.map(item => {
+			const product = (products || []).find(p => p.id === item.id) ||
+				(productsDeleted || []).find(p => p.id === item.id);
+			const name = product ? product.name : `ID: ${item.id}`;
+			return `• ${name}: ${item.quantity} шт.`;
+		}).join('\n');
+
+		const fullMessage = `📄 НАКЛАДНА №${invoice.invoiceStockId}\n` +
+			`👤 Отримувач: ${customerName || '---'}\n` +
+			`📅 Дата поставки: ${invoice.date}\n` +
+			`✅ Статус: ${invoice.status}\n` +
+			`--------------------------\n` +
+			`${itemsText}`;
+
+		const newWindow = window.open("", "_blank", "width=800,height=700");
+
+		if (newWindow) {
+			newWindow.document.write(`
+            <html>
+                <head>
+                    <title>Накладна №${invoice.invoiceStockId}</title>
+                    <style>
+                        body { padding: 40px; font-family: 'Segoe UI', sans-serif; background: #f0f2f5; }
+                        .card { background: white; padding: 30px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); max-width: 600px; margin: 0 auto; }
+                        pre { white-space: pre-wrap; font-family: monospace; font-size: 15px; background: #fafafa; padding: 15px; border: 1px solid #eee; }
+                        .btns { margin-top: 20px; display: flex; gap: 10px; }
+                        button { padding: 10px 20px; border: none; border-radius: 6px; cursor: pointer; font-weight: bold; }
+                        .print { background: #007bff; color: white; }
+                        @media print { .btns { display: none; } body { background: white; padding: 0; } .card { box-shadow: none; border: none; } }
+                    </style>
+                </head>
+                <body>
+                    <div class="card">
+                        <h2>Накладна на склад</h2>
+                        <pre>${fullMessage}</pre>
+                        <div class="btns">
+                            <button class="print" onclick="window.print()">🖨️ Друк</button>
+                            <button onclick="window.close()">Закрити</button>
+                        </div>
+                    </div>
+                </body>
+            </html>
+        `);
+			newWindow.document.close();
+		}
 	}
 
 	componentDidMount() {
