@@ -7,47 +7,44 @@ import { NavLink } from 'react-router-dom'
 
 export function fetchProductsData() {
 	return async dispatch => {
-
-		dispatch(fetchProductsDataStart())
-
+		dispatch(fetchProductsDataStart()) // Вмикає loading: true
 		try {
+			// Запускаємо всі запити одночасно
+			const [
+				resCategories,
+				resProducts,
+				resDeleted,
+				resOrders,
+				resHistory,
+				resStock
+			] = await Promise.all([
+				axios.get('categories.json'),
+				axios.get('products.json'),
+				axios.get('productsDeleted.json'),
+				axios.get('orders.json'),
+				axios.get('ordersHistory.json'),
+				axios.get('invoiceStock.json')
+			]);
 
-			const responseCategories = await axios.get('categories.json')
+			const products = resProducts.data || [];
+			dispatch(setTotalProductsCount(products.length));
 
-			const categoriesData = responseCategories.data
+			const invoiceStockData = resStock.data
+				? (Array.isArray(resStock.data) ? resStock.data : Object.values(resStock.data))
+				: [];
 
-			const responseProducts = await axios.get('products.json')
-
-			const products = responseProducts.data
-
-			dispatch(setTotalProductsCount(products.length))
-
-			const responseProductsDeleted = await axios.get('productsDeleted.json')
-
-			const productsDeleted = responseProductsDeleted.data
-
-
-			const responseOrders = await axios.get('orders.json')
-
-			const ordersData = responseOrders.data
-
-			const responseOrdersHistory = await axios.get('ordersHistory.json')
-
-			const ordersHistoryData = responseOrdersHistory.data
-
-			// ➕ ДОДАЄМО ЗАПИТ ДЛЯ СКЛАДСЬКИХ НАКЛАДНИХ
-			const responseInvoiceStock = await axios.get('invoiceStock.json')
-			// Більш надійна перевірка на масив
-			const invoiceStockData = responseInvoiceStock.data
-				? (Array.isArray(responseInvoiceStock.data)
-					? responseInvoiceStock.data
-					: Object.values(responseInvoiceStock.data))
-				: []
-
-			dispatch(fetchProductsDataSuccess(categoriesData, products, productsDeleted, ordersData, ordersHistoryData, invoiceStockData))
+			// Передаємо всі дані. Reducer поставить loading: false
+			dispatch(fetchProductsDataSuccess(
+				resCategories.data,
+				products,
+				resDeleted.data,
+				resOrders.data,
+				resHistory.data,
+				invoiceStockData
+			));
 
 		} catch (e) {
-			dispatch(fetchProductsDataError(e))
+			dispatch(fetchProductsDataError(e)); // Вимкне loading при помилці
 		}
 	}
 }
@@ -1877,6 +1874,8 @@ export function addProductToInvoiceStock(obj) {
 		const { customerId } = obj;
 
 		try {
+
+			dispatch(fetchProductsDataStart())
 			// 1. Отримуємо активні кошики
 			const responseOrders = await axios.get(`orders.json`);
 			const ordersState = responseOrders.data ? responseOrders.data : [];
@@ -1888,6 +1887,7 @@ export function addProductToInvoiceStock(obj) {
 
 			if (!ordersThis) {
 				console.error("Кошик не знайдено");
+				dispatch(fetchProductsDataError("Кошик не знайдено")); // Зупиняємо лоадер
 				return;
 			}
 
@@ -1957,8 +1957,21 @@ export function addProductToInvoiceStock(obj) {
 			// а ваші інші функції передають просто false.
 			dispatch(updateIsOrdersThisCart(false));
 
+			// 🔥 ДОДАЙТЕ ЦЕ: Явний сигнал, що всі процеси завершені успішно
+			// Це скине loading у false через FETCH_PRODUCTS_DATA_SUCCESS
+			dispatch(fetchProductsDataSuccess(
+				getState().products.categories,
+				getState().products.products,
+				getState().products.productsDeleted,
+				ordersState, // нові замовлення
+				getState().products.ordersHistory,
+				stockData // нові дані складу
+			));
+
 		} catch (e) {
 			console.error("Помилка при поповненні складу:", e);
+			// ОБОВ'ЯЗКОВО додайте виклик екшену помилки, щоб лоадер зник
+			dispatch(fetchProductsDataError(e));
 		}
 	}
 }

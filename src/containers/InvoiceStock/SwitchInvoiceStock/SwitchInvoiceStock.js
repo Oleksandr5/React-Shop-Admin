@@ -10,8 +10,10 @@ import { fetchProductsData } from '../../../redux/actions/products'
 class SwitchInvoiceStock extends Component {
 
 	componentDidMount() {
-		// Оновлюємо дані при вході на сторінку вибору
-		this.props.fetchProductsData();
+		// Викликаємо завантаження лише якщо даних ще немає в сторі
+		if (!this.props.invoiceStock || this.props.invoiceStock.length === 0) {
+			this.props.fetchProductsData();
+		}
 	}
 
 	renderNavLink() {
@@ -50,10 +52,14 @@ class SwitchInvoiceStock extends Component {
 	render() {
 		const { loading, invoiceStock, customers } = this.props;
 
-		// Показуємо Loader, поки дані не завантажені
-		if (loading || !customers || invoiceStock === null) {
+		// 1. Показуємо Loader ТІЛЬКИ якщо йде завантаження або НЕМАЄ списку клієнтів
+		if (loading || !customers) {
 			return <Loader />;
 		}
+
+		// 2. Робимо "захист": якщо invoiceStock порожній (null/undefined), 
+		// використовуємо порожній масив, щоб .length не видавав помилку
+		const currentStock = invoiceStock || [];
 
 		return (
 			<div className={`wrapper ${classes.SwitchInvoiceStock}`}>
@@ -65,7 +71,8 @@ class SwitchInvoiceStock extends Component {
 
 					<div className="container">
 						<ul className="list-unstyled">
-							{invoiceStock.length > 0
+							{/* Використовуємо наш захищений масив currentStock */}
+							{currentStock.length > 0
 								? this.renderNavLink()
 								: <div className="alert alert-warning text-center shadow-sm">
 									<h6 className="mb-0 font-italic">Архів накладних порожній</h6>

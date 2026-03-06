@@ -113,37 +113,39 @@ class InvoiceStock extends Component {
 	}
 
 	componentDidMount() {
-		this.props.fetchProductsData();
+		// Викликаємо завантаження лише якщо даних ще немає в сторі
+		if (!this.props.invoiceStock || this.props.invoiceStock.length === 0) {
+			this.props.fetchProductsData();
+		}
 	}
 
 	render() {
-
-
-
 		const url = window.location.pathname;
 		const customerId = +url.substring(url.lastIndexOf('/') + 1);
 		const { invoiceStock, customers, loading } = this.props;
+
 		// --- ЛОГУВАННЯ ДЛЯ ПЕРЕВІРКИ ---
-		console.log('[InvoiceStock] Props:', {
-			loading,
-			invoiceStock,
-			customerId,
-			foundAdmin: (invoiceStock || []).find(s => s.customerId === customerId)
-		});
+		console.log('[InvoiceStock] Props:', { loading, hasData: !!invoiceStock });
+
 		const thisCustomer = (customers || []).find(c => c.id === customerId);
 		const adminData = (invoiceStock || []).find(s => s.customerId === customerId);
 		const thisInvoices = adminData ? adminData.cartsHistory : null;
 
+		// ВИПРАВЛЕНА УМОВА: 
+		// Показуємо лоадер тільки якщо loading=true ТА у нас ще немає даних (invoiceStock порожній)
+		// Якщо дані вже є в Redux, ми показуємо інтерфейс відразу, не чекаючи фонового оновлення
+		const showLoader = loading && (!invoiceStock || invoiceStock.length === 0);
+
 		return (
-			loading
+			showLoader
 				? <Loader />
 				: (
 					<div className={`wrapper ${classes.InvoiceStock}`}>
+						{/* ... весь ваш інший код залишається без змін ... */}
 						<div
 							className={`overflow-auto webkit_scrollbar_width webkit_scrollbar_style scrollToTop ${classes.renderOrders}`}
 							onScroll={this.props.onScroll}
 						>
-							{/* Блок інформації про клієнта */}
 							<div className="infoAboutCustomer p-3 bg-light mb-3 text-center border-bottom">
 								<p className="mb-0 text-uppercase">Архів складу:
 									<strong className="text-success ml-2">
@@ -153,7 +155,6 @@ class InvoiceStock extends Component {
 								<small className="text-muted">ID клієнта: {customerId}</small>
 							</div>
 
-							{/* Заголовок та кнопка масового видалення */}
 							<div className="d-flex justify-content-between align-items-center mb-3 px-3">
 								<h3 className="mb-0">Історія накладних:</h3>
 								{thisInvoices && thisInvoices.length > 0 && (
@@ -170,13 +171,11 @@ class InvoiceStock extends Component {
 								)}
 							</div>
 
-							{/* Вивід списку або повідомлення про відсутність */}
 							{thisInvoices && thisInvoices.length > 0
 								? this.renderInvoicesList(thisInvoices, customerId)
 								: <h6 className="text-danger text-center mt-5 font-italic">Накладних не знайдено!</h6>
 							}
 
-							{/* Кнопка вгору */}
 							<Button
 								type="button"
 								style={{ display: 'none' }}

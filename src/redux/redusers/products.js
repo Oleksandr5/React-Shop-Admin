@@ -28,7 +28,7 @@ const initialState = {
 	portionNumber: 1,
 	invoices: [],
 	invoicesSummary: [],
-	invoiceStock: null
+	invoiceStock: []
 }
 
 export default function products(state = initialState, action) {
