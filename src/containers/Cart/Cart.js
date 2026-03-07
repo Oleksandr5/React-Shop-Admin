@@ -73,9 +73,23 @@ class Cart extends Component {
 	}
 
 	handleClose = () => {
+		const orders = this.props.orders;
+		const customerId = this.props.customerId;
+
+		// Перевіряємо, чи є товари в кошику через вашу функцію getThisOrder
+		let { ordersThis } = this.getThisOrder(orders, customerId);
+
+		let hasItems = false;
+		if (ordersThis && ordersThis.cart && ordersThis.cart.length > 0) {
+			hasItems = true;
+		}
+
 		this.setState({
-			show: false, successfulOrder: false
-		})
+			show: false,             // Закриваємо модальне вікно
+			successfulOrder: false,  // Скидаємо прапор успіху (прибере блоки з кнопками)
+			isOrdersThisCart: hasItems, // Оновлюємо стан наявності товарів
+			orderType: null          // Скидаємо тип (order/stock)
+		});
 	}
 
 	handleShow = () => {
