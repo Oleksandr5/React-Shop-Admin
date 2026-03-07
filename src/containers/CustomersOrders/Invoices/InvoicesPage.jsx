@@ -6,6 +6,7 @@ import firebase from 'firebase';
 
 const UsedMaterialsTable = ({
 	selectedUser,
+	customers,
 	invoicesSummary,
 	usedMaterials,
 	stock,
@@ -20,6 +21,12 @@ const UsedMaterialsTable = ({
 	const [searchAgreement, setSearchAgreement] = useState('');
 	const [isEditingIds, setIsEditingIds] = useState(false);
 	const [newIdsString, setNewIdsString] = useState("");
+
+	// Знаходимо користувача в масиві за його ID
+	const userObj = customers?.find(c => String(c.id) === String(selectedUser));
+
+	// Отримуємо ім'я (якщо знайшли) або просто показуємо ID
+	const displayUserName = userObj ? userObj.name : `Користувач #${selectedUser}`;
 
 	// 1. Стейт для динамічного списку ID товарів
 	const [dynamicProductIds, setDynamicProductIds] = useState([]);
@@ -283,6 +290,10 @@ const UsedMaterialsTable = ({
 					flexDirection: 'column', // Лейбл над інпутом на мобілці
 					gap: '8px'
 				}}>
+					{/* ВИВІД ІМЕНІ */}
+					<div style={{ fontSize: '30px', color: '#FF0000', marginTop: '-5px', marginBottom: '15px' }}>
+						👤 Працюємо з: <strong>{displayUserName}</strong>
+					</div>
 					<label style={{ fontWeight: 'bold', color: '#2d3748' }}>📄 Загальна угода:</label>
 					<input
 						type="text"
@@ -559,11 +570,11 @@ const InvoicesPage = ({
 			// --- НОВА ЛОГІКА ВИБОРУ ---
 			const isPrint = window.confirm(
 				"Деталі замовлення отримано. Оберіть дію:\n\n" +
-				"✅ OK — Відкрити вікно для ДРУКУ\n" +
-				"❌ Скасувати — Швидкий перегляд (Alert)"
+				"✅ OK — Швидкий перегляд (Alert)\n" +
+				"❌ Скасувати — Відкрити вікно для ДРУКУ"
 			);
 
-			if (!isPrint) {
+			if (isPrint) {
 				alert(fullMessage);
 				return;
 			}
@@ -907,6 +918,20 @@ const InvoicesPage = ({
 				)}
 			</div>
 
+			{isAdminUsedMaterials && selectedUser && (
+				<UsedMaterialsTable
+					selectedUser={selectedUser}
+					customers={customers}
+					invoicesSummary={invoicesSummary}
+					usedMaterials={usedMaterials}
+					fetchUsedMaterials={fetchUsedMaterials}
+					addUsedMaterial={addUsedMaterial}
+					stock={stock}
+					fetchUsedMaterialsHistory={fetchUsedMaterialsHistory}
+					isAdminFullAccess={isAdminFullAccess}
+				/>
+			)}
+
 			<h3 className={classes.sectionTitle}>📑 Замовлення:</h3>
 
 			{/* TABLE: НАКЛАДНІ */}
@@ -974,19 +999,6 @@ const InvoicesPage = ({
 					))}
 				</tbody>
 			</table>
-
-			{isAdminUsedMaterials && selectedUser && (
-				<UsedMaterialsTable
-					selectedUser={selectedUser}
-					invoicesSummary={invoicesSummary}
-					usedMaterials={usedMaterials}
-					fetchUsedMaterials={fetchUsedMaterials}
-					addUsedMaterial={addUsedMaterial}
-					stock={stock}
-					fetchUsedMaterialsHistory={fetchUsedMaterialsHistory}
-					isAdminFullAccess={isAdminFullAccess}
-				/>
-			)}
 
 			{isAdminInvoices && stock && (
 				<>
