@@ -556,79 +556,90 @@ const InvoicesPage = ({
 				`--------------------------\n` +
 				`${itemsText}`;
 
-			// Відкриваємо вікно ЗАВЖДИ замість alert
-			const newWindow = window.open("", "_blank", "width=800,height=700");
+			// --- НОВА ЛОГІКА ВИБОРУ ---
+			const isPrint = window.confirm(
+				"Деталі замовлення отримано. Оберіть дію:\n\n" +
+				"✅ OK — Відкрити вікно для ДРУКУ\n" +
+				"❌ Скасувати — Швидкий перегляд (Alert)"
+			);
+
+			if (!isPrint) {
+				alert(fullMessage);
+				return;
+			}
+
+			// Відкриваємо гарне вікно для друку
+			const newWindow = window.open("", "_blank", "width=800,height=750");
 
 			if (newWindow) {
 				newWindow.document.write(`
-                <html>
-                    <head>
-                        <title>Замовлення #${orderId}</title>
-                        <style>
-                            body { 
-                                padding: 40px; 
-                                font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
-                                background: #f0f2f5; 
-                                color: #333; 
-                            }
-                            .invoice-card { 
-                                background: white; 
-                                padding: 30px; 
-                                border-radius: 12px; 
-                                box-shadow: 0 4px 15px rgba(0,0,0,0.1); 
-                                max-width: 600px; 
-                                margin: 0 auto; 
-                            }
-                            pre { 
-                                white-space: pre-wrap; 
-                                font-family: 'Courier New', monospace; 
-                                font-size: 15px; 
-                                line-height: 1.6; 
-                                background: #fafafa; 
-                                padding: 15px; 
-                                border: 1px solid #eee; 
-                                border-radius: 6px;
-                            }
-                            .btn-group { margin-top: 20px; display: flex; gap: 10px; }
-                            button { 
-                                padding: 10px 25px; 
-                                border: none; 
-                                border-radius: 6px; 
-                                cursor: pointer; 
-                                font-weight: bold; 
-                                transition: 0.3s;
-                            }
-                            .print-btn { background: #007bff; color: white; }
-                            .print-btn:hover { background: #0056b3; }
-                            .close-btn { background: #e0e0e0; color: #333; }
-                            
-                            @media print {
-                                body { background: white; padding: 0; }
-                                .invoice-card { box-shadow: none; border: none; width: 100%; max-width: 100%; }
-                                .btn-group { display: none; }
-                            }
-                        </style>
-                    </head>
-                    <body>
-                        <div class="invoice-card">
-                            <h2 style="margin-top:0; color:#007bff;">📄 Накладна замовлення</h2>
-                            <pre>${fullMessage}</pre>
-                            <div class="btn-group">
-                                <button class="print-btn" onclick="window.print()">🖨️ Друк</button>
-                                <button class="close-btn" onclick="window.close()">Закрити</button>
-                            </div>
+            <html>
+                <head>
+                    <title>Замовлення #${orderId}</title>
+                    <style>
+                        body { 
+                            padding: 40px; 
+                            font-family: 'Segoe UI', sans-serif; 
+                            background: #f0f2f5; 
+                            color: #333; 
+                        }
+                        .invoice-card { 
+                            background: white; 
+                            padding: 30px; 
+                            border-radius: 12px; 
+                            box-shadow: 0 4px 15px rgba(0,0,0,0.1); 
+                            max-width: 600px; 
+                            margin: 0 auto; 
+                        }
+                        pre { 
+                            white-space: pre-wrap; 
+                            font-family: 'Courier New', monospace; 
+                            font-size: 15px; 
+                            line-height: 1.6; 
+                            background: #fafafa; 
+                            padding: 20px; 
+                            border: 1px solid #eee; 
+                            border-radius: 8px;
+                        }
+                        .btn-group { margin-top: 25px; display: flex; gap: 10px; justify-content: flex-end; }
+                        button { 
+                            padding: 12px 25px; 
+                            border: none; 
+                            border-radius: 8px; 
+                            cursor: pointer; 
+                            font-weight: bold; 
+                            transition: 0.2s;
+                        }
+                        .print-btn { background: #007bff; color: white; }
+                        .close-btn { background: #6c757d; color: white; }
+                        
+                        @media print {
+                            .btn-group { display: none; }
+                            body { background: white; padding: 0; }
+                            .invoice-card { box-shadow: none; border: none; width: 100%; max-width: 100%; }
+                        }
+                    </style>
+                </head>
+                <body>
+                    <div class="invoice-card">
+                        <h2 style="margin-top:0; color:#007bff;">📄 Детальна накладна</h2>
+                        <pre>${fullMessage}</pre>
+                        <div class="btn-group">
+                            <button class="print-btn" onclick="window.print()">🖨️ Друк</button>
+                            <button class="close-btn" onclick="window.close()">Закрити</button>
                         </div>
-                    </body>
-                </html>
+                    </div>
+                </body>
+            </html>
             `);
 				newWindow.document.close();
 			} else {
-				// Резервний варіант, якщо браузер заблокував вікно
-				alert("Браузер заблокував спливаюче вікно. Будь ласка, дозвольте їх для цього сайту, щоб бачити накладну.");
+				alert("Браузер заблокував вікно. Дозвольте спливаючі вікна.");
 			}
 
 		} catch (error) {
 			console.error("Помилка:", error);
+			alert("Сталася помилка при завантаженні даних замовлення.");
 		}
 	};
 

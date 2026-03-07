@@ -50,16 +50,16 @@ class InvoiceStock extends Component {
 						Накладна №{invoice.invoiceStockId}
 					</h5>
 					<p className="small text-muted mb-2">Дата поставки: {invoice.date}</p>
-
-					<h5 className={`${classes.h5}`}>Статус: &nbsp;
-						<Select
-							name="statusorder"
-							className={`addOptionToProduct_${invoice.invoiceStockId} ${invoice.status === "in process..." ? "text-danger" : "text-success"}`}
-							onChange={event => this.props.changeStatusInvoiceStock(customerId, invoice.invoiceStockId, event.target.value)}
-							option={this.optionStatusOrder(invoice.status)}
-						/>
-					</h5>
-
+					<div onClick={(e) => e.stopPropagation()}>
+						<h5 className={`${classes.h5}`}>Статус: &nbsp;
+							<Select
+								name="statusorder"
+								className={`addOptionToProduct_${invoice.invoiceStockId} ${invoice.status === "in process..." ? "text-danger" : "text-success"}`}
+								onChange={event => this.props.changeStatusInvoiceStock(customerId, invoice.invoiceStockId, event.target.value)}
+								option={this.optionStatusOrder(invoice.status)}
+							/>
+						</h5>
+					</div>
 					<div className="table-responsive mt-3">
 						<table className="table table-sm table-hover">
 							<thead className="thead-light">
@@ -120,6 +120,7 @@ class InvoiceStock extends Component {
 	handlePrintInvoice = (invoice, customerName) => {
 		const { products, productsDeleted } = this.props;
 
+		// 1. Формуємо текст товарів
 		const itemsText = invoice.cart.map(item => {
 			const product = (products || []).find(p => p.id === item.id) ||
 				(productsDeleted || []).find(p => p.id === item.id);
@@ -127,6 +128,7 @@ class InvoiceStock extends Component {
 			return `• ${name}: ${item.quantity} шт.`;
 		}).join('\n');
 
+		// 2. Формуємо повне текстове повідомлення
 		const fullMessage = `📄 НАКЛАДНА №${invoice.invoiceStockId}\n` +
 			`👤 Отримувач: ${customerName || '---'}\n` +
 			`📅 Дата поставки: ${invoice.date}\n` +
@@ -134,34 +136,50 @@ class InvoiceStock extends Component {
 			`--------------------------\n` +
 			`${itemsText}`;
 
+		// 3. Питаємо користувача: Друк чи Alert?
+		// "OK" поверне true (Друк), "Скасувати" поверне false (Alert)
+		const isPrint = window.confirm(
+			"Оберіть дію:\n\n" +
+			"Натисніть 'OK' для відкриття вікна ДРУКУ\n" +
+			"Натисніть 'Скасувати' для швидкого ПЕРЕГЛЯДУ (Alert)"
+		);
+
+		if (!isPrint) {
+			// Якщо вибрано "Скасувати" — показуємо звичайний alert
+			alert(fullMessage);
+			return; // Зупиняємо функцію, вікно друку не відкриється
+		}
+
+		// 4. Якщо користувач натиснув "OK" — відкриваємо вікно для друку
 		const newWindow = window.open("", "_blank", "width=800,height=700");
 
 		if (newWindow) {
 			newWindow.document.write(`
-            <html>
-                <head>
-                    <title>Накладна №${invoice.invoiceStockId}</title>
-                    <style>
-                        body { padding: 40px; font-family: 'Segoe UI', sans-serif; background: #f0f2f5; }
-                        .card { background: white; padding: 30px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); max-width: 600px; margin: 0 auto; }
-                        pre { white-space: pre-wrap; font-family: monospace; font-size: 15px; background: #fafafa; padding: 15px; border: 1px solid #eee; }
-                        .btns { margin-top: 20px; display: flex; gap: 10px; }
-                        button { padding: 10px 20px; border: none; border-radius: 6px; cursor: pointer; font-weight: bold; }
-                        .print { background: #007bff; color: white; }
-                        @media print { .btns { display: none; } body { background: white; padding: 0; } .card { box-shadow: none; border: none; } }
-                    </style>
-                </head>
-                <body>
-                    <div class="card">
-                        <h2>Накладна на склад</h2>
-                        <pre>${fullMessage}</pre>
-                        <div class="btns">
-                            <button class="print" onclick="window.print()">🖨️ Друк</button>
-                            <button onclick="window.close()">Закрити</button>
-                        </div>
+        <html>
+            <head>
+                <title>Накладна №${invoice.invoiceStockId}</title>
+                <style>
+                    body { padding: 40px; font-family: 'Segoe UI', sans-serif; background: #f0f2f5; }
+                    .card { background: white; padding: 30px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); max-width: 600px; margin: 0 auto; }
+                    h2 { color: #007bff; border-bottom: 2px solid #eee; padding-bottom: 10px; }
+                    pre { white-space: pre-wrap; font-family: monospace; font-size: 15px; background: #fafafa; padding: 15px; border: 1px solid #eee; line-height: 1.5; }
+                    .btns { margin-top: 20px; display: flex; gap: 10px; }
+                    button { padding: 10px 20px; border: none; border-radius: 6px; cursor: pointer; font-weight: bold; }
+                    .print { background: #007bff; color: white; }
+                    @media print { .btns { display: none; } body { background: white; padding: 0; } .card { box-shadow: none; border: none; width: 100%; max-width: none; } }
+                </style>
+            </head>
+            <body>
+                <div class="card">
+                    <h2>📋 Накладна на склад</h2>
+                    <pre>${fullMessage}</pre>
+                    <div class="btns">
+                        <button class="print" onclick="window.print()">🖨️ Друк</button>
+                        <button onclick="window.close()">Закрити</button>
                     </div>
-                </body>
-            </html>
+                </div>
+            </body>
+        </html>
         `);
 			newWindow.document.close();
 		}
