@@ -19,6 +19,8 @@ const CrewInventoryReport = ({
 	const [archiveHistory, setArchiveHistory] = useState({});
 	const [hasArchiveInDB, setHasArchiveInDB] = useState(false); // Коментар: Чи існують дані в архіві БД
 	const [loading, setLoading] = useState(false);
+	const [localArchivedRows, setLocalArchivedRows] = useState({});
+	const [editingRow, setEditingRow] = useState(null); // ID рядка, який зараз натиснув користувач
 
 	// Коментар: Функція для пошуку останнього запису в архіві
 	const fetchArchiveData = async (workerId) => {
@@ -106,6 +108,37 @@ const CrewInventoryReport = ({
 			}
 		} catch (e) {
 			alert("Помилка: " + e.message);
+		}
+	};
+
+	const saveRowToArchiveDB = async (productId, name, currentValue) => {
+		try {
+			const db = firebase.database();
+
+			// 1. Спочатку знайдемо останній архів (як у першій функції)
+			const arcSnap = await db.ref('archive').orderByKey().limitToLast(1).once('value');
+
+			if (arcSnap.exists()) {
+				const months = arcSnap.val();
+				const monthKey = Object.keys(months)[0];
+				const times = months[monthKey];
+				const lastTimeKey = Object.keys(times).sort().reverse()[0];
+
+				// 2. Записуємо в ТОЧНО ТАКИЙ ЖЕ шлях:
+				// archive / monthKey / lastTimeKey / remainingMaterialsHistory / workerId / productId
+				await db.ref(`archive/${monthKey}/${lastTimeKey}/remainingMaterialsHistory/${mainWorkerId}/${productId}`)
+					.set(Number(currentValue));
+
+				// Оновлюємо локальний стан, щоб кнопка зникла
+				setLocalArchivedRows(prev => ({ ...prev, [productId]: true }));
+				setEditingRow(null); // Закриваємо режим редагування (кнопка зникне)
+				alert(`Дані по "${name}" додано в існуючий архів.`);
+			} else {
+				alert("Помилка: Не знайдено жодного створеного архіву.");
+			}
+		} catch (err) {
+			console.error(err);
+			alert("Помилка збереження рядка.");
 		}
 	};
 
@@ -307,6 +340,12 @@ const CrewInventoryReport = ({
 				<tbody>
 					{dynamicProductIds.map(pid => {
 						const product = stock?.find(s => s.id == pid);
+
+						const productId = pid;
+						const name = product?.name || `ID ${pid}`;
+						const isRowArchived = localArchivedRows[pid]; // перевірка зі стану
+						const valueInRedux = archiveHistory[pid] || 0; // поточне значення залишку
+
 						const prev = Number(archiveHistory[pid] || 0);
 						const taken = Number(combinedData.invoices[pid] || 0);
 						const spent = Number(combinedData.used[pid] || 0);
@@ -322,18 +361,55 @@ const CrewInventoryReport = ({
 
 								<td data-label="Залишок на початок місяця" style={{ textAlign: 'center' }}>
 									{!hasArchiveInDB ? (
-										<input
-											type="number"
-											value={archiveHistory[pid] || ''}
-											onChange={(e) => handleArchiveInputChange(pid, e.target.value)}
-											className={classes.inputSmall}
-											style={{ width: '50px', border: '1px solid #f39c12' }}
-										/>
+										<div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+											<input
+												type="number"
+												value={archiveHistory[pid] || ''}
+												// 1. При фокусі встановлюємо, що цей рядок зараз редагується
+												onFocus={() => setEditingRow(pid)}
+												onChange={(e) => handleArchiveInputChange(pid, e.target.value)}
+												className={classes.inputSmall}
+												style={{
+													width: '50px',
+													border: editingRow === pid ? '1px solid #f39c12' : '1px solid #ccc',
+													outline: 'none'
+												}}
+											/>
+
+											{/* 2. Кнопка з'являється ТІЛЬКИ якщо:
+               - ми клікнули в цей інпут (editingRow === pid)
+               - і цей рядок ще не був успішно збережений (!localArchivedRows[pid])
+            */}
+											{(editingRow === pid && !localArchivedRows[pid]) && (
+												<button
+													onClick={() => {
+														if (window.confirm(`Заархівувати поточне значення (${archiveHistory[pid] || 0}) для "${name}"?`)) {
+															saveRowToArchiveDB(pid, name, archiveHistory[pid] || 0);
+														}
+													}}
+													title="Зберегти лише цей рядок в архів"
+													style={{
+														background: '#f39c12',
+														color: '#fff',
+														border: 'none',
+														borderRadius: '4px',
+														padding: '4px 8px',
+														cursor: 'pointer',
+														fontSize: '12px',
+														marginLeft: '5px',
+														verticalAlign: 'middle'
+													}}
+												>
+													💾
+												</button>
+											)}
+										</div>
 									) : (
-										<span onClick={() => setHasArchiveInDB(false)} style={{ cursor: 'pointer' }}>{prev}</span>
+										<span onClick={() => setHasArchiveInDB(false)} style={{ cursor: 'pointer' }}>
+											{prev}
+										</span>
 									)}
 								</td>
-
 								<td data-label="Взято" style={{ textAlign: 'center', color: 'green' }}>
 									+{taken}
 								</td>
@@ -864,6 +940,8 @@ const UsedMaterialsTable = ({
 			alert("Помилка при формуванні звіту.");
 		}
 	};
+
+
 
 	return (
 		<div className={classes.usedMaterialsSection}>
