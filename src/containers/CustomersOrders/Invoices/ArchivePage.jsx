@@ -4,14 +4,30 @@ import firebase from 'firebase/app';
 import 'firebase/database';
 import classes from './InvoicesPage.module.css';
 
-const ArchivePage = ({ customers, products }) => {
+const ArchivePage = ({ hasAccount, customers, customerId }) => {
 	const [months, setMonths] = useState([]);
 	const [selectedMonth, setSelectedMonth] = useState('');
 	const [availableSnapshots, setAvailableSnapshots] = useState([]); // Списк записів за місяць
-	const [selectedSnapshot, setSelectedSnapshot] = useState('');   // Обраний час
-	const [selectedUser, setSelectedUser] = useState('');
+	const [selectedSnapshot, setSelectedSnapshot] = useState('');   // Обраний час	
 	const [fullArchive, setFullArchive] = useState(null);
 	const [searchAgreement, setSearchAgreement] = useState('');
+
+	const [selectedUser, setSelectedUser] = useState(customerId || '');
+
+	const [admins, setAdmins] = useState({});
+	const idThisCustomers = window.localStorage.getItem("idThisCustomers");
+
+	useEffect(() => {
+		const ref = firebase.database().ref('settings/admins');
+		ref.on('value', snapshot => { setAdmins(snapshot.val() || {}); });
+		return () => ref.off();
+	}, []);
+
+	// Перевіряємо: користувач залогінений ТА має відповідне поле "true" у базі адмінів
+	const isAdminInvoices = hasAccount && !!admins[idThisCustomers]?.invoices;
+	const isAdminUsedMaterials = hasAccount && !!admins[idThisCustomers]?.usedMaterials;
+	const isAdminFullAccess = hasAccount && !!admins[idThisCustomers]?.fullAccess;
+
 
 	// Завантаження списку місяців при старті
 	useEffect(() => {
@@ -79,17 +95,63 @@ const ArchivePage = ({ customers, products }) => {
 
 	const handleSearchByAgreement = () => {
 		const term = searchAgreement.trim();
-		if (!term || !userData.historyLog) return;
+		if (!term) {
+			alert("Введіть номер угоди для пошуку");
+			return;
+		}
+		if (!userData || !userData.historyLog) {
+			alert("Дані про історію списань для цього клієнта відсутні в архіві.");
+			return;
+		}
 
-		// В вашому JSON historyLog — це об'єкт з ключами-id від Firebase
-		const logsArray = Object.values(userData.historyLog);
-		const matches = logsArray.filter(log => String(log.agreement || '') === term);
+		let found = [];
+		Object.keys(userData.historyLog).forEach(productId => {
+			const productLogs = userData.historyLog[productId];
+			if (!productLogs) return;
 
-		if (matches.length > 0) {
-			const total = matches.reduce((sum, log) => sum + Number(log.value || 0), 0);
-			alert(`📋 По угоді №${term} всього списано: ${total} од. за цим записом.`);
+			// Перетворюємо об'єкт логів у масив
+			const logsArray = Object.values(productLogs);
+
+			// Фільтруємо за номером угоди
+			const matches = logsArray.filter(log =>
+				String(log.agreement || '').trim() === term
+			);
+
+			if (matches.length > 0) {
+				const productInfo = userData.summary.find(s => String(s.productId) === String(productId));
+				const totalForThisProduct = matches.reduce((sum, current) =>
+					sum + Number(current.value || 0), 0
+				);
+
+				const units = productInfo?.units || '';
+				const name = productInfo?.name || `Товар #${productId}`;
+				found.push(`• ${name}: ${totalForThisProduct} ${units}`);
+			}
+		});
+
+		if (found.length === 0) {
+			alert(`❌ В архіві по угоді №${term} не знайдено списань для цього клієнта.`);
 		} else {
-			alert("Нічого не знайдено");
+			const message = `📋 Списано на угоду №${term}:\n\n${found.join('\n')}`;
+
+			// Якщо список дуже великий, відкриваємо в новому вікні, інакше — alert
+			if (message.length > 500) {
+				const newWindow = window.open("", "_blank", "width=600,height=400");
+				if (newWindow) {
+					newWindow.document.write(`
+                    <html>
+                        <head><title>Угода №${term}</title></head>
+                        <body style="font-family: sans-serif; padding: 20px; line-height: 1.6;">
+                            <h3 style="border-bottom: 2px solid #17a2b8; padding-bottom: 10px;">📋 Звіт по угоді №${term}</h3>
+                            <pre style="font-size: 14px; white-space: pre-wrap;">${message}</pre>
+                            <button onclick="window.close()" style="margin-top:20px; padding: 10px; cursor:pointer;">Закрити</button>
+                        </body>
+                    </html>
+                `);
+				}
+			} else {
+				alert(message);
+			}
 		}
 	};
 
@@ -137,75 +199,463 @@ const ArchivePage = ({ customers, products }) => {
 				items: inv.items ? Object.values(inv.items) : (inv.name ? [inv] : [])
 			}));
 		})(),
+
 		summary: fullArchive.invoicesSummaryHistory?.[userId] ? Object.values(fullArchive.invoicesSummaryHistory[userId]) : [],
 
-		// ВИПРАВЛЕНО: Звертаємось напряму до вузла з ID клієнта в корені архіву
-		historyLog: fullArchive[userId] || {},
+		// ТУТ ВИПРАВЛЕНО ШЛЯХИ:
+		// historyLog тепер береться з використаної історії
+		historyLog: fullArchive.usedMaterialsHistoryHistory?.[userId] || {},
 
-		// Якщо у вас немає окремого підсумку 'used', його можна вирахувати з historyLog
-		used: (() => {
-			const logs = fullArchive[userId] || {};
-			const summary = {};
-			// Оскільки в логах немає явного productId (тільки agreement), 
-			// логіка usedMaterials може потребувати перегляду структури збереження
-			return summary;
-		})(),
+		// used тепер береться з підсумків списання
+		used: fullArchive.usedMaterialsHistory?.[userId] || {},
 
 		stock: fullArchive.stockAtThatTime || {}
 	} : null;
 
+	const exportToCsv = (productId, productName) => {
+		const productLogsObject = userData.historyLog[productId];
+		if (!productLogsObject) return alert("Немає даних");
+
+		const logs = Object.values(productLogsObject);
+
+		// Заголовки стовпців
+		let csvContent = "Дата;Товар;Кількість;Угода\n";
+
+		// Додаємо рядки
+		logs.forEach(log => {
+			const date = log.createdAt ? new Date(log.createdAt).toLocaleString() : '---';
+			const val = log.value || 0;
+			const agr = log.agreement || '---';
+			csvContent += `${date};${productName};${val};${agr}\n`;
+		});
+
+		// Створюємо файл "на льоту"
+		const blob = new Blob([`\uFEFF${csvContent}`], { type: 'text/csv;charset=utf-8;' });
+		const link = document.createElement("a");
+		const url = URL.createObjectURL(blob);
+
+		link.setAttribute("href", url);
+		link.setAttribute("download", `Archive_${productName}.csv`);
+		link.style.visibility = 'hidden';
+		document.body.appendChild(link);
+		link.click();
+		document.body.removeChild(link);
+	};
+
+	const handlePrintSummary = (summaryData, name) => {
+		// 1. Кінцева дата — це час створення архіву (archivedAt) або вибраний snapshot
+		const endDate = fullArchive?.archivedAt ? new Date(fullArchive.archivedAt) : new Date();
+
+		const currentFullDate = endDate.toLocaleString('uk-UA', {
+			day: '2-digit',
+			month: '2-digit',
+			year: 'numeric',
+			hour: '2-digit',
+			minute: '2-digit',
+			second: '2-digit'
+		});
+
+		// 2. Початок місяця на основі дати архіву
+		const startOfMonth = new Date(endDate.getFullYear(), endDate.getMonth(), 1);
+		const startOfMonthFormatted = startOfMonth.toLocaleString('uk-UA', {
+			day: '2-digit',
+			month: '2-digit',
+			year: 'numeric',
+			hour: '2-digit',
+			minute: '2-digit',
+			second: '2-digit'
+		});
+
+		const periodString = `${startOfMonthFormatted} — ${currentFullDate}`;
+
+		const tableRowsHtml = summaryData.map((item) => `
+        <tr>
+            <td>${item.name}</td>
+            <td style="text-align: right; font-weight: bold;">${item.totalQuantity} ${item.units}</td>
+        </tr>
+    `).join('');
+
+		const newWindow = window.open("", "_blank", "width=800,height=600");
+
+		if (newWindow) {
+			newWindow.document.write(`
+        <html>
+            <head>
+                <title>Звіт по товарах: ${name}</title>
+                <style>
+                    body { font-family: sans-serif; padding: 20px; color: #333; line-height: 1.5; }
+                    h2 { text-align: center; margin-bottom: 5px; display: flex; align-items: center; justify-content: center; gap: 10px; }
+                    .period { text-align: center; font-size: 14px; color: #555; margin-bottom: 20px; border-bottom: 1px solid #eee; padding-bottom: 10px; }
+                    table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+                    th, td { border: 1px solid #999; padding: 10px; text-align: left; }
+                    th { background-color: #f2f2f2; text-transform: uppercase; font-size: 12px; }
+                    .info-row { margin-bottom: 10px; font-size: 15px; }
+                    .no-print { text-align: center; margin-top: 30px; }
+                    button { padding: 10px 20px; background: #28a745; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; }
+                    @media print { .no-print { display: none; } }
+                </style>
+            </head>
+            <body>
+                <h2>📊 Загальна кількість товарів</h2>
+                <div class="period"><strong>Період:</strong> ${periodString}</div>
+                <div class="info-row"><strong>Клієнт:</strong> ${name || 'Не вказано'}</div>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Назва товару</th>
+                            <th style="text-align: right;">Загальна кількість</th>
+                        </tr>
+                    </thead>
+                    <tbody>${tableRowsHtml}</tbody>
+                </table>
+                <div style="margin-top: 20px; font-size: 11px; color: #888; text-align: right;">
+                    Архівний запис від: ${currentFullDate}
+                </div>
+                <div class="no-print">
+                    <button onclick="window.print()">🖨️ Друкувати звіт</button>
+                    <button onclick="window.close()" style="background: #6c757d; margin-left: 10px;">Закрити</button>
+                </div>
+            </body>
+        </html>
+        `);
+			newWindow.document.close();
+		}
+	};
+
+	const handlePrintMaterials = (summaryData, usedData, name) => {
+		const endDate = fullArchive?.archivedAt ? new Date(fullArchive.archivedAt) : new Date();
+		const currentFullDate = endDate.toLocaleString('uk-UA');
+		const startOfMonth = new Date(endDate.getFullYear(), endDate.getMonth(), 1).toLocaleString('uk-UA');
+		const periodString = `${startOfMonth} — ${currentFullDate}`;
+
+		const tableRowsHtml = summaryData.map((item) => {
+			const usedQty = usedData[item.productId] || 0;
+			return `
+        <tr>
+            <td>${item.name}</td>
+            <td style="text-align: center;">${item.totalQuantity} ${item.units}</td>
+            <td style="text-align: center; font-weight: bold; color: #d9534f;">${usedQty} ${item.units}</td>
+        </tr>`;
+		}).join('');
+
+		const newWindow = window.open("", "_blank", "width=800,height=600");
+		if (newWindow) {
+			newWindow.document.write(`
+            <html>
+                <head>
+                    <title>Використані матеріали: ${name}</title>
+                    <style>
+                        body { font-family: sans-serif; padding: 20px; color: #333; }
+                        h2 { text-align: center; }
+                        .period { text-align: center; font-size: 14px; color: #666; margin-bottom: 20px; }
+                        table { width: 100%; border-collapse: collapse; }
+                        th, td { border: 1px solid #999; padding: 8px; text-align: left; }
+                        th { background: #f2f2f2; font-size: 12px; }
+                        .no-print { text-align: center; margin-top: 20px; }
+                        button { padding: 10px 20px; background: #17a2b8; color: white; border: none; border-radius: 4px; cursor: pointer; }
+                        @media print { .no-print { display: none; } }
+                    </style>
+                </head>
+                <body>
+                    <h2>🛠 Використані матеріали</h2>
+                    <div class="period"><strong>Період:</strong> ${periodString}<br><strong>Клієнт:</strong> ${name}</div>
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Назва товару</th>
+                                <th style="text-align: center;">Взято</th>
+                                <th style="text-align: center;">Списано (використано)</th>
+                            </tr>
+                        </thead>
+                        <tbody>${tableRowsHtml}</tbody>
+                    </table>
+                    <div class="no-print">
+                        <button onclick="window.print()">🖨️ Друкувати звіт</button>
+                        <button onclick="window.close()" style="background: #6c757d; margin-left: 10px;">Закрити</button>
+                    </div>
+                </body>
+            </html>
+        `);
+			newWindow.document.close();
+		}
+	};
+
+	const handlePrintOrderTable = (invoices, name) => {
+		// 1. Формуємо дати: беремо дату створення архіву (якщо є) або поточний час
+		const endDate = fullArchive?.archivedAt ? new Date(fullArchive.archivedAt) : new Date();
+
+		const currentFullDate = endDate.toLocaleString('uk-UA', {
+			day: '2-digit',
+			month: '2-digit',
+			year: 'numeric',
+			hour: '2-digit',
+			minute: '2-digit',
+			second: '2-digit'
+		});
+
+		const startOfMonth = new Date(endDate.getFullYear(), endDate.getMonth(), 1);
+		const startOfMonthFormatted = startOfMonth.toLocaleString('uk-UA', {
+			day: '2-digit',
+			month: '2-digit',
+			year: 'numeric',
+			hour: '2-digit',
+			minute: '2-digit',
+			second: '2-digit'
+		});
+
+		const periodString = `${startOfMonthFormatted} — ${currentFullDate}`;
+
+		// 2. Формуємо рядки таблиці (використовуємо дані з архіву)
+		// В архіві invoices зазвичай приходять як масив об'єктів (groupedInvoices)
+		const tableRowsHtml = invoices.map((invoice) => {
+			// Якщо це архів, товари зазвичай вже у масиві group.items
+			const items = invoice.items || [];
+			return items.map((item, itemIndex) => {
+				return `
+                <tr>
+                    ${itemIndex === 0 ? `<td rowspan="${items.length}" style="text-align: center; font-weight: bold;">${invoice.id || invoice.idOrderHistory}</td>` : ''}
+                    <td>${item.name}</td>
+                    <td style="text-align: right; font-weight: bold;">${item.quantity} ${item.units}</td>
+                    ${itemIndex === 0 ? `<td rowspan="${items.length}" style="text-align: center;">${invoice.date}</td>` : ''}
+                </tr>
+            `;
+			}).join('');
+		}).join('');
+
+		// 3. Відкриваємо вікно друку
+		const newWindow = window.open("", "_blank", "width=900,height=800");
+
+		if (newWindow) {
+			newWindow.document.write(`
+        <html>
+            <head>
+                <title>Друк замовлень: ${name}</title>
+                <style>
+                    body { font-family: sans-serif; padding: 20px; color: #333; }
+                    h2 { text-align: center; margin-bottom: 5px; }
+                    .period { text-align: center; font-size: 14px; color: #000; margin-bottom: 20px; border-bottom: 2px solid #333; padding-bottom: 10px; }
+                    table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+                    th, td { border: 1px solid #999; padding: 8px; text-align: left; font-size: 13px; }
+                    th { background-color: #f2f2f2; }
+                    .customer-info { margin-bottom: 10px; font-size: 15px; }
+                    .no-print { text-align: center; margin-top: 30px; }
+                    button { padding: 10px 20px; cursor: pointer; background: #007bff; color: white; border: none; border-radius: 4px; font-weight: bold; }
+                    @media print { .no-print { display: none; } }
+                </style>
+            </head>
+            <body>
+                <h2>📑 Звіт по замовленням</h2>
+                <div class="period"><strong>Період:</strong> ${periodString}</div>
+                
+                <div class="customer-info"><strong>Клієнт:</strong> ${name || 'Не вказано'}</div>
+                
+                <table>
+                    <thead>
+                        <tr>
+                            <th style="text-align: center;">ID Замовлення</th>
+                            <th>Назва товару</th>
+                            <th style="text-align: right;">Кількість</th>
+                            <th style="text-align: center;">Дата замовлення</th>
+                        </tr>
+                    </thead>
+                    <tbody>${tableRowsHtml}</tbody>
+                </table>
+
+                <div style="margin-top: 20px; font-size: 11px; color: #888; text-align: right;">
+                    Звіт сформовано з архіву: ${currentFullDate}
+                </div>
+
+                <div class="no-print">
+                    <button onclick="window.print()">🖨️ Друкувати накладну</button>
+                    <button onclick="window.close()" style="background: #6c757d; margin-left: 10px;">Закрити</button>
+                </div>
+            </body>
+        </html>
+    `);
+			newWindow.document.close();
+		}
+	};
+
+	const handlePrintStock = (stockData) => {
+		// Отримуємо дату з архіву або поточну
+		const archiveDate = fullArchive?.archivedAt ? new Date(fullArchive.archivedAt) : new Date();
+		const formattedDate = archiveDate.toLocaleString('uk-UA');
+
+		// Перетворюємо об'єкт stockData у масив та фільтруємо видимі товари
+		const filteredStock = Object.values(stockData || {}).filter(s => !!s.visibleproduct);
+
+		const tableRowsHtml = filteredStock.map((s) => `
+        <tr>
+            <td>${s.name}</td>
+            <td style="text-align: right; font-weight: bold;">${s.quantity} ${s.units}</td>
+        </tr>
+    `).join('');
+
+		const newWindow = window.open("", "_blank", "width=800,height=600");
+		if (newWindow) {
+			newWindow.document.write(`
+        <html>
+            <head>
+                <title>Залишки на складі</title>
+                <style>
+                    body { font-family: sans-serif; padding: 20px; color: #333; }
+                    .header-info { display: flex; justify-content: space-between; align-items: baseline; border-bottom: 2px solid #333; margin-bottom: 20px; }
+                    table { width: 100%; border-collapse: collapse; }
+                    th, td { border: 1px solid #999; padding: 10px; text-align: left; }
+                    th { background-color: #f2f2f2; }
+                    .footer-date { margin-top: 15px; font-size: 12px; color: #555; text-align: right; }
+                    .no-print { text-align: center; margin-top: 20px; }
+                    button { padding: 10px 20px; background: #fb8c00; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; }
+                    @media print { .no-print { display: none; } }
+                </style>
+            </head>
+            <body>
+                <div class="header-info">
+                    <h2>📦 Залишки на складі</h2>
+                    <span>Дата архіву: ${formattedDate}</span>
+                </div>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Назва товару</th>
+                            <th style="text-align: right;">Кількість</th>
+                        </tr>
+                    </thead>
+                    <tbody>${tableRowsHtml}</tbody>
+                </table>
+                <p class="footer-date">Звіт сформовано з архіву: ${formattedDate}</p>
+                <div class="no-print">
+                    <button onclick="window.print()">🖨️ Друкувати</button>
+                    <button onclick="window.close()" style="background: #6c757d; margin-left: 10px;">Закрити</button>
+                </div>
+            </body>
+        </html>
+        `);
+			newWindow.document.close();
+		}
+	};
+
+	const handleExportStockToCSV = (stockData) => {
+		// 1. Фільтруємо дані так само, як і для друку
+		const filteredStock = Object.values(stockData || {}).filter(s => !!s.visibleproduct);
+
+		if (filteredStock.length === 0) {
+			alert("Немає даних для експорту");
+			return;
+		}
+
+		// 2. Формуємо заголовок та рядки
+		// Використовуємо крапку з комою ";", бо вона краще розпізнається Excel для українського регіону
+		const header = ["Назва товару", "Кількість", "Одиниці виміру"].join(";");
+		const rows = filteredStock.map(s =>
+			`"${s.name.replace(/"/g, '""')}";"${s.quantity}";"${s.units}"`
+		);
+
+		const csvContent = [header, ...rows].join("\n");
+
+		// 3. Створюємо Blob з кодуванням UTF-8 (з сигнатурою BOM для Excel)
+		const blob = new Blob(["\ufeff", csvContent], { type: 'text/csv;charset=utf-8;' });
+		const url = URL.createObjectURL(blob);
+
+		// 4. Створюємо тимчасове посилання для завантаження
+		const link = document.createElement("a");
+		const archiveDate = fullArchive?.archivedAt ? fullArchive.archivedAt.split('T')[0] : new Date().toISOString().split('T')[0];
+
+		link.setAttribute("href", url);
+		link.setAttribute("download", `stock_archive_${archiveDate}.csv`);
+		link.style.visibility = 'hidden';
+		document.body.appendChild(link);
+		link.click();
+		document.body.removeChild(link);
+	};
+
 	return (
 		<div className={classes.archiveWrapper}>
-			<div className={classes.pageHeader} style={{ background: 'linear-gradient(135deg, #6c757d, #495057)' }}>
-				<h2 className={classes.pageTitle}>📦 Архів замовлень</h2>
+			<div className={classes.pageHeader} style={{
+				background: 'linear-gradient(135deg, #6c757d, #495057)',
+				padding: '20px',
+				borderRadius: '8px'
+			}}>
+				<h2 className={classes.pageTitle} style={{ marginBottom: '20px', textAlign: 'center' }}>
+					📦 Архів замовлень
+				</h2>
 
-				<div className={classes.selectWrapper}>
-					<label className={classes.label}>📅 Місяць:</label>
-					<select
-						value={selectedMonth}
-						onChange={(e) => handleMonthChange(e.target.value)}
-						className={classes.select}
-					>
-						<option value="">-- Оберіть місяць --</option>
-						{months.map(m => <option key={m} value={m}>{m}</option>)}
-					</select>
+				{/* Основний контейнер для селектів */}
+				<div style={{
+					display: 'flex',
+					flexDirection: 'column', // Стовпчик за замовчуванням (для мобілок)
+					gap: '15px',
+					width: '100%'
+				}} className="adaptive-select-container">
 
-					{/* Вибір конкретного часу запису */}
-					<label className={classes.label}>🕒 Запис від:</label>
-					<select
-						value={selectedSnapshot}
-						onChange={(e) => handleSnapshotChange(e.target.value)}
-						className={classes.select}
-						disabled={!availableSnapshots.length}
-					>
-						<option value="">-- Час створення --</option>
-						{availableSnapshots.map(s => (
-							<option key={s} value={s}>{s.replace('_', ' о ')}</option>
-						))}
-					</select>
+					{/* Рядок: Місяць */}
+					<div style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
+						<label className={classes.label} style={{ color: '#fff', fontSize: '14px' }}>📅 Місяць:</label>
+						<select
+							value={selectedMonth}
+							onChange={(e) => handleMonthChange(e.target.value)}
+							className={classes.select}
+							style={{ width: '100%', height: '40px', margin: 0 }}
+						>
+							<option value="">-- Оберіть місяць --</option>
+							{months.map(m => <option key={m} value={m}>{m}</option>)}
+						</select>
+					</div>
 
-					<label className={classes.label}>👤 Клієнт:</label>
-					<select
-						value={selectedUser}
-						onChange={(e) => setSelectedUser(e.target.value)}
-						className={classes.select}
-						disabled={!selectedSnapshot}
-					>
-						<option value="">-- Оберіть клієнта --</option>
-						{customers && Object.values(customers)
-							.filter(c => (c.id === 7 || c.id > 127) && c.name !== "Шановний клієнт")
-							.map(c => (
-								<option key={c.id} value={c.id}>{c.name} ({c.email})</option>
-							))
-						}
-					</select>
+					{/* Рядок: Запис від */}
+					<div style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
+						<label className={classes.label} style={{ color: '#fff', fontSize: '14px' }}>🕒 Запис від:</label>
+						<select
+							value={selectedSnapshot}
+							onChange={(e) => handleSnapshotChange(e.target.value)}
+							className={classes.select}
+							disabled={!availableSnapshots.length}
+							style={{ width: '100%', height: '40px', margin: 0 }}
+						>
+							<option value="">-- Час створення --</option>
+							{availableSnapshots.map(s => (
+								<option key={s} value={s}>{s.replace('_', ' о ')}</option>
+							))}
+						</select>
+					</div>
+
+					{/* Рядок: Клієнт */}
+					<div style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
+						<label className={classes.label} style={{ color: '#fff', fontSize: '14px' }}>👤 Клієнт:</label>
+						<select
+							value={selectedUser}
+							onChange={(e) => setSelectedUser(e.target.value)}
+							className={classes.select}
+							disabled={!selectedSnapshot}
+							style={{ width: '100%', height: '40px', margin: 0 }}
+						>
+							<option value="">-- Оберіть клієнта --</option>
+							{customers && Object.values(customers)
+								.filter(c => (c.id === 7 || c.id > 127) && c.name !== "Шановний клієнт")
+								.map(c => (
+									<option key={c.id} value={c.id}>{c.name} ({c.email})</option>
+								))
+							}
+						</select>
+					</div>
 				</div>
 			</div>
 
 			{userData ? (
 				<>
 					<h3 className={classes.sectionTitle}>📑 Деталізація замовлень:</h3>
-					<table className={classes.table}>
+					<table
+						className={classes.table}
+						style={{ cursor: 'pointer' }}
+						onClick={(e) => {
+							e.stopPropagation();
+							const selectedCustomerObj = customers.find(c => String(c.id) === String(selectedUser));
+							const finalName = selectedCustomerObj ? selectedCustomerObj.name : "Клієнт";
+
+							// Викликаємо друк для згрупованих замовлень
+							handlePrintOrderTable(userData.groupedInvoices, finalName);
+						}}
+					>
 						<thead>
 							<tr>
 								<th style={{ width: "12%" }}>ID</th>
@@ -217,148 +667,239 @@ const ArchivePage = ({ customers, products }) => {
 						<tbody>
 							{userData.groupedInvoices.length > 0 ? userData.groupedInvoices.map((group, gIdx) => (
 								<React.Fragment key={gIdx}>
-									{group.items.map((item, iIdx) => (
-										<tr key={`${gIdx}-${iIdx}`} className={iIdx === group.items.length - 1 ? classes.invoiceDivider : ""}>
-											{iIdx === 0 && (
-												<td rowSpan={group.items.length} style={{ verticalAlign: 'middle', fontWeight: 'bold' }}>
-													{group.id}
-												</td>
-											)}
-											<td>{item.name}</td>
-											<td className={classes.alignRight}>{item.quantity} {item.units}</td>
-											{iIdx === 0 && (
-												<td rowSpan={group.items.length} style={{ verticalAlign: 'middle' }}>
-													{group.date}
-												</td>
-											)}
-										</tr>
-									))}
+									{group.items.map((item, iIdx) => {
+										const isLastRowInGroup = iIdx === group.items.length - 1;
+										const isNotLastGroup = gIdx !== userData.groupedInvoices.length - 1;
+										const shouldHaveDivider = isLastRowInGroup && isNotLastGroup;
+
+										return (
+											<tr
+												key={`${gIdx}-${iIdx}`}
+												className={shouldHaveDivider ? classes.invoiceDivider : ""}
+											>
+												{iIdx === 0 && (
+													<td rowSpan={group.items.length} style={{ verticalAlign: 'middle', fontWeight: 'bold' }}>
+														{group.id}
+													</td>
+												)}
+												<td>{item.name}</td>
+												<td className={classes.alignRight}>{item.quantity} {item.units}</td>
+												{iIdx === 0 && (
+													<td rowSpan={group.items.length} style={{ verticalAlign: 'middle' }}>
+														{group.date}
+													</td>
+												)}
+											</tr>
+										);
+									})}
 								</React.Fragment>
-							)) : <tr><td colSpan="4" style={{ textAlign: 'center' }}>Дані відсутні</td></tr>}
+							)) : (
+								<tr><td colSpan="4" style={{ textAlign: 'center' }}>Дані відсутні</td></tr>
+							)}
 						</tbody>
 					</table>
 
-					<div style={{
-						display: 'flex',
-						justifyContent: 'space-between',
-						alignItems: 'center',
-						marginTop: '30px',
-						marginBottom: '15px',
-						flexWrap: 'wrap',
-						gap: '10px'
-					}}>
-						<h3 className={classes.sectionTitle} style={{ margin: 0 }}>🛠 Використані матеріали:</h3>
-
-						<div style={{
-							display: 'flex',
-							alignItems: 'center',
-							gap: '8px',
-							flexWrap: 'wrap', // Дозволяє елементам перестрибувати на новий рядок
-							background: '#f8f9fa',
-							padding: '8px 12px', // Трохи збільшив відступ для мобілок
-							borderRadius: '6px',
-							border: '1px solid #dee2e6'
-						}}>
-							<span style={{
-								fontSize: '13px',
-								fontWeight: '600',
-								color: '#495057',
-								whiteSpace: 'nowrap' // Забороняє розрив тексту "Пошук по угоді"
-							}}>
-								🔍 Пошук по угоді:
-							</span>
-
-							<input
-								type="text"
-								placeholder="№ угоди..."
-								value={searchAgreement}
-								onChange={(e) => setSearchAgreement(e.target.value)}
-								className={classes.select}
-								style={{
-									width: '130px',
-									flexGrow: 1, // Інпут буде розтягуватися, щоб заповнити місце
-									minWidth: '100px', // Мінімальна ширина для зручності
-									height: '30px',
-									margin: 0,
-									padding: '2px 8px',
-									fontSize: '13px'
-								}}
-							/>
-
-							<button
-								onClick={handleSearchByAgreement}
-								className={classes.btnHistory}
-								style={{
-									height: '30px',
-									padding: '0 15px',
-									display: 'flex',
-									alignItems: 'center',
-									justifyContent: 'center',
-									fontSize: '12px',
-									fontWeight: 'bold',
-									background: '#17a2b8',
-									color: '#fff',
-									border: 'none',
-									borderRadius: '4px',
-									cursor: 'pointer',
-									flexGrow: 1, // Кнопка також може розтягуватися на весь рядок у мобільній версії
-									whiteSpace: 'nowrap'
-								}}
-							>
-								ПЕРЕВІРИТИ
-							</button>
-						</div>
-					</div>
-
-					<table className={classes.table}>
+					{/* Блок загальної кількості товарів з періодом */}
+					<h3 className={classes.sectionTitle}>📊 Загальна кількість взятих товарів:</h3>
+					<table
+						className={classes.table}
+						style={{ cursor: 'pointer', marginBottom: '30px' }}
+						onClick={(e) => {
+							e.stopPropagation();
+							const selectedCustomerObj = customers.find(c => String(c.id) === String(selectedUser));
+							const finalName = selectedCustomerObj ? selectedCustomerObj.name : "Клієнт";
+							// Використовуємо userData.summary з архіву
+							handlePrintSummary(userData.summary, finalName);
+						}}
+					>
 						<thead>
 							<tr>
-								<th style={{ width: "40%" }}>Назва товару</th>
-								<th className={classes.alignRight}>Взято</th>
-								<th style={{ textAlign: 'center' }}>Списано</th>
-								<th style={{ textAlign: 'center' }}>Історія</th>
+								<th>Товари</th>
+								<th className={classes.alignRight}>Кі-сть</th>
 							</tr>
 						</thead>
 						<tbody>
-							{userData.summary.length > 0 ? userData.summary.map((item, idx) => (
-								<tr key={idx}>
+							{userData.summary.length > 0 ? userData.summary.map((item, index) => (
+								<tr key={index}>
 									<td>{item.name}</td>
 									<td className={classes.alignRight}>{item.totalQuantity} {item.units}</td>
-									<td style={{ textAlign: 'center' }}>
-										<span className={classes.totalBadge}>
-											{userData.used[item.productId] || 0} {item.units}
-										</span>
-									</td>
-									<td style={{ textAlign: 'center' }}>
-										<button className={classes.btnHistory} onClick={() => showHistoryAlert(item.productId, item.name)}>
-											📜
-										</button>
-									</td>
 								</tr>
-							)) : <tr><td colSpan="4" style={{ textAlign: 'center' }}>Дані відсутні</td></tr>}
+							)) : (
+								<tr><td colSpan="2" style={{ textAlign: 'center' }}>Дані відсутні</td></tr>
+							)}
 						</tbody>
 					</table>
+					{isAdminUsedMaterials && selectedUser && (
+						<>
+							<div style={{
+								display: 'flex',
+								justifyContent: 'space-between',
+								alignItems: 'center',
+								marginTop: '30px',
+								marginBottom: '15px',
+								flexWrap: 'wrap',
+								gap: '10px'
+							}}>
+								<h3 className={classes.sectionTitle} style={{ margin: 0 }}>🛠 Використані матеріали:</h3>
 
-					<h3 className={classes.sectionTitle}>📦 Стан складу (на момент архіву):</h3>
-					<table className={classes.table}>
-						<thead>
-							<tr>
-								<th style={{ width: "75%" }}>Товар</th>
-								<th style={{ width: "25%" }} className={classes.alignRight}>Доступно</th>
-							</tr>
-						</thead>
-						<tbody>
-							{Object.values(userData.stock)
-								.filter(s => s.visibleproduct)
-								.map((s, index) => (
-									<tr key={index}>
-										<td>{s.name}</td>
-										<td className={classes.alignRight}>{s.quantity} {s.units}</td>
+								{/* Блок пошуку по угоді */}
+								<div style={{
+									display: 'flex',
+									alignItems: 'center',
+									gap: '8px',
+									flexWrap: 'wrap',
+									background: '#f8f9fa',
+									padding: '8px 12px',
+									borderRadius: '6px',
+									border: '1px solid #dee2e6'
+								}}>
+									<span style={{ fontSize: '13px', fontWeight: '600', color: '#495057', whiteSpace: 'nowrap' }}>
+										🔍 Пошук по угоді:
+									</span>
+									<input
+										type="text"
+										placeholder="№ угоди..."
+										value={searchAgreement}
+										onChange={(e) => setSearchAgreement(e.target.value)}
+										className={classes.select}
+										style={{ width: '130px', height: '30px', padding: '2px 8px', fontSize: '13px' }}
+									/>
+									<button
+										onClick={handleSearchByAgreement}
+										className={classes.btnHistory}
+										style={{
+											height: '30px', padding: '0 15px', background: '#17a2b8',
+											color: '#fff', border: 'none', borderRadius: '4px',
+											cursor: 'pointer', fontWeight: 'bold', fontSize: '12px'
+										}}
+									>
+										ПЕРЕВІРИТИ
+									</button>
+								</div>
+							</div>
+
+							<table
+								className={classes.table}
+								style={{ cursor: 'pointer' }}
+								onClick={() => {
+									const selectedCustomerObj = customers.find(c => String(c.id) === String(selectedUser));
+									const finalName = selectedCustomerObj ? selectedCustomerObj.name : "Клієнт";
+									handlePrintMaterials(userData.summary, userData.used, finalName);
+								}}
+							>
+								<thead>
+									<tr>
+										<th style={{ width: "40%" }}>Назва товару</th>
+										<th className={classes.alignRight}>Взято</th>
+										<th style={{ textAlign: 'center' }}>Списано</th>
+										<th style={{ textAlign: 'center' }}>Історія</th>
 									</tr>
-								))
-							}
-						</tbody>
-					</table>
+								</thead>
+								<tbody>
+									{userData.summary.length > 0 ? userData.summary.map((item, idx) => (
+										<tr key={idx}>
+											<td>{item.name}</td>
+											<td className={classes.alignRight}>{item.totalQuantity} {item.units}</td>
+											<td style={{ textAlign: 'center' }}>
+												<span className={classes.totalBadge}>
+													{userData.used[item.productId] || 0} {item.units}
+												</span>
+											</td>
+											<td style={{ textAlign: 'center' }}>
+												<button
+													className={classes.btnHistory}
+													onClick={(e) => {
+														e.stopPropagation(); // Зупиняємо виклик handlePrintMaterials
+														showHistoryAlert(item.productId, item.name);
+													}}
+												>
+													📜
+												</button>
+											</td>
+										</tr>
+									)) : (
+										<tr><td colSpan="4" style={{ textAlign: 'center' }}>Дані відсутні</td></tr>
+									)}
+								</tbody>
+							</table>
+						</>
+					)}
+					{isAdminInvoices && (
+						<>
+							{/* Контейнер для заголовка та кнопки експорту */}
+							<div style={{
+								display: 'flex',
+								justifyContent: 'space-between',
+								alignItems: 'center',
+								marginTop: '30px',
+								marginBottom: '15px',
+								gap: '10px',
+								flexWrap: 'wrap' // дозволить кнопці переїхати під заголовок на дуже вузьких екранах
+							}}>
+								<h3 className={classes.sectionTitle} style={{ margin: 0 }}>
+									📦 Стан складу (на момент архіву):
+								</h3>
+
+								<button
+									onClick={(e) => {
+										e.stopPropagation(); // Важливо: щоб не спрацював клік по таблиці (друк)
+										handleExportStockToCSV(userData.stock);
+									}}
+									className={classes.btnHistory}
+									style={{
+										background: '#28a745',
+										height: '34px',
+										fontSize: '13px',
+										padding: '0 15px',
+										display: 'flex',
+										alignItems: 'center',
+										gap: '5px'
+									}}
+								>
+									<span>📥</span> Експорт Excel
+								</button>
+							</div>
+
+							{/* Обгортка для горизонтальної прокрутки на мобільних */}
+							<div style={{ width: '100%', overflowX: 'auto' }}>
+								<table
+									className={classes.table}
+									style={{ cursor: 'pointer', minWidth: '300px' }} // minWidth не дасть таблиці злипнутися
+									onClick={(e) => {
+										// Клік по всій таблиці викликає друк
+										handlePrintStock(userData.stock);
+									}}
+								>
+									<thead>
+										<tr>
+											<th style={{ textAlign: 'left' }}>Товари</th>
+											<th className={classes.alignRight} style={{ width: '100px' }}>Кі-сть</th>
+										</tr>
+									</thead>
+									<tbody>
+										{Object.values(userData.stock || {})
+											.filter(s => !!s.visibleproduct)
+											.map((s, index) => (
+												<tr key={index}>
+													<td style={{ fontSize: '14px' }}>{s.name}</td>
+													<td className={classes.alignRight} style={{ fontWeight: '600' }}>
+														{s.quantity} {s.units}
+													</td>
+												</tr>
+											))
+										}
+										{Object.values(userData.stock || {}).filter(s => !!s.visibleproduct).length === 0 && (
+											<tr>
+												<td colSpan="2" style={{ textAlign: 'center', padding: '20px', color: '#666' }}>
+													Дані відсутні
+												</td>
+											</tr>
+										)}
+									</tbody>
+								</table>
+							</div>
+						</>
+					)}
 				</>
 			) : (
 				<div style={{ textAlign: 'center', marginTop: '50px', color: '#999', padding: '40px' }}>
@@ -370,8 +911,9 @@ const ArchivePage = ({ customers, products }) => {
 };
 
 const mapStateToProps = state => ({
+	hasAccount: state.inform.hasAccount,
 	customers: state.inform.customers,
-	products: state.products.products
+	customerId: state.inform.customerId
 });
 
 export default connect(mapStateToProps)(ArchivePage);

@@ -454,79 +454,6 @@ const InvoicesPage = ({
 		if (selectedUser) { fetchUsedMaterials(selectedUser); }
 	}, [selectedUser]);
 
-	// const handleOrderDetails = async (notification) => {
-	// 	const customerId = notification.customerId;
-	// 	const orderId = notification.orderId;
-
-	// 	console.log(`--- ПОШУК ЗАМОВЛЕННЯ №${orderId} ---`);
-
-	// 	try {
-	// 		const path = `invoices/${customerId}/${orderId}`;
-	// 		const snapshot = await firebase.database().ref(path).once('value');
-	// 		const orderData = snapshot.val();
-
-	// 		if (!orderData) {
-	// 			console.error("❌ Дані відсутні");
-	// 			alert(`Замовлення #${orderId} не знайдено.`);
-	// 			return;
-	// 		}
-
-	// 		const items = orderData.items || [];
-	// 		if (items.length === 0) {
-	// 			alert(`Замовлення #${orderId} порожнє.`);
-	// 			return;
-	// 		}
-
-	// 		const itemsText = items.map(item => `• ${item.name}: ${item.quantity} ${item.units}`).join('\n');
-
-	// 		// Спроба знайти клієнта (якщо customers доступний)
-	// 		let clientName = "ID " + customerId;
-	// 		try {
-	// 			if (typeof customers !== 'undefined') {
-	// 				const customer = customers.find(c => String(c.id) === String(customerId));
-	// 				if (customer) clientName = customer.name;
-	// 			}
-	// 		} catch (e) { /* ignore */ }
-
-	// 		const fullMessage = `📦 Деталі замовлення #${orderId}\n` +
-	// 			`👤 Клієнт: ${clientName}\n` +
-	// 			`📅 Дата: ${orderData.date || notification.date}\n` +
-	// 			`✅ Статус: ${orderData.status || 'не вказано'}\n` +
-	// 			`--------------------------\n` +
-	// 			`${itemsText}`;
-
-	// 		// ЛОГІКА ЯК У handleHistory:
-	// 		// Якщо символів більше 800 (або якщо позицій більше 15), відкриваємо вікно
-	// 		if (fullMessage.length > 800 || items.length > 15) {
-	// 			const newWindow = window.open("", "_blank", "width=700,height=600");
-	// 			if (newWindow) {
-	// 				newWindow.document.write(`
-	//                 <html>
-	//                     <head><title>Замовлення #${orderId}</title></head>
-	//                     <body style="padding:20px; font-family:monospace; background:#f4f4f4; color:#333;">
-	//                         <div style="background:white; padding:20px; border-radius:8px; shadow: 0 4px 6px rgba(0,0,0,0.1); border: 1px solid #ddd;">
-	//                             <h2 style="margin-top:0;">📋 Накладна замовлення</h2>
-	//                             <pre style="white-space:pre-wrap; font-size:14px; line-height:1.6;">${fullMessage}</pre>
-	//                             <hr>
-	//                             <button onclick="window.print()" style="padding:10px 20px; cursor:pointer;">Друк</button>
-	//                         </div>
-	//                     </body>
-	//                 </html>
-	//             `);
-	// 				newWindow.document.close();
-	// 			} else {
-	// 				alert(fullMessage);
-	// 			}
-	// 		} else {
-	// 			alert(fullMessage);
-	// 		}
-
-	// 	} catch (error) {
-	// 		console.error("Помилка:", error);
-	// 		alert("Сталася помилка при завантаженні.");
-	// 	}
-	// };
-
 	const currentDate = new Date().toLocaleString('uk-UA', {
 		day: '2-digit',
 		month: '2-digit',
@@ -877,6 +804,30 @@ const InvoicesPage = ({
 		}
 	};
 
+	const handleExportStockToCSV = (stockData) => {
+		if (!stockData || stockData.length === 0) {
+			alert("Немає даних для експорту");
+			return;
+		}
+
+		const header = ["Товар", "Кількість", "Одиниці"].join(";");
+		const rows = stockData
+			.filter(s => !!s.visibleproduct)
+			.map(s => {
+				const name = s.name ? s.name.toString().replace(/"/g, '""') : "Без назви";
+				return `"${name}";"${s.quantity || 0}";"${s.units || ""}"`;
+			});
+
+		const csvContent = [header, ...rows].join("\n");
+		const blob = new Blob(["\ufeff", csvContent], { type: 'text/csv;charset=utf-8;' });
+		const url = URL.createObjectURL(blob);
+
+		const link = document.createElement("a");
+		link.setAttribute("href", url);
+		link.setAttribute("download", `Залишки_складу_${new Date().toLocaleDateString()}.csv`);
+		link.click();
+	};
+
 	return (
 		<div className={classes.wrapper}>
 			{isAdminUsedMaterials && notifications.length > 0 && (
@@ -1002,7 +953,36 @@ const InvoicesPage = ({
 
 			{isAdminInvoices && stock && (
 				<>
-					<h3 className={classes.sectionTitle}>📦 Залишки на складі:</h3>
+					{/* Контейнер заголовка та кнопки */}
+					<div style={{
+						display: 'flex',
+						justifyContent: 'space-between',
+						alignItems: 'center',
+						marginBottom: '10px',
+						marginTop: '20px'
+					}}>
+						<h3 className={classes.sectionTitle} style={{ margin: 0 }}>
+							📦 Залишки на складі:
+						</h3>
+						<button
+							onClick={(e) => {
+								e.stopPropagation();
+								// Використовуємо ту саму логіку експорту, але для поточного складу
+								handleExportStockToCSV(stock);
+							}}
+							className={classes.btnHistory}
+							style={{
+								background: '#28a745',
+								height: '32px',
+								fontSize: '12px',
+								padding: '0 12px'
+							}}
+						>
+							📥 Експорт Excel
+						</button>
+					</div>
+
+					{/* Таблиця */}
 					<table
 						className={classes.table}
 						style={{ cursor: 'pointer' }}
@@ -1011,11 +991,24 @@ const InvoicesPage = ({
 							handlePrintStock(stock);
 						}}
 					>
-						<thead><tr><th>Товари</th><th className={classes.alignRight}>Кі-сть</th></tr></thead>
+						<thead>
+							<tr>
+								<th>Товари</th>
+								<th className={classes.alignRight}>Кі-сть</th>
+							</tr>
+						</thead>
 						<tbody>
 							{stock?.filter(s => !!s.visibleproduct).map((s, index) => (
-								<tr key={s.id}><td>{s.name}</td><td className={classes.alignRight}>{s.quantity} {s.units}</td></tr>
+								<tr key={s.id || index}>
+									<td>{s.name}</td>
+									<td className={classes.alignRight}>
+										{s.quantity} {s.units}
+									</td>
+								</tr>
 							))}
+							{stock?.filter(s => !!s.visibleproduct).length === 0 && (
+								<tr><td colSpan="2" style={{ textAlign: 'center' }}>Склад порожній</td></tr>
+							)}
 						</tbody>
 					</table>
 				</>

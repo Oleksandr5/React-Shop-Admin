@@ -277,4 +277,33 @@
     }
 
 	.clearBtn {height: 48px !important;}
+
+	.pageHeader {
+        padding: 15px; /* трохи менше відступів на мобільних */
+        align-items: stretch;
+    }
+
+    .pageTitle {
+        text-align: center;
+        margin-bottom: 10px;
+    }
+
+    .selectWrapper {
+        flex-direction: column; /* Вибудовуємо елементи в стовпчик */
+        align-items: stretch;   /* Розтягуємо на всю ширину */
+        gap: 12px;              /* Відстань між групами селектів */
+    }
+
+    .select {
+        width: 100%;            /* Селекти на всю ширину */
+        min-width: 0;           /* Скидаємо мінімальну ширину 220px */
+        height: 42px;           /* Робимо зручними для натискання пальцем */
+        font-size: 16px;        /* Щоб iOS не зумив екран при фокусі */
+    }
+
+    .label {
+        margin-bottom: -8px;    /* Наближаємо підпис до свого селекту */
+        font-size: 14px;
+        opacity: 0.9;
+    }
 }
