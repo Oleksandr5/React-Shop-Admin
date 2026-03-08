@@ -215,7 +215,7 @@ const CrewInventoryReport = ({
                         <thead>
                             <tr>
                                 <th>Товар</th>
-                                <th>Архів</th>
+                                <th>Залишок на початок місяця</th>
                                 <th>Взято</th>
                                 <th>Списано</th>
                                 <th>Порахований залишок</th>
@@ -296,7 +296,7 @@ const CrewInventoryReport = ({
 				<thead>
 					<tr style={{ fontSize: '11px', backgroundColor: '#f1f4f9' }}>
 						<th>Товар</th>
-						<th>Архів {!hasArchiveInDB && "(Введіть дані)"}</th>
+						<th>Залишок на початок місяця {!hasArchiveInDB && "(Введіть дані)"}</th>
 						<th>Взято</th>
 						<th>Списано</th>
 						<th>Порахований залишок</th>
@@ -320,7 +320,7 @@ const CrewInventoryReport = ({
 									{product?.name || `ID ${pid}`}
 								</td>
 
-								<td data-label="Архів" style={{ textAlign: 'center' }}>
+								<td data-label="Залишок на початок місяця" style={{ textAlign: 'center' }}>
 									{!hasArchiveInDB ? (
 										<input
 											type="number"
