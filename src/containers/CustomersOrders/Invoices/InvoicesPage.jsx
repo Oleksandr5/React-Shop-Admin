@@ -600,6 +600,250 @@ const UsedMaterialsTable = ({
 		} catch (err) { alert("Помилка при відкаті"); }
 	};
 
+	const handlePrintAllAgreementsReport = async () => {
+		try {
+
+			// --- ДОДАЙТЕ ЦЕЙ БЛОК: Створюємо список матеріалів тут ---
+			const stockMap = new Map((stock || []).map(s => [Number(s.id), s]));
+			const summaryMap = new Map((invoicesSummary || []).map(s => [Number(s.productId), s]));
+			const currentFullMaterialsList = dynamicProductIds.map(id => {
+				const productFromStock = stockMap.get(Number(id));
+				const userInventory = summaryMap.get(Number(id));
+				return {
+					productId: id,
+					name: productFromStock?.name || userInventory?.name || `Товар #${id}`,
+					units: productFromStock?.units || userInventory?.units || ''
+				};
+			});
+			// -------------------------------------------------------
+			// 1. Отримуємо історію для всіх наявних товарів
+			const promises = dynamicProductIds.map(productId =>
+				fetchUsedMaterialsHistory(selectedUser, productId).then(hist => ({
+					productId,
+					hist
+				}))
+			);
+
+			const results = await Promise.all(promises);
+
+			// 2. Групуємо дані: ключ - номер угоди, значення - масив товарів
+			const agreementsMap = {};
+
+			results.forEach(({ productId, hist }) => {
+				if (hist && hist.length > 0) {
+					const productInfo = fullMaterialsList.find(s => Number(s.productId) === Number(productId));
+					const name = productInfo?.name || `Товар #${productId}`;
+					const units = productInfo?.units || '';
+
+					hist.forEach(log => {
+						const agreement = String(log.agreement || "Без угоди").trim();
+						if (!agreementsMap[agreement]) {
+							agreementsMap[agreement] = [];
+						}
+						agreementsMap[agreement].push({
+							name,
+							quantity: Number(log.value || 0),
+							units,
+							date: log.createdAt ? new Date(log.createdAt).toLocaleString("uk-UA", { day: '2-digit', month: '2-digit', year: '2-digit' }) : "---"
+						});
+					});
+				}
+			});
+
+			// 3. Формуємо HTML для друку
+			const currentDate = new Date().toLocaleString('uk-UA');
+			let reportHtml = "";
+
+			// Сортуємо угоди, щоб йшли по порядку
+			const sortedAgreements = Object.keys(agreementsMap).sort();
+
+			sortedAgreements.forEach(agNum => {
+				const items = agreementsMap[agNum];
+				reportHtml += `
+                <div style="margin-bottom: 30px; border-bottom: 1px solid #eee; padding-bottom: 15px;">
+                    <h3 style="color: #2c3e50; margin-bottom: 10px;">📄 Угода №: ${agNum}</h3>
+                    <table style="width: 100%; border-collapse: collapse;">
+                        <thead style="background: #f8f9fa;">
+                            <tr>
+                                <th style="border: 1px solid #ddd; padding: 8px; text-align: left;">Дата</th>
+                                <th style="border: 1px solid #ddd; padding: 8px; text-align: left;">Товар</th>
+                                <th style="border: 1px solid #ddd; padding: 8px; text-align: right;">Кількість</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${items.map(m => `
+                                <tr>
+                                    <td style="border: 1px solid #ddd; padding: 8px;">${m.date}</td>
+                                    <td style="border: 1px solid #ddd; padding: 8px;">${m.name}</td>
+                                    <td style="border: 1px solid #ddd; padding: 8px; text-align: right;">${m.quantity} ${m.units}</td>
+                                </tr>
+                            `).join('')}
+                        </tbody>
+                    </table>
+                </div>
+            `;
+			});
+
+			// 4. Відкриваємо вікно друку
+			const newWindow = window.open("", "_blank", "width=900,height=700");
+			if (newWindow) {
+				newWindow.document.write(`
+                <html>
+                    <head>
+                        <title>Звіт по всіх угодах</title>
+                        <style>
+                            body { font-family: sans-serif; padding: 30px; }
+                            .header { text-align: center; border-bottom: 3px solid #17a2b8; margin-bottom: 30px; padding-bottom: 10px; }
+                            @media print { .no-print { display: none; } }
+                        </style>
+                    </head>
+                    <body>
+                        <div class="header">
+                            <h2>📦 Повний звіт списань по всіх угодах</h2>
+                            <p>Екіпаж: ${selectedUser} | Дата формування: ${currentDate}</p>
+                        </div>
+                        ${reportHtml || "<p>Списань по угодах не знайдено.</p>"}
+                        <div class="no-print" style="text-align: center; margin-top: 40px;">
+                            <button onclick="window.print()" style="padding: 15px 30px; background: #17a2b8; color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: bold;">🖨️ Роздрукувати звіт</button>
+                        </div>
+                    </body>
+                </html>
+            `);
+				newWindow.document.close();
+			}
+		} catch (err) {
+			console.error(err);
+			alert("Не вдалося зібрати загальний звіт.");
+		}
+	};
+
+	const handlePrintFullHistoryReport = async () => {
+		try {
+
+			// --- ДОДАЙТЕ ЦЕЙ БЛОК ДЛЯ ВИЗНАЧЕННЯ ІМЕНІ ---
+			const crewId = selectedUser;
+			// Шукаємо об'єкт працівника в масиві customers за його ID
+			const workerObj = customers.find(c => String(c.id) === String(crewId));
+			const crewDisplayName = workerObj ? `${workerObj.name} (${crewId})` : crewId;
+			// --------------------------------------------
+
+			const promises = dynamicProductIds.map(productId =>
+				fetchUsedMaterialsHistory(selectedUser, productId).then(hist => ({
+					productId,
+					hist
+				}))
+			);
+
+			const results = await Promise.all(promises);
+			const currentDate = new Date().toLocaleString('uk-UA');
+
+			let reportHtml = `
+            <html>
+            <head>
+                <title>Загальна історія списань</title>
+                <style>
+                    body { font-family: sans-serif; padding: 20px; line-height: 1.4; }
+                    .header { text-align: center; border-bottom: 2px solid #333; margin-bottom: 20px; padding-bottom: 10px; }
+                    .product-section { margin-bottom: 40px; page-break-inside: avoid; }
+                    .product-title { background: #17a2b8; color: white; padding: 10px; font-weight: bold; margin-bottom: 0; display: flex; justify-content: space-between; }
+                    table { width: 100%; border-collapse: collapse; font-size: 13px; margin-top: 0; }
+                    th, td { border: 1px solid #ccc; padding: 8px 10px; text-align: left; }
+                    th { background: #f2f2f2; font-weight: bold; }
+                    .total-row { background: #e9ecef; font-weight: bold; }
+                    .no-print { text-align: center; margin: 20px; }
+                    @media print { .no-print { display: none; } }
+                </style>
+            </head>
+            <body>
+                <div class="header">
+                    <h2>📋 Повний звіт історії списань матеріалів</h2>
+                    <p><b>Екіпаж:</b> ${crewDisplayName} | <b>Дата:</b> ${currentDate}</p>
+                </div>
+        `;
+
+			let hasData = false;
+
+			results.forEach(({ productId, hist }) => {
+				if (hist && hist.length > 0) {
+					hasData = true;
+					const productInfo = fullMaterialsList.find(s => Number(s.productId) === Number(productId));
+					const productName = productInfo?.name || `Товар #${productId}`;
+					const units = productInfo?.units || '';
+
+					// Сортуємо від старих до нових для коректного підрахунку суми, 
+					// але для виводу потім перевернемо
+					const sortedLogs = [...hist].sort((a, b) => a.createdAt - b.createdAt);
+
+					let runningTotal = 0;
+					const rowsWithTotal = sortedLogs.map(log => {
+						const val = Number(log.value || 0);
+						runningTotal += val;
+						return {
+							...log,
+							currentRunningTotal: runningTotal
+						};
+					}).reverse(); // Відображаємо нові записи зверху
+
+					reportHtml += `
+                    <div class="product-section">
+                        <div class="product-title">
+                            <span>📦 ${productName}</span>
+                            <span>Всього списано: ${runningTotal} ${units}</span>
+                        </div>
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th style="width: 20%">Дата</th>
+                                    <th style="width: 15%">Списано</th>
+                                    <th style="width: 20%">Загальна кількість</th>
+                                    <th style="width: 20%">Угода</th>
+                                    <th>Примітка</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${rowsWithTotal.map(log => `
+                                    <tr>
+                                        <td>${log.createdAt ? new Date(log.createdAt).toLocaleString("uk-UA") : "---"}</td>
+                                        <td><b>${log.value}</b> ${units}</td>
+                                        <td style="color: #2c3e50; font-weight: bold;">${log.currentRunningTotal} ${units}</td>
+                                        <td>${log.agreement || "—"}</td>
+                                        <td>${log.comment || ""}</td>
+                                    </tr>
+                                `).join('')}
+                                <tr class="total-row">
+                                    <td colspan="2" style="text-align: right;">ПІДСУМОК:</td>
+                                    <td colspan="3">${runningTotal} ${units}</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                `;
+				}
+			});
+
+			if (!hasData) {
+				reportHtml += "<p style='text-align:center;'>Історія списань порожня.</p>";
+			}
+
+			reportHtml += `
+                <div class="no-print">
+                    <button onclick="window.print()" style="padding: 12px 24px; background: #28a745; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 16px; font-weight: bold;">🖨️ Роздрукувати повний звіт</button>
+                </div>
+            </body>
+            </html>
+        `;
+
+			const newWindow = window.open("", "_blank", "width=1000,height=800");
+			if (newWindow) {
+				newWindow.document.write(reportHtml);
+				newWindow.document.close();
+			}
+		} catch (err) {
+			console.error(err);
+			alert("Помилка при формуванні звіту.");
+		}
+	};
+
 	return (
 		<div className={classes.usedMaterialsSection}>
 			<div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -721,6 +965,34 @@ const UsedMaterialsTable = ({
 							Знайти товари
 						</button>
 					</div>
+				</div>
+				<button
+					onClick={handlePrintAllAgreementsReport}
+					className={classes.btnAdd}
+					style={{
+						marginTop: '10px',
+						backgroundColor: '#6c757d', // Сірий колір, щоб відрізнялася від основної кнопки
+						borderColor: '#5a6268',
+						width: '100%'
+					}}
+				>
+					📋 Звіт по всіх угодах (Excel/Друк)
+				</button>
+				<div style={{ marginBottom: '15px', display: 'flex', justifyContent: 'flex-end' }}>
+					<button
+						onClick={handlePrintFullHistoryReport}
+						className={classes.btnHistory}
+						style={{
+							backgroundColor: '#17a2b8',
+							color: 'white',
+							padding: '8px 15px',
+							display: 'flex',
+							alignItems: 'center',
+							gap: '8px'
+						}}
+					>
+						📜 Звіт по всій історії списань
+					</button>
 				</div>
 			</div>
 
@@ -1201,6 +1473,8 @@ const InvoicesPage = ({
 		}
 	};
 
+
+
 	const handleExportStockToCSV = (stockData) => {
 		if (!stockData || stockData.length === 0) {
 			alert("Немає даних для експорту");
@@ -1280,26 +1554,38 @@ const InvoicesPage = ({
 						isAdminFullAccess={isAdminFullAccess}
 						dynamicProductIds={dynamicProductIds}
 						setDynamicProductIds={setDynamicProductIds}
-
 					/>
-					{/* Коментар: НОВИЙ БЛОК: Вибір напарника та Звіт залишків екіпажу */}
-					<div style={{ marginTop: '30px', padding: '20px', border: '2px solid #17a2b8', borderRadius: '12px', background: '#f8f9fa' }}>
-						<label className={classes.label} style={{ color: '#17a2b8', fontWeight: 'bold' }}>🤝 Напарник для звіту екіпажу:</label>
-						<select className={classes.select} value={partnerUser} onChange={e => setPartnerUser(e.target.value)} style={{ marginLeft: '10px', width: 'auto' }}>
-							<option value="">-- Без напарника --</option>
-							{customers.filter(c => String(c.id) !== String(selectedUser) && (c.id === 7 || c.id > 127)).map(c => (
-								<option key={c.id} value={c.id}>{c.name}</option>
-							))}
-						</select>
 
-						<CrewInventoryReport
-							mainWorkerId={selectedUser}
-							partnerWorkerId={partnerUser}
-							stock={stock}
-							dynamicProductIds={dynamicProductIds}
-							customers={customers}
-						/>
-					</div>
+					{/* Перевірка повного доступу для відображення звіту екіпажу */}
+					{isAdminFullAccess && selectedUser && (
+						<div style={{ marginTop: '30px', padding: '20px', border: '2px solid #17a2b8', borderRadius: '12px', background: '#f8f9fa' }}>
+							<label className={classes.label} style={{ color: '#17a2b8', fontWeight: 'bold' }}>
+								🤝 Напарник для звіту екіпажу:
+							</label>
+							<select
+								className={classes.select}
+								value={partnerUser}
+								onChange={e => setPartnerUser(e.target.value)}
+								style={{ marginLeft: '10px', width: 'auto' }}
+							>
+								<option value="">-- Без напарника --</option>
+								{customers
+									.filter(c => String(c.id) !== String(selectedUser) && (c.id === 7 || c.id > 127))
+									.map(c => (
+										<option key={c.id} value={c.id}>{c.name}</option>
+									))
+								}
+							</select>
+
+							<CrewInventoryReport
+								mainWorkerId={selectedUser}
+								partnerWorkerId={partnerUser}
+								stock={stock}
+								dynamicProductIds={dynamicProductIds}
+								customers={customers}
+							/>
+						</div>
+					)}
 				</>
 			)}
 
@@ -1373,76 +1659,80 @@ const InvoicesPage = ({
 				</tbody>
 			</table>
 
-			{isAdminInvoices && stock && (
-				<>
-					{/* Контейнер заголовка та кнопки */}
-					<div style={{
-						display: 'flex',
-						justifyContent: 'space-between',
-						alignItems: 'center',
-						marginBottom: '10px',
-						marginTop: '20px'
-					}}>
-						<h3 className={classes.sectionTitle} style={{ margin: 0 }}>
-							📦 Залишки на складі:
-						</h3>
-						<button
+			{
+				isAdminInvoices && stock && (
+					<>
+						{/* Контейнер заголовка та кнопки */}
+						<div style={{
+							display: 'flex',
+							justifyContent: 'space-between',
+							alignItems: 'center',
+							marginBottom: '10px',
+							marginTop: '20px'
+						}}>
+							<h3 className={classes.sectionTitle} style={{ margin: 0 }}>
+								📦 Залишки на складі:
+							</h3>
+							<button
+								onClick={(e) => {
+									e.stopPropagation();
+									// Використовуємо ту саму логіку експорту, але для поточного складу
+									handleExportStockToCSV(stock);
+								}}
+								className={classes.btnHistory}
+								style={{
+									background: '#28a745',
+									height: '32px',
+									fontSize: '12px',
+									padding: '0 12px'
+								}}
+							>
+								📥 Експорт Excel
+							</button>
+						</div>
+
+						{/* Таблиця */}
+						<table
+							className={classes.table}
+							style={{ cursor: 'pointer' }}
 							onClick={(e) => {
 								e.stopPropagation();
-								// Використовуємо ту саму логіку експорту, але для поточного складу
-								handleExportStockToCSV(stock);
-							}}
-							className={classes.btnHistory}
-							style={{
-								background: '#28a745',
-								height: '32px',
-								fontSize: '12px',
-								padding: '0 12px'
+								handlePrintStock(stock);
 							}}
 						>
-							📥 Експорт Excel
-						</button>
-					</div>
-
-					{/* Таблиця */}
-					<table
-						className={classes.table}
-						style={{ cursor: 'pointer' }}
-						onClick={(e) => {
-							e.stopPropagation();
-							handlePrintStock(stock);
-						}}
-					>
-						<thead>
-							<tr>
-								<th>Товари</th>
-								<th className={classes.alignRight}>Кі-сть</th>
-							</tr>
-						</thead>
-						<tbody>
-							{stock?.filter(s => !!s.visibleproduct).map((s, index) => (
-								<tr key={s.id || index}>
-									<td>{s.name}</td>
-									<td className={classes.alignRight}>
-										{s.quantity} {s.units}
-									</td>
+							<thead>
+								<tr>
+									<th>Товари</th>
+									<th className={classes.alignRight}>Кі-сть</th>
 								</tr>
-							))}
-							{stock?.filter(s => !!s.visibleproduct).length === 0 && (
-								<tr><td colSpan="2" style={{ textAlign: 'center' }}>Склад порожній</td></tr>
-							)}
-						</tbody>
-					</table>
-				</>
-			)}
+							</thead>
+							<tbody>
+								{stock?.filter(s => !!s.visibleproduct).map((s, index) => (
+									<tr key={s.id || index}>
+										<td>{s.name}</td>
+										<td className={classes.alignRight}>
+											{s.quantity} {s.units}
+										</td>
+									</tr>
+								))}
+								{stock?.filter(s => !!s.visibleproduct).length === 0 && (
+									<tr><td colSpan="2" style={{ textAlign: 'center' }}>Склад порожній</td></tr>
+								)}
+							</tbody>
+						</table>
+					</>
+				)
+			}
 
-			{isAdminFullAccess && (
-				<button className={classes.btnAdd} style={{ backgroundColor: '#f39c12', width: 'auto', marginBottom: '20px', borderColor: '#e67e22' }}
-					onClick={() => { if (window.confirm("Створити архів?")) archiveAllDataMonthly(); }}>
-					📦 Створити архів за поточний місяць
-				</button>
-			)}
-		</div>
+			{
+				isAdminFullAccess && (
+					<button className={classes.btnAdd} style={{ backgroundColor: '#f39c12', width: 'auto', marginBottom: '20px', borderColor: '#e67e22' }}
+						onClick={() => { if (window.confirm("Створити архів?")) archiveAllDataMonthly(); }}>
+						📦 Створити архів за поточний місяць
+					</button>
+				)
+			}
+		</div >
 	);
 };
 
