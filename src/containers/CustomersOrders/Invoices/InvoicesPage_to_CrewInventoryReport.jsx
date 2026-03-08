@@ -4,391 +4,6 @@ import { fetchInvoices, fetchInvoicesSummary, fetchOrderNotifications, deleteNot
 import classes from './InvoicesPage.module.css'
 import firebase from 'firebase';
 
-// =========================================================================
-// Коментар: НОВИЙ КОМПОНЕНТ: CrewInventoryReport (Звіт залишків екіпажу)
-// =========================================================================
-const CrewInventoryReport = ({
-	mainWorkerId,
-	partnerWorkerId,
-	stock,
-	dynamicProductIds,
-	customers
-}) => {
-	const [combinedData, setCombinedData] = useState({ invoices: {}, used: {} });
-	const [realRemaining, setRealRemaining] = useState({});
-	const [archiveHistory, setArchiveHistory] = useState({});
-	const [hasArchiveInDB, setHasArchiveInDB] = useState(false); // Коментар: Чи існують дані в архіві БД
-	const [loading, setLoading] = useState(false);
-
-	// Коментар: Функція для пошуку останнього запису в архіві
-	const fetchArchiveData = async (workerId) => {
-		const db = firebase.database();
-		const arcSnap = await db.ref('archive').orderByKey().limitToLast(1).once('value');
-		if (arcSnap.exists()) {
-			const months = arcSnap.val();
-			const monthKey = Object.keys(months)[0];
-			const times = months[monthKey];
-			const lastTimeKey = Object.keys(times).sort().reverse()[0];
-			const data = times[lastTimeKey]?.remainingMaterialsHistory?.[workerId];
-
-			if (data) {
-				setHasArchiveInDB(true);
-				return data;
-			}
-		}
-		setHasArchiveInDB(false);
-		return {};
-	};
-
-	useEffect(() => {
-		const fetchData = async () => {
-			if (!mainWorkerId) return;
-			setLoading(true);
-			const db = firebase.database();
-			const ids = [mainWorkerId, partnerWorkerId].filter(id => !!id);
-
-			try {
-				const invoicesAcc = {};
-				const usedAcc = {};
-
-				await Promise.all(ids.map(async (id) => {
-					const invSnap = await db.ref(`invoicesSummary/${id}`).once('value');
-					const usedSnap = await db.ref(`usedMaterials/${id}`).once('value');
-
-					const invData = invSnap.val() || {};
-					Object.values(invData).forEach(item => {
-						invoicesAcc[item.productId] = (invoicesAcc[item.productId] || 0) + Number(item.totalQuantity || 0);
-					});
-
-					const usedData = usedSnap.val() || {};
-					Object.entries(usedData).forEach(([pid, qty]) => {
-						usedAcc[pid] = (usedAcc[pid] || 0) + Number(qty || 0);
-					});
-				}));
-
-				const histData = await fetchArchiveData(mainWorkerId);
-				setCombinedData({ invoices: invoicesAcc, used: usedAcc });
-				setArchiveHistory(histData);
-			} catch (err) {
-				console.error("Error:", err);
-			} finally {
-				setLoading(false);
-			}
-		};
-
-		fetchData();
-		const remRef = firebase.database().ref(`remainingMaterials/${mainWorkerId}`);
-		remRef.on('value', snap => setRealRemaining(snap.val() || {}));
-		return () => remRef.off();
-	}, [mainWorkerId, partnerWorkerId]);
-
-	// Коментар: НОВА ФУНКЦІЯ: Запис введених даних прямо в архів Firebase
-	const saveToArchiveDB = async () => {
-		if (!window.confirm("Записати ці дані в останній існуючий архів?")) return;
-
-		const db = firebase.database();
-		try {
-			// 1. Знаходимо останній місяць і останній час
-			const arcSnap = await db.ref('archive').orderByKey().limitToLast(1).once('value');
-			if (arcSnap.exists()) {
-				const months = arcSnap.val();
-				const monthKey = Object.keys(months)[0];
-				const times = months[monthKey];
-				const lastTimeKey = Object.keys(times).sort().reverse()[0];
-
-				// 2. Дописуємо дані прямо в цей існуючий архів
-				await db.ref(`archive/${monthKey}/${lastTimeKey}/remainingMaterialsHistory/${mainWorkerId}`).set(archiveHistory);
-
-				setHasArchiveInDB(true);
-				alert("✅ Дані додано до існуючого архіву: " + lastTimeKey);
-			} else {
-				alert("Архівів ще не існує. Спершу створіть загальний архів місяця.");
-			}
-		} catch (e) {
-			alert("Помилка: " + e.message);
-		}
-	};
-
-	const handleArchiveInputChange = (pid, value) => {
-		setArchiveHistory(prev => ({ ...prev, [pid]: Number(value) }));
-	};
-
-	const handleSync = async () => {
-		const updates = {};
-		dynamicProductIds.forEach(pid => {
-			const calc = (Number(archiveHistory[pid]) || 0) + (Number(combinedData.invoices[pid]) || 0) - (Number(combinedData.used[pid]) || 0);
-			updates[`/remainingMaterials/${mainWorkerId}/${pid}`] = calc;
-		});
-		await firebase.database().ref().update(updates);
-		alert("✅ Синхронізовано з Факт");
-	};
-
-	const handleSyncRow = async (pid) => {
-		// 1. Рахуємо значення "Система" для цього конкретного ID
-		const prev = Number(archiveHistory[pid] || 0);
-		const taken = Number(combinedData.invoices[pid] || 0);
-		const spent = Number(combinedData.used[pid] || 0);
-		const calc = prev + taken - spent;
-
-		try {
-			// 2. Оновлюємо тільки цей один запис у Firebase
-			await firebase.database().ref(`remainingMaterials/${mainWorkerId}/${pid}`).set(calc);
-			alert(`✅ Товар ID ${pid} синхронізовано!`);
-		} catch (e) {
-			alert("Помилка: " + e.message);
-		}
-	};
-
-	const handlePrintReport = () => {
-		const currentDate = new Date().toLocaleString('uk-UA');
-
-		// 1. Функція для пошуку імені: повертає "Ім'я (ID)" або просто "ID", якщо не знайдено
-		const getWorkerNameWithId = (id) => {
-			if (!id) return null;
-			// Шукаємо об'єкт користувача в масиві customers
-			const worker = customers?.find(c => String(c.id) === String(id));
-			return worker ? `${worker.name} (${id})` : `ID ${id}`;
-		};
-
-		// 2. Отримуємо відформатовані імена для основного працівника та напарника
-		const mainWorkerDisplay = getWorkerNameWithId(mainWorkerId);
-		const partnerWorkerDisplay = getWorkerNameWithId(partnerWorkerId);
-
-		// 3. Формуємо підсумковий рядок екіпажу
-		const crewNames = partnerWorkerId
-			? `${mainWorkerDisplay} / ${partnerWorkerDisplay}`
-			: mainWorkerDisplay;
-
-		const tableRowsHtml = dynamicProductIds.map(pid => {
-			const product = stock?.find(s => s.id == pid);
-			const prev = Number(archiveHistory[pid] || 0);
-			const taken = Number(combinedData.invoices[pid] || 0);
-			const spent = Number(combinedData.used[pid] || 0);
-			const calc = prev + taken - spent;
-			const fact = Number(realRemaining[pid] || 0);
-			const diff = fact - calc;
-			const diffText = diff === 0 ? '✓' : (diff > 0 ? `-${diff}` : `+${Math.abs(diff)}`);
-
-			return `
-            <tr>
-                <td>${product?.name || `ID ${pid}`}</td>
-                <td style="text-align: center;">${prev}</td>
-                <td style="text-align: center; color: green;">+${taken}</td>
-                <td style="text-align: center; color: red;">-${spent}</td>
-                <td style="text-align: center; font-weight: bold;">${calc}</td>
-                <td style="text-align: center;">${fact}</td>
-                <td style="text-align: center; font-weight: bold;">${diffText}</td>
-            </tr>
-        `;
-		}).join('');
-
-		const newWindow = window.open("", "_blank", "width=900,height=700");
-		if (newWindow) {
-			newWindow.document.write(`
-            <html>
-                <head>
-                    <title>Звіт — ${crewNames}</title>
-                    <style>
-                        body { font-family: sans-serif; padding: 20px; color: #333; }
-                        .header { border-bottom: 2px solid #17a2b8; margin-bottom: 20px; padding-bottom: 10px; }
-                        .header-top { display: flex; justify-content: space-between; align-items: baseline; }
-                        .crew-info { font-size: 16px; margin-top: 10px; color: #2c3e50; }
-                        table { width: 100%; border-collapse: collapse; margin-top: 10px; }
-                        th, td { border: 1px solid #ccc; padding: 8px; font-size: 12px; }
-                        th { background-color: #f1f4f9; text-align: center; }
-                        .no-print { display: flex; justify-content: center; gap: 15px; margin-top: 30px; }
-                        button { padding: 10px 25px; border: none; border-radius: 6px; cursor: pointer; font-size: 14px; font-weight: bold; }
-                        .btn-print { background: #17a2b8; color: white; }
-                        .btn-close { background: #6c757d; color: white; }
-                        @media print { .no-print { display: none; } }
-                    </style>
-                </head>
-                <body>
-                    <div class="header">
-                        <div class="header-top">
-                            <h2 style="margin: 0;">📊 Звіт залишків екіпажу</h2>
-                            <span style="font-size: 12px;">Дата: ${currentDate}</span>
-                        </div>
-                        <div class="crew-info"><strong>👷 Екіпаж:</strong> ${crewNames}</div>
-                    </div>
-                    <table>
-                        <thead>
-                            <tr>
-                                <th>Товар</th>
-                                <th>Архів</th>
-                                <th>Взято</th>
-                                <th>Списано</th>
-                                <th>Порахований залишок</th>
-                                <th>Фактичний залишок</th>
-                                <th>Різниця</th>
-                            </tr>
-                        </thead>
-                        <tbody>${tableRowsHtml}</tbody>
-                    </table>
-                    <div class="no-print">
-                        <button class="btn-print" onclick="window.print()">🖨️ Друкувати звіт</button>
-                        <button class="btn-close" onclick="window.close()">✖ Закрити</button>
-                    </div>
-                </body>
-            </html>
-        `);
-			newWindow.document.close();
-		}
-	};
-
-	// Знаходимо імена для відображення в інтерфейсі
-	const getWorkerName = (id) => {
-		const worker = customers?.find(c => String(c.id) === String(id));
-		return worker ? `${worker.name} (${id})` : (id ? `ID ${id}` : "");
-	};
-
-	const mainName = getWorkerName(mainWorkerId);
-	const partnerName = getWorkerName(partnerWorkerId);
-	const crewNames = partnerWorkerId ? `${mainName} / ${partnerName}` : mainName;
-
-	if (loading) return <p>⏳ Завантаження...</p>;
-
-	return (
-		<div className={classes.usedMaterialsSection} style={{ marginTop: '40px', borderTop: '5px solid #17a2b8', paddingTop: '20px' }}>
-			<div className={classes.reportHeaderContainer}>
-				<div className={classes.titleBlock}>
-					<h3 className={classes.sectionTitle}>📊 Звіт екіпажу</h3>
-					{/* Тепер crewNames визначено і помилки не буде */}
-					<div className={classes.crewInfo}>
-						<strong>👷 Екіпаж:</strong> {crewNames || "Не обрано"}
-					</div>
-				</div>
-
-				<div className={classes.topActions}>
-					{!hasArchiveInDB && (
-						<button
-							onClick={saveToArchiveDB}
-							className={classes.btnHistory}
-							style={{ background: '#f39c12', color: '#fff' }}
-						>
-							💾 Записати в архів
-						</button>
-					)}
-
-					<button
-						onClick={handleSync}
-						className={classes.btnHistory}
-						style={{ background: '#17a2b8', color: '#fff' }}
-					>
-						🔄 Синхронізувати
-					</button>
-
-					<button
-						onClick={handlePrintReport}
-						className={classes.btnHistory}
-						style={{ background: '#27ae60', color: '#fff' }}
-					>
-						📥 Друк / Ексель
-					</button>
-				</div>
-			</div>
-
-			<table className={`${classes.table} ${classes.reportTable}`}>
-				<thead>
-					<tr style={{ fontSize: '11px', backgroundColor: '#f1f4f9' }}>
-						<th>Товар</th>
-						<th>Архів {!hasArchiveInDB && "(Введіть дані)"}</th>
-						<th>Взято</th>
-						<th>Списано</th>
-						<th>Порахований залишок</th>
-						<th>Фактичний залишок</th>
-						<th>Різниця</th>
-					</tr>
-				</thead>
-				<tbody>
-					{dynamicProductIds.map(pid => {
-						const product = stock?.find(s => s.id == pid);
-						const prev = Number(archiveHistory[pid] || 0);
-						const taken = Number(combinedData.invoices[pid] || 0);
-						const spent = Number(combinedData.used[pid] || 0);
-						const calc = prev + taken - spent;
-						const fact = Number(realRemaining[pid] || 0);
-						const diff = fact - calc;
-
-						return (
-							<tr key={pid}>
-								<td data-label="Товар" style={{ fontSize: '12px' }}>
-									{product?.name || `ID ${pid}`}
-								</td>
-
-								<td data-label="Архів" style={{ textAlign: 'center' }}>
-									{!hasArchiveInDB ? (
-										<input
-											type="number"
-											value={archiveHistory[pid] || ''}
-											onChange={(e) => handleArchiveInputChange(pid, e.target.value)}
-											className={classes.inputSmall}
-											style={{ width: '50px', border: '1px solid #f39c12' }}
-										/>
-									) : (
-										<span onClick={() => setHasArchiveInDB(false)} style={{ cursor: 'pointer' }}>{prev}</span>
-									)}
-								</td>
-
-								<td data-label="Взято" style={{ textAlign: 'center', color: 'green' }}>
-									+{taken}
-								</td>
-
-								<td data-label="Списано" style={{ textAlign: 'center', color: 'red' }}>
-									-{spent}
-								</td>
-
-								<td data-label="Порахований залишок" style={{ textAlign: 'center', fontWeight: 'bold' }}>
-									{calc}
-								</td>
-
-								<td data-label="Фактичний залишок" style={{ textAlign: 'center' }}>
-									<input
-										type="number"
-										value={realRemaining[pid] || ''}
-										onChange={async (e) => {
-											const val = e.target.value;
-											await firebase.database().ref(`remainingMaterials/${mainWorkerId}/${pid}`).set(Number(val));
-										}}
-										className={classes.inputSmall}
-										style={{ width: '50px', border: '1px solid #17a2b8' }}
-									/>
-								</td>
-
-								<td data-label="Різниця" style={{ textAlign: 'center', fontWeight: 'bold', color: diff > 0 ? 'red' : 'green' }}>
-									{diff === 0 ? '✓' : (
-										<div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '5px' }}>
-											<span>{diff > 0 ? `-${diff}` : `+${Math.abs(diff)}`}</span>
-											<button
-												onClick={() => handleSyncRow(pid)}
-												title="Синхронізувати лише цей рядок"
-												style={{
-													padding: '2px 5px',
-													fontSize: '10px',
-													cursor: 'pointer',
-													background: '#e9ecef',
-													border: '1px solid #ced4da',
-													borderRadius: '3px'
-												}}
-											>
-												🔄
-											</button>
-										</div>
-									)}
-								</td>
-							</tr>
-						);
-					})}
-				</tbody>
-			</table>
-		</div>
-	);
-};
-
-// =========================================================================
-// КОМПОНЕНТ: UsedMaterialsTable (Ваш оригінальний, з невеликими правками пропсів)
-// =========================================================================
-
 const UsedMaterialsTable = ({
 	selectedUser,
 	customers,
@@ -398,9 +13,7 @@ const UsedMaterialsTable = ({
 	fetchUsedMaterials,
 	addUsedMaterial,
 	fetchUsedMaterialsHistory,
-	isAdminFullAccess,
-	dynamicProductIds, // ЗМІНА: тепер отримуємо це як пропс від батька
-	setDynamicProductIds
+	isAdminFullAccess
 }) => {
 	const [inputValues, setInputValues] = useState({});
 	const [agreementValues, setAgreementValues] = useState({});
@@ -415,8 +28,33 @@ const UsedMaterialsTable = ({
 	// Отримуємо ім'я (якщо знайшли) або просто показуємо ID
 	const displayUserName = userObj ? userObj.name : `Користувач #${selectedUser}`;
 
-	// !!! ВИДАЛЕНО: Тут був useEffect з syncAndFetch та initialList.
-	// Тепер за це відповідає InvoicesPage, щоб не було дублювання логіки.
+	// 1. Стейт для динамічного списку ID товарів
+	const [dynamicProductIds, setDynamicProductIds] = useState([]);
+
+	// 2. Автоматична синхронізація та отримання списку з Firebase
+	useEffect(() => {
+		const ref = firebase.database().ref('settings/productsForWorkOrders');
+
+		const syncAndFetch = async () => {
+			// Твій початковий список як база для першого створення
+			const initialList = [104, 123, 121, 122, 120, 119, 103, 124, 118, 117, 125, 132, 126, 108, 116, 112, 109, 114, 113, 115, 110, 111, 130, 129, 131, 128, 150, 153, 152, 151, 149, 148, 147];
+
+			try {
+				const snapshot = await ref.once('value');
+				if (!snapshot.exists()) {
+					await ref.set(initialList);
+					setDynamicProductIds(initialList);
+					console.log("✅ Список товарів синхронізовано з Firebase");
+				} else {
+					setDynamicProductIds(snapshot.val() || []);
+				}
+			} catch (err) {
+				console.error("❌ Помилка завантаження налаштувань:", err);
+			}
+		};
+
+		syncAndFetch();
+	}, []);
 
 	// 3. Динамічна підготовка даних (useMemo тепер залежить від dynamicProductIds)
 	const fullMaterialsList = useMemo(() => {
@@ -781,48 +419,13 @@ const InvoicesPage = ({
 }) => {
 
 	const [selectedUser, setSelectedUser] = useState(customerId || '');
-	// Коментар: НОВЕ: Стейт для збереження вибраного напарника
-	const [partnerUser, setPartnerUser] = useState('');
 	const [admins, setAdmins] = useState({});
-	// Коментар: НОВЕ: Стейт для списку ID, який тепер спільний для двох таблиць
-	const [dynamicProductIds, setDynamicProductIds] = useState([]);
 
 	const idThisCustomers = window.localStorage.getItem("idThisCustomers");
 
 	useEffect(() => {
 		const ref = firebase.database().ref('settings/admins');
 		ref.on('value', snapshot => { setAdmins(snapshot.val() || {}); });
-		return () => ref.off();
-	}, []);
-
-	// =========================================================================
-	// Коментар: ПЕРЕНЕСЕНО СЮДИ: Автоматична синхронізація та завантаження ID товарів
-	// Коментар: Цей блок гарантує, що база даних не буде порожньою при першому запуску
-	// =========================================================================
-	useEffect(() => {
-		const ref = firebase.database().ref('settings/productsForWorkOrders');
-
-		// Коментар: Ваш список ID за замовчуванням
-		const initialList = [104, 123, 121, 122, 120, 119, 103, 124, 118, 117, 125, 132, 126, 108, 116, 112, 109, 114, 113, 115, 110, 111, 130, 129, 131, 128, 150, 153, 152, 151, 149, 148, 147];
-
-		const syncAndFetch = async () => {
-			try {
-				// Коментар: Використовуємо .on для відстеження змін адміністратором у реальному часі
-				ref.on('value', async (snapshot) => {
-					if (!snapshot.exists()) {
-						// Коментар: Якщо запису в Firebase немає — створюємо його з initialList
-						await ref.set(initialList);
-						setDynamicProductIds(initialList);
-						console.log("✅ База даних налаштувань створена з початковим списком");
-					} else {
-						// Коментар: Якщо дані є — оновлюємо стейт
-						setDynamicProductIds(snapshot.val() || []);
-					}
-				});
-			} catch (err) { console.error("❌ Firebase Error:", err); }
-		};
-
-		syncAndFetch();
 		return () => ref.off();
 	}, []);
 
@@ -1267,43 +870,18 @@ const InvoicesPage = ({
 			</div>
 
 			{isAdminUsedMaterials && selectedUser && (
-				<>
-					<UsedMaterialsTable
-						selectedUser={selectedUser}
-						customers={customers}
-						invoicesSummary={invoicesSummary}
-						usedMaterials={usedMaterials}
-						fetchUsedMaterials={fetchUsedMaterials}
-						addUsedMaterial={addUsedMaterial}
-						stock={stock}
-						fetchUsedMaterialsHistory={fetchUsedMaterialsHistory}
-						isAdminFullAccess={isAdminFullAccess}
-						dynamicProductIds={dynamicProductIds}
-						setDynamicProductIds={setDynamicProductIds}
-
-					/>
-					{/* Коментар: НОВИЙ БЛОК: Вибір напарника та Звіт залишків екіпажу */}
-					<div style={{ marginTop: '30px', padding: '20px', border: '2px solid #17a2b8', borderRadius: '12px', background: '#f8f9fa' }}>
-						<label className={classes.label} style={{ color: '#17a2b8', fontWeight: 'bold' }}>🤝 Напарник для звіту екіпажу:</label>
-						<select className={classes.select} value={partnerUser} onChange={e => setPartnerUser(e.target.value)} style={{ marginLeft: '10px', width: 'auto' }}>
-							<option value="">-- Без напарника --</option>
-							{customers.filter(c => String(c.id) !== String(selectedUser) && (c.id === 7 || c.id > 127)).map(c => (
-								<option key={c.id} value={c.id}>{c.name}</option>
-							))}
-						</select>
-
-						<CrewInventoryReport
-							mainWorkerId={selectedUser}
-							partnerWorkerId={partnerUser}
-							stock={stock}
-							dynamicProductIds={dynamicProductIds}
-							customers={customers}
-						/>
-					</div>
-				</>
+				<UsedMaterialsTable
+					selectedUser={selectedUser}
+					customers={customers}
+					invoicesSummary={invoicesSummary}
+					usedMaterials={usedMaterials}
+					fetchUsedMaterials={fetchUsedMaterials}
+					addUsedMaterial={addUsedMaterial}
+					stock={stock}
+					fetchUsedMaterialsHistory={fetchUsedMaterialsHistory}
+					isAdminFullAccess={isAdminFullAccess}
+				/>
 			)}
-
-
 
 			<h3 className={classes.sectionTitle}>📑 Замовлення:</h3>
 

@@ -247,6 +247,8 @@
     line-height: 0;	
 }
 
+
+
 /* --- МОБІЛЬНА ВЕРСІЯ (до 600px) --- */
 @media (max-width: 600px) {
     .usedWrapper {
@@ -305,5 +307,141 @@
         margin-bottom: -8px;    /* Наближаємо підпис до свого селекту */
         font-size: 14px;
         opacity: 0.9;
+    }
+}
+
+/* Контейнер для всього верху (заголовок + кнопки) */
+.reportHeaderContainer {
+    display: flex;
+    justify-content: space-between; /* Розштовхує заголовок вліво, а кнопки вправо */
+    align-items: flex-end;          /* Вирівнює кнопки по нижній лінії тексту */
+    margin-bottom: 20px;
+    gap: 20px;
+}
+
+/* Базовий стиль для контейнера кнопок */
+.topActions {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 20px;
+    align-items: center;
+}
+
+/* ================= АДАПТИВНІСТЬ ТІЛЬКИ ДЛЯ ЗВІТУ ================= */
+
+@media (max-width: 768px) {
+    /* 1. Блок кнопок: під заголовком, одна під одною */
+    .reportHeaderContainer {
+        flex-direction: column;     /* Заголовок зверху, кнопки знизу */
+        align-items: flex-start;    /* Все по лівому краю */
+    }
+
+    .topActions {
+        flex-direction: column;     /* Кнопки одна під одною */
+        width: 100%;                /* Контейнер на всю ширину */
+        gap: 8px;
+    }
+
+    .topActions button {
+        width: 100% !important;     /* Кожна кнопка на всю ширину */
+        margin: 0 !important;
+        height: 45px;
+    }
+
+    /* 2. Загальні налаштування таблиці */
+    .reportTable {
+        display: block;
+        border: none !important;
+    }
+
+    .reportTable thead {
+        display: none; /* Ховаємо шапку на мобілках */
+    }
+
+    .reportTable tbody {
+        display: block;
+        width: 100%;
+    }
+
+    /* 3. Картка товару (один рядок таблиці) */
+    .reportTable tr {
+        display: grid;
+        grid-template-columns: 1fr 1fr; 
+        gap: 10px;
+        margin-bottom: 25px;
+        padding: 12px;
+        border: 2px solid #17a2b8 !important; /* Бірюзова рамка */
+        border-radius: 12px;
+        background: #fff;
+        box-shadow: 0 4px 10px rgba(0,0,0,0.05);
+    }
+
+    /* Назва товару (перша комірка) */
+    .reportTable tr td:first-child {
+        grid-column: span 2;
+        background: #f8f9fa;
+        text-align: center;
+        font-weight: bold;
+        font-size: 16px !important;
+        text-transform: uppercase;
+        margin: -12px -12px 5px -12px;
+        padding: 12px !important;
+        border-radius: 10px 10px 0 0;
+        border-bottom: 2px solid #17a2b8 !important;
+        color: #333;
+        height: auto;
+    }
+
+    /* 4. ВНУТРІШНІ ЗЕЛЕНІ РАМКИ (Архів, Взято, Списано...) */
+    .reportTable td {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        padding: 8px !important;
+        border: 2px solid #28a745 !important; /* ЗЕЛЕНА РАМКА */
+        border-radius: 8px;
+        height: 65px;
+        background: #fff;
+    }
+
+    /* Підписи всередині зелених рамок */
+    .reportTable td::before {
+        content: attr(data-label);
+        font-size: 8px;
+        font-weight: 800;
+        color: #888;
+        margin-bottom: 4px;
+        text-transform: uppercase;
+    }
+
+    /* 5. Комірка "Різниця" (остання) */
+    .reportTable tr td:last-child {
+        grid-column: span 2;
+        border: none !important;
+        border-top: 1px dashed #ccc !important;
+        margin-top: 5px;
+        height: auto;
+        flex-direction: row;
+        justify-content: space-between;
+        background: transparent;
+        padding: 15px 5px 5px 5px !important;
+    }
+
+    .reportTable tr td:last-child::before {
+        content: "РІЗНИЦЯ:";
+        font-size: 11px;
+        font-weight: bold;
+        color: #333;
+    }
+
+    /* Інпути */
+    .reportTable input {
+        width: 70px !important;
+        height: 30px;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        text-align: center;
+        font-size: 14px;
     }
 }
