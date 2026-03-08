@@ -602,8 +602,12 @@ const UsedMaterialsTable = ({
 
 	const handlePrintAllAgreementsReport = async () => {
 		try {
+			// --- БЛОК ВИЗНАЧЕННЯ ІМЕНІ ЕКІПАЖУ ---
+			const crewId = selectedUser;
+			const workerObj = customers.find(c => String(c.id) === String(crewId));
+			const crewDisplayName = workerObj ? `${workerObj.name} (${crewId})` : crewId;
 
-			// --- ДОДАЙТЕ ЦЕЙ БЛОК: Створюємо список матеріалів тут ---
+			// --- ПІДГОТОВКА СПИСКУ МАТЕРІАЛІВ ---
 			const stockMap = new Map((stock || []).map(s => [Number(s.id), s]));
 			const summaryMap = new Map((invoicesSummary || []).map(s => [Number(s.productId), s]));
 			const currentFullMaterialsList = dynamicProductIds.map(id => {
@@ -615,10 +619,10 @@ const UsedMaterialsTable = ({
 					units: productFromStock?.units || userInventory?.units || ''
 				};
 			});
-			// -------------------------------------------------------
+
 			// 1. Отримуємо історію для всіх наявних товарів
 			const promises = dynamicProductIds.map(productId =>
-				fetchUsedMaterialsHistory(selectedUser, productId).then(hist => ({
+				fetchUsedMaterialsHistory(crewId, productId).then(hist => ({
 					productId,
 					hist
 				}))
@@ -626,12 +630,11 @@ const UsedMaterialsTable = ({
 
 			const results = await Promise.all(promises);
 
-			// 2. Групуємо дані: ключ - номер угоди, значення - масив товарів
+			// 2. Групуємо дані: ключ - номер угоди
 			const agreementsMap = {};
-
 			results.forEach(({ productId, hist }) => {
 				if (hist && hist.length > 0) {
-					const productInfo = fullMaterialsList.find(s => Number(s.productId) === Number(productId));
+					const productInfo = currentFullMaterialsList.find(s => Number(s.productId) === Number(productId));
 					const name = productInfo?.name || `Товар #${productId}`;
 					const units = productInfo?.units || '';
 
@@ -650,65 +653,75 @@ const UsedMaterialsTable = ({
 				}
 			});
 
-			// 3. Формуємо HTML для друку
+			// 3. Формуємо HTML
 			const currentDate = new Date().toLocaleString('uk-UA');
-			let reportHtml = "";
+			let reportHtml = `
+            <html>
+            <head>
+                <title>Звіт по угодах</title>
+                <style>
+                    body { font-family: sans-serif; padding: 20px; line-height: 1.4; }
+                    .header { text-align: center; border-bottom: 2px solid #333; margin-bottom: 20px; padding-bottom: 10px; }
+                    .agreement-section { margin-bottom: 40px; page-break-inside: avoid; }
+                    .agreement-title { background: #17a2b8; color: white; padding: 10px; font-weight: bold; margin-bottom: 0; }
+                    table { width: 100%; border-collapse: collapse; font-size: 13px; margin-top: 0; }
+                    th, td { border: 1px solid #ccc; padding: 8px 10px; text-align: left; }
+                    th { background: #f2f2f2; font-weight: bold; }
+                    .no-print { text-align: center; margin: 20px; }
+                    @media print { .no-print { display: none; } }
+                </style>
+            </head>
+            <body>
+                <div class="header">
+                    <h2>📋 Повний звіт списань по всіх угодах</h2>
+                    <p><b>Екіпаж:</b> ${crewDisplayName} | <b>Дата формування:</b> ${currentDate}</p>
+                </div>
+        `;
 
-			// Сортуємо угоди, щоб йшли по порядку
 			const sortedAgreements = Object.keys(agreementsMap).sort();
 
-			sortedAgreements.forEach(agNum => {
-				const items = agreementsMap[agNum];
-				reportHtml += `
-                <div style="margin-bottom: 30px; border-bottom: 1px solid #eee; padding-bottom: 15px;">
-                    <h3 style="color: #2c3e50; margin-bottom: 10px;">📄 Угода №: ${agNum}</h3>
-                    <table style="width: 100%; border-collapse: collapse;">
-                        <thead style="background: #f8f9fa;">
-                            <tr>
-                                <th style="border: 1px solid #ddd; padding: 8px; text-align: left;">Дата</th>
-                                <th style="border: 1px solid #ddd; padding: 8px; text-align: left;">Товар</th>
-                                <th style="border: 1px solid #ddd; padding: 8px; text-align: right;">Кількість</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            ${items.map(m => `
+			if (sortedAgreements.length > 0) {
+				sortedAgreements.forEach(agNum => {
+					const items = agreementsMap[agNum];
+					reportHtml += `
+                    <div class="agreement-section">
+                        <div class="agreement-title">📄 Угода №: ${agNum}</div>
+                        <table>
+                            <thead>
                                 <tr>
-                                    <td style="border: 1px solid #ddd; padding: 8px;">${m.date}</td>
-                                    <td style="border: 1px solid #ddd; padding: 8px;">${m.name}</td>
-                                    <td style="border: 1px solid #ddd; padding: 8px; text-align: right;">${m.quantity} ${m.units}</td>
+                                    <th style="width: 25%">Дата</th>
+                                    <th>Товар</th>
+                                    <th style="width: 20%; text-align: right;">Кількість</th>
                                 </tr>
-                            `).join('')}
-                        </tbody>
-                    </table>
-                </div>
-            `;
-			});
+                            </thead>
+                            <tbody>
+                                ${items.map(m => `
+                                    <tr>
+                                        <td>${m.date}</td>
+                                        <td>${m.name}</td>
+                                        <td style="text-align: right;"><b>${m.quantity}</b> ${m.units}</td>
+                                    </tr>
+                                `).join('')}
+                            </tbody>
+                        </table>
+                    </div>
+                `;
+				});
+			} else {
+				reportHtml += "<p style='text-align:center;'>Списань по угодах не знайдено.</p>";
+			}
 
-			// 4. Відкриваємо вікно друку
+			reportHtml += `
+                <div class="no-print">
+                    <button onclick="window.print()" style="padding: 12px 24px; background: #28a745; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 16px; font-weight: bold;">🖨️ Роздрукувати звіт</button>
+                </div>
+            </body>
+            </html>
+        `;
+
 			const newWindow = window.open("", "_blank", "width=900,height=700");
 			if (newWindow) {
-				newWindow.document.write(`
-                <html>
-                    <head>
-                        <title>Звіт по всіх угодах</title>
-                        <style>
-                            body { font-family: sans-serif; padding: 30px; }
-                            .header { text-align: center; border-bottom: 3px solid #17a2b8; margin-bottom: 30px; padding-bottom: 10px; }
-                            @media print { .no-print { display: none; } }
-                        </style>
-                    </head>
-                    <body>
-                        <div class="header">
-                            <h2>📦 Повний звіт списань по всіх угодах</h2>
-                            <p>Екіпаж: ${selectedUser} | Дата формування: ${currentDate}</p>
-                        </div>
-                        ${reportHtml || "<p>Списань по угодах не знайдено.</p>"}
-                        <div class="no-print" style="text-align: center; margin-top: 40px;">
-                            <button onclick="window.print()" style="padding: 15px 30px; background: #17a2b8; color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: bold;">🖨️ Роздрукувати звіт</button>
-                        </div>
-                    </body>
-                </html>
-            `);
+				newWindow.document.write(reportHtml);
 				newWindow.document.close();
 			}
 		} catch (err) {
