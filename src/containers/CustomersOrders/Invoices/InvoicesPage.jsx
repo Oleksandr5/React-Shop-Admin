@@ -271,7 +271,11 @@ const CrewInventoryReport = ({
 					)}
 
 					<button
-						onClick={handleSync}
+						onClick={() => {
+							if (window.confirm("Ви впевнені, що хочете синхронізувати всі дані? Це оновить поточні залишки на основі бази даних.")) {
+								handleSync();
+							}
+						}}
 						className={classes.btnHistory}
 						style={{ background: '#17a2b8', color: '#fff' }}
 					>
@@ -360,7 +364,11 @@ const CrewInventoryReport = ({
 										<div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '5px' }}>
 											<span>{diff > 0 ? `-${diff}` : `+${Math.abs(diff)}`}</span>
 											<button
-												onClick={() => handleSyncRow(pid)}
+												onClick={() => {
+													if (window.confirm("Синхронізувати лише цей рядок?")) {
+														handleSyncRow(pid);
+													}
+												}}
 												title="Синхронізувати лише цей рядок"
 												style={{
 													padding: '2px 5px',
