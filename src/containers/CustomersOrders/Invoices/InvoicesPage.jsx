@@ -12,7 +12,9 @@ const CrewInventoryReport = ({
 	partnerWorkerId,
 	stock,
 	dynamicProductIds,
-	customers
+	customers,
+	invoices,
+	invoicesSummary
 }) => {
 	const [combinedData, setCombinedData] = useState({ invoices: {}, used: {} });
 	const [realRemaining, setRealRemaining] = useState({});
@@ -83,6 +85,236 @@ const CrewInventoryReport = ({
 		remRef.on('value', snap => setRealRemaining(snap.val() || {}));
 		return () => remRef.off();
 	}, [mainWorkerId, partnerWorkerId]);
+
+	// --- НОВА ФУНКЦІЯ АРХІВУВАННЯ ЗАЛИШКІВ/ЗВІТУ ---
+	const archiveFullReport = async () => {
+		if (!window.confirm("Створити новий незалежний знімок звіту в архіві?")) return;
+
+		try {
+			const date = new Date();
+			const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+			const timeStamp = `${String(date.getDate()).padStart(2, '0')}_${String(date.getHours()).padStart(2, '0')}-${String(date.getMinutes()).padStart(2, '0')}`;
+
+			const db = firebase.database();
+
+			const reportData = dynamicProductIds.map(pid => {
+				const product = stock?.find(s => String(s.id) === String(pid));
+
+				// Важливо: переконайтеся, що ці змінні (archiveHistory, realRemaining) 
+				// не undefined на момент виклику
+				const prev = Number(archiveHistory?.[pid] || 0);
+				const taken = Number(combinedData.invoices?.[pid] || 0);
+				const spent = Number(combinedData.used?.[pid] || 0);
+				const calc = prev + taken - spent;
+				const fact = Number(realRemaining?.[pid] || 0);
+
+				return {
+					productId: pid,
+					name: product?.name || `ID ${pid}`,
+					remainingMaterialsHistory: prev, // Було initial
+					added: taken,
+					spent: spent,
+					calculated: calc,
+					remainingMaterials: fact,        // Було actual
+					difference: fact - calc
+				};
+			});
+
+			const getWorkerNameWithId = (id) => {
+				const worker = customers?.find(c => String(c.id) === String(id));
+				return worker ? `${worker.name} (${id})` : `ID ${id}`;
+			};
+
+			const crewNames = partnerWorkerId
+				? `${getWorkerNameWithId(mainWorkerId)} / ${getWorkerNameWithId(partnerWorkerId)}`
+				: getWorkerNameWithId(mainWorkerId);
+
+			await db.ref(`archiveReports/${monthKey}/${timeStamp}`).set({
+				archivedAt: date.toISOString(),
+				crew: crewNames,
+				mainWorkerId: mainWorkerId,
+				reportDetails: reportData
+			});
+
+			alert(`✅ Звіт успішно заархівовано!`);
+		} catch (error) {
+			console.error(error);
+			alert("Помилка при створенні архіву: " + error.message);
+		}
+	};
+
+	// ВСТАВИТИ В InvoicesPage.jsx всередині CrewInventoryReport
+	const archiveGlobalReport = async () => {
+		// 1. Логуємо вхідні дані, щоб побачити, що зараз є в пам'яті компонента
+		console.log("=== ПЕРЕВІРКА ДАНИХ ПЕРЕД АРХІВАЦІЄЮ ===");
+		console.log("combinedData:", combinedData);
+		console.log("realRemaining:", realRemaining);
+		console.log("archiveHistory:", archiveHistory);
+
+		if (!combinedData || (Object.keys(combinedData.invoices).length === 0 && Object.keys(combinedData.used).length === 0)) {
+			alert("Помилка: Дані для розрахунку ще не завантажені або таблиця порожня.");
+			return;
+		}
+
+		if (!window.confirm("Створити архівний знімок для поточного екіпажу?")) return;
+
+		try {
+			const date = new Date();
+			const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+			const timeStamp = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}_${String(date.getHours()).padStart(2, '0')}-${String(date.getMinutes()).padStart(2, '0')}`;
+
+			const db = firebase.database();
+			const allReports = {};
+
+			const activeWorkerIds = [String(mainWorkerId)];
+			if (partnerWorkerId) activeWorkerIds.push(String(partnerWorkerId));
+
+			activeWorkerIds.forEach(wId => {
+				const worker = customers[wId];
+				if (!worker) {
+					console.warn(`Працівника з ID ${wId} не знайдено в списку customers`);
+					return;
+				}
+
+				const reportData = (dynamicProductIds || []).map(pid => {
+					const product = stock?.find(s => String(s.id) === String(pid));
+
+					const prev = Number(archiveHistory?.[pid] || 0);
+					const taken = Number(combinedData?.invoices?.[pid] || 0);
+					const spent = Number(combinedData?.used?.[pid] || 0);
+					const fact = Number(realRemaining?.[pid] || 0);
+					const calc = prev + taken - spent;
+
+					return {
+						productId: pid,
+						name: product?.name || `Товар ID ${pid}`,
+						units: product?.units || '',
+						prev,
+						added: taken,
+						spent,
+						calculated: calc,
+						fact,
+						diff: fact - calc
+					};
+				});
+
+				allReports[wId] = {
+					workerName: worker.name,
+					workerEmail: worker.email || '',
+					reportDetails: reportData
+				};
+			});
+
+			// 2. ФІНАЛЬНИЙ ЛОГ перед відправкою в базу
+			console.log("ОБ'ЄКТ ЯКИЙ ЙДЕ В FIREBASE:", {
+				path: `archiveReports/${monthKey}/${timeStamp}`,
+				data: allReports
+			});
+
+			if (Object.keys(allReports).length === 0) {
+				console.error("ОБ'ЄКТ allReports ПУСТИЙ. Запис скасовано.");
+				return;
+			}
+
+			await db.ref(`archiveReports/${monthKey}/${timeStamp}`).set({
+				archivedAt: date.toISOString(),
+				reports: allReports
+			});
+
+			alert(`✅ Архів для ${activeWorkerIds.length} працівників створено! Перевірте консоль.`);
+		} catch (error) {
+			console.error("ПОМИЛКА ПРИ ЗАПИСУ В БАЗУ:", error);
+			alert("Помилка: " + error.message);
+		}
+	};
+
+	// const archiveGlobalReport = async () => {
+	// 	if (!invoicesSummary || !stock) {
+	// 		alert("Помилка: Глобальні дані про накладні не завантажені.");
+	// 		return;
+	// 	}
+
+	// 	if (!window.confirm("Створити архівний знімок для ВСІХ клієнтів з реальними залишками?")) return;
+
+	// 	try {
+	// 		const date = new Date();
+	// 		const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+	// 		const timeStamp = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}_${String(date.getHours()).padStart(2, '0')}-${String(date.getMinutes()).padStart(2, '0')}`;
+
+	// 		const db = firebase.database();
+
+	// 		// 1. Завантажуємо дані з ПРАВИЛЬНИХ шляхів
+	// 		const [usedSnap, remainsSnap, historySnap] = await Promise.all([
+	// 			db.ref('usedMaterialsSummary').once('value'),
+	// 			db.ref('remainingMaterials').once('value'), // ВИПРАВЛЕНО ШЛЯХ
+	// 			db.ref('inventoryArchive').once('value')     // Шлях для 'prev'
+	// 		]);
+
+	// 		const usedDataAll = usedSnap.val() || {};
+	// 		const remainsDataAll = remainsSnap.val() || {};
+	// 		const historyDataAll = historySnap.val() || {};
+
+	// 		const allReports = {};
+	// 		const customersList = Array.isArray(customers) ? customers : Object.values(customers || {});
+
+	// 		const relevantCustomers = customersList.filter(
+	// 			c => (Number(c.id) === 7 || Number(c.id) > 127) && c.name !== "Шановний клієнт"
+	// 		);
+
+	// 		relevantCustomers.forEach(worker => {
+	// 			const wId = String(worker.id);
+
+	// 			const reportData = (dynamicProductIds || []).map(pid => {
+	// 				const product = stock?.find(s => String(s.id) === String(pid));
+	// 				const pKey = String(pid);
+
+	// 				// Дані з накладних (вже в props)
+	// 				const taken = Number(invoicesSummary?.[wId]?.[pKey] || 0);
+
+	// 				// Списано (з usedMaterialsSummary)
+	// 				const spent = Number(usedDataAll?.[wId]?.[pKey] || 0);
+
+	// 				// ФАКТ (з remainingMaterials) - ТУТ БУЛИ НУЛІ
+	// 				const fact = Number(remainsDataAll?.[wId]?.[pKey] || 0);
+
+	// 				// Попередній залишок (з inventoryArchive)
+	// 				const prev = Number(historyDataAll?.[wId]?.[pKey] || 0);
+
+	// 				const calc = prev + taken - spent;
+
+	// 				return {
+	// 					productId: pid,
+	// 					name: product?.name || `Товар ID ${pid}`,
+	// 					units: product?.units || '',
+	// 					prev: prev,
+	// 					added: taken,
+	// 					spent: spent,
+	// 					calculated: calc,
+	// 					fact: fact,
+	// 					diff: fact - calc
+	// 				};
+	// 			});
+
+	// 			allReports[wId] = {
+	// 				workerName: worker.name,
+	// 				workerEmail: worker.email || '',
+	// 				reportDetails: reportData
+	// 			};
+	// 		});
+
+	// 		console.log("ПЕРЕВІРКА: ОВ-12 для ID 7 має бути 256. Об'єкт:", allReports["7"]);
+
+	// 		await db.ref(`archiveReports/${monthKey}/${timeStamp}`).set({
+	// 			archivedAt: date.toISOString(),
+	// 			reports: allReports
+	// 		});
+
+	// 		alert(`✅ Глобальний архів створено! Тепер дані для ID 7 та інших мають підтягнутися.`);
+	// 	} catch (error) {
+	// 		console.error("Помилка:", error);
+	// 		alert("Помилка: " + error.message);
+	// 	}
+	// };
 
 	// Коментар: НОВА ФУНКЦІЯ: Запис введених даних прямо в архів Firebase
 	const saveToArchiveDB = async () => {
@@ -293,6 +525,10 @@ const CrewInventoryReport = ({
 				</div>
 
 				<div className={classes.topActions}>
+					{/* ДОДАНА КНОПКА АРХІВУВАННЯ ЗВІТУ */}
+					<button onClick={archiveGlobalReport} className={classes.btnAdd} style={{ background: '#27ae60' }}>
+						📸 Створити Глобальний Архів
+					</button>
 					{!hasArchiveInDB && (
 						<button
 							onClick={saveToArchiveDB}
@@ -1682,6 +1918,8 @@ const InvoicesPage = ({
 								stock={stock}
 								dynamicProductIds={dynamicProductIds}
 								customers={customers}
+								invoices={invoices}
+								invoicesSummary={invoicesSummary}
 							/>
 						</div>
 					)}

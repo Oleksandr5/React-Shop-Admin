@@ -1,182 +1,168 @@
+/* ================= ОСНОВНІ КОНТЕЙНЕРИ ================= */
 .wrapper {
-	max-height: 80vh;
-	width: 100%;
-	overflow: auto;
-	padding: 15px;
-	border: 1px solid #ddd;
-	background: #ffffff;
+    max-height: 80vh;
+    width: 100%;
+    overflow: auto;
+    padding: 15px;
+    border: 1px solid #ddd;
+    background: #ffffff;
 }
 
 .archiveWrapper {
-    composes: wrapper; /* копіює всі стилі з .wrapper */
+    composes: wrapper;
     max-height: 100vh;
     height: 100vh;
 }
 
 /* ================= HEADER ================= */
-
 .pageHeader {
-	display: flex;
-	flex-direction: column;
-	gap: 15px;
-	margin-bottom: 25px;
-	padding: 20px;
-	background: linear-gradient(135deg, #4a6cf7, #6a8dff);
-	border-radius: 10px;
-	color: white;
-	box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+    margin-bottom: 25px;
+    padding: 20px;
+    background: linear-gradient(135deg, #4a6cf7, #6a8dff);
+    border-radius: 10px;
+    color: white;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
 }
 
 .pageTitle {
-	margin: 0;
-	font-size: 22px;
-	font-weight: 600;
+    margin: 0;
+    font-size: 22px;
+    font-weight: 600;
 }
 
 .selectWrapper {
-	display: flex;
-	align-items: center;
-	gap: 10px;
-	flex-wrap: wrap;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
 }
 
 .label {
-	font-weight: 500;
+    font-weight: 500;
 }
 
 .select {
-	padding: 8px 12px;
-	border-radius: 6px;
-	border: none;
-	outline: none;
-	font-size: 14px;
-	min-width: 220px;
-	cursor: pointer;
+    padding: 8px 12px;
+    border-radius: 6px;
+    border: none;
+    outline: none;
+    font-size: 14px;
+    min-width: 220px;
+    cursor: pointer;
 }
 
 /* ================= SECTION TITLES ================= */
-
 .sectionTitle {
-	margin-top: 30px;
-	margin-bottom: 15px;
-	padding: 10px 15px;
-	background: linear-gradient(90deg, #f0f4ff, #ffffff);
-	border-left: 5px solid #4a6cf7;
-	font-size: 18px;
-	font-weight: 600;
-	border-radius: 6px;
-	box-shadow: 0 2px 6px rgba(0,0,0,0.05);
+    margin-top: 30px;
+    margin-bottom: 15px;
+    padding: 10px 15px;
+    background: linear-gradient(90deg, #f0f4ff, #ffffff);
+    border-left: 5px solid #4a6cf7;
+    font-size: 18px;
+    font-weight: 600;
+    border-radius: 6px;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.05);
 }
 
-/* ================= TABLE ================= */
-
+/* ================= TABLE (Base) ================= */
 .table {
-	width: 100%;
-	border-collapse: collapse;
-	margin-bottom: 20px;
-	table-layout: fixed;
+    width: 100%;
+    border-collapse: collapse;
+    margin-bottom: 20px;
 }
 
 .table th {
-	border: 1px solid #ccc;
-	background-color: #f5f5f5;
-	padding: 8px;
-	text-align: left;
+    border: 1px solid #ccc;
+    background-color: #f5f5f5;
+    padding: 8px;
+    text-align: left;
 }
 
 .table td {
-	border: 1px solid #ccc;
-	padding: 8px;
-	word-break: break-word;
+    border: 1px solid #ccc;
+    padding: 8px;
+    word-break: break-word;
 }
 
 .alignRight {
-	text-align: right;
-	white-space: nowrap;
+    text-align: right;
+    white-space: nowrap;
 }
 
-/* Розділювач між накладними */
 .invoiceDivider {
-	position: relative;
+    position: relative;
 }
 
 .invoiceDivider::after {
-	content: "";
-	position: absolute;
-	left: 0;
-	bottom: -1px;
-	width: 100%;
-	height: 3px;
-	background-color: black;
+    content: "";
+    position: absolute;
+    left: 0;
+    bottom: -1px;
+    width: 100%;
+    height: 3px;
+    background-color: black;
 }
 
-
-/* Hover */
 .table tbody tr:hover {
-	background-color: #f9f9f9;
+    background-color: #f9f9f9;
 }
 
-/* Mobile */
-@media (max-width: 767.98px) {
-	.pageTitle {
-		font-size: 18px;
-	}
-}
-
+/* ================= NOTIFICATIONS ================= */
 .notificationsBlock {
-	margin-bottom: 30px;
-	padding: 20px;
-	background: #f4f8ff;
-	border-radius: 12px;
-	border: 1px solid #dce6ff;
+    margin-bottom: 30px;
+    padding: 20px;
+    background: #f4f8ff;
+    border-radius: 12px;
+    border: 1px solid #dce6ff;
 }
 
 .notificationsHeader {
-	display: flex;
-	justify-content: space-between;
-	align-items: center;
-	margin-bottom: 15px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 15px;
 }
 
 .notificationsHeader h3 {
-	font-size: 16px; /* трохи більший шрифт */
-	font-weight: 600;
-	color: #1a1a1a; /* темніший колір */
+    font-size: 16px;
+    font-weight: 600;
+    color: #1a1a1a;
 }
 
 .notificationsList {
-	display: flex;
-	flex-direction: column;
-	gap: 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
 }
 
 .notificationItem {
-	display: flex;
-	justify-content: space-between;
-	align-items: center;
-	padding: 14px 18px;
-	background: #e6f0ff; /* світліший синій фон для контрасту */
-	border-radius: 10px;
-	box-shadow: 0 2px 6px rgba(0,0,0,0.1); /* трохи яскравіша тінь */
-	transition: 0.2s;
-	font-weight: 500; /* трохи жирніше */
-	color: #000; /* чорний текст */
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 14px 18px;
+    background: #e6f0ff;
+    border-radius: 10px;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+    transition: 0.2s;
+    font-weight: 500;
+    color: #000;
 }
 
 .notificationItem:hover {
-	transform: translateY(-2px);
-	box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
 }
-
 
 .meta {
-	font-size: 13px;
-	color: #666;
-	margin-top: 4px;
+    font-size: 13px;
+    color: #666;
+    margin-top: 4px;
 }
 
-/* --- БАЗОВІ СТИЛІ ЕЛЕМЕНТІВ --- */
-
+/* ================= ЕЛЕМЕНТИ ТА КНОПКИ ================= */
 .usedWrapper {
     display: flex;
     align-items: center;
@@ -196,9 +182,8 @@
     border: 1px solid #bbdefb;
 }
 
-/* Уніфіковані інпути */
 .inputSmall, .inputAgreement {
-    height: 36px; /* Однаковая висота з кнопками */
+    height: 36px;
     padding: 0 8px;
     border: 1px solid #ccc;
     border-radius: 4px;
@@ -208,12 +193,6 @@
 
 .inputSmall { width: 70px; }
 .inputAgreement { width: 100px; }
-
-/* --- УНІФІКОВАНІ КНОПКИ --- */
-/* Загальний клас для всіх кнопок управління (якщо хочете додати в JSX) 
-   або просто однакові параметри в кожному класі */
-
-
 
 .btnAdd, .btnHistory, .btnUndo, .clearBtn {
     height: 36px;
@@ -226,100 +205,31 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    transition: background-color 0.2s;
+    transition: 0.2s;
     color: white !important;
 }
 
-.clearBtn {background-color: #faf8fe !important; border: 2px solid #000000; color: rgb(11, 11, 11) !important;}
-.clearBtn:hover {background-color: #d2d0d9 !important; border: 2px solid #000; color: rgb(17, 2, 2) !important;}
+.clearBtn { background-color: #faf8fe !important; border: 2px solid #000000; color: #0b0b0b !important; }
+.clearBtn:hover { background-color: #d2d0d9 !important; }
 
 .btnAdd { background-color: #28a745 !important; }
-.btnAdd:hover { background-color: #218838 !important; box-shadow: 0 4px 10px rgba(0, 0, 0, 0.25);}
+.btnAdd:hover { background-color: #218838 !important; box-shadow: 0 4px 10px rgba(0, 0, 0, 0.25); }
 
 .btnHistory { background-color: #6c757d !important; }
-.btnHistory:hover { background-color: #5a6268 !important;  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.25);}
+.btnHistory:hover { background-color: #5a6268 !important; box-shadow: 0 4px 10px rgba(0, 0, 0, 0.25); }
 
 .btnUndo { background-color: #da1c0b !important; }
-.btnUndo:hover { background-color: #9d0b08 !important;  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.25);}
+.btnUndo:hover { background-color: #9d0b08 !important; box-shadow: 0 4px 10px rgba(0, 0, 0, 0.25); }
 
-.undoIcon {
-    font-size: 18px;
-    line-height: 0;	
-}
-
-
-
-/* --- МОБІЛЬНА ВЕРСІЯ (до 600px) --- */
-@media (max-width: 600px) {
-    .usedWrapper {
-        display: flex;
-        flex-direction: column; /* Все в один стовпчик */
-        align-items: stretch; /* Розтягуємо на всю ширину */
-        width: 100%;
-        gap: 8px;
-    }
-
-    /* Ряд для інпутів, щоб вони були поруч навіть на мобільних */
-    /* Якщо хочете інпути теж один під одним — просто видаліть цей блок */
-    .inputSmall, .inputAgreement {
-        width: 100%;
-        max-width: none;
-    }
-
-    .totalBadge {
-        width: 100%;
-        box-sizing: border-box;
-        padding: 10px;
-    }
-
-    .btnAdd, .btnHistory, .btnUndo {
-        width: 100%; /* Кнопки на всю ширину */
-        height: 42px; /* Трохи більша висота для зручності натискання пальцем */
-        max-width: none;
-    }
-
-	.clearBtn {height: 48px !important;}
-
-	.pageHeader {
-        padding: 15px; /* трохи менше відступів на мобільних */
-        align-items: stretch;
-    }
-
-    .pageTitle {
-        text-align: center;
-        margin-bottom: 10px;
-    }
-
-    .selectWrapper {
-        flex-direction: column; /* Вибудовуємо елементи в стовпчик */
-        align-items: stretch;   /* Розтягуємо на всю ширину */
-        gap: 12px;              /* Відстань між групами селектів */
-    }
-
-    .select {
-        width: 100%;            /* Селекти на всю ширину */
-        min-width: 0;           /* Скидаємо мінімальну ширину 220px */
-        height: 42px;           /* Робимо зручними для натискання пальцем */
-        font-size: 16px;        /* Щоб iOS не зумив екран при фокусі */
-    }
-
-    .label {
-        margin-bottom: -8px;    /* Наближаємо підпис до свого селекту */
-        font-size: 14px;
-        opacity: 0.9;
-    }
-}
-
-/* Контейнер для всього верху (заголовок + кнопки) */
+/* ================= REPORT LAYOUT ================= */
 .reportHeaderContainer {
     display: flex;
-    justify-content: space-between; /* Розштовхує заголовок вліво, а кнопки вправо */
-    align-items: flex-end;          /* Вирівнює кнопки по нижній лінії тексту */
+    justify-content: space-between;
+    align-items: flex-end;
     margin-bottom: 20px;
     gap: 20px;
 }
 
-/* Базовий стиль для контейнера кнопок */
 .topActions {
     display: flex;
     gap: 10px;
@@ -327,35 +237,64 @@
     align-items: center;
 }
 
-/* ================= АДАПТИВНІСТЬ ТІЛЬКИ ДЛЯ ЗВІТУ ================= */
+/* ================= АДАПТИВНІСТЬ (MOBILE) ================= */
 
 @media (max-width: 768px) {
-    /* 1. Блок кнопок: під заголовком, одна під одною */
+    /* Налаштування хедера */
     .reportHeaderContainer {
-        flex-direction: column;     /* Заголовок зверху, кнопки знизу */
-        align-items: flex-start;    /* Все по лівому краю */
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 15px;
     }
 
     .topActions {
-        flex-direction: column;     /* Кнопки одна під одною */
-        width: 100%;                /* Контейнер на всю ширину */
+        flex-direction: column;
+        width: 100%;
         gap: 8px;
     }
 
-    .topActions button {
-        width: 100% !important;     /* Кожна кнопка на всю ширину */
-        margin: 0 !important;
+    /* Кнопки та інпути на мобільних */
+    .topActions button, .btnAdd, .btnHistory, .btnUndo, .clearBtn {
+        width: 100% !important;
         height: 45px;
+        margin: 0 !important;
     }
 
-    /* 2. Загальні налаштування таблиці */
+    .usedWrapper {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .inputSmall, .inputAgreement, .totalBadge {
+        width: 100% !important;
+        height: 42px;
+    }
+
+    .selectWrapper {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 12px;
+    }
+
+    .select {
+        width: 100%;
+        min-width: 0;
+        height: 42px;
+        font-size: 16px;
+    }
+
+    .label {
+        margin-bottom: -8px;
+    }
+
+    /* ПЕРЕТВОРЕННЯ ЗВІТУ В КАРТКИ */
     .reportTable {
         display: block;
         border: none !important;
     }
 
     .reportTable thead {
-        display: none; /* Ховаємо шапку на мобілках */
+        display: none;
     }
 
     .reportTable tbody {
@@ -363,20 +302,19 @@
         width: 100%;
     }
 
-    /* 3. Картка товару (один рядок таблиці) */
     .reportTable tr {
         display: grid;
         grid-template-columns: 1fr 1fr; 
         gap: 10px;
         margin-bottom: 25px;
         padding: 12px;
-        border: 2px solid #17a2b8 !important; /* Бірюзова рамка */
+        border: 2px solid #17a2b8 !important;
         border-radius: 12px;
         background: #fff;
         box-shadow: 0 4px 10px rgba(0,0,0,0.05);
     }
 
-    /* Назва товару (перша комірка) */
+    /* Назва товару */
     .reportTable tr td:first-child {
         grid-column: span 2;
         background: #f8f9fa;
@@ -392,20 +330,19 @@
         height: auto;
     }
 
-    /* 4. ВНУТРІШНІ ЗЕЛЕНІ РАМКИ (Архів, Взято, Списано...) */
+    /* Комірки показників */
     .reportTable td {
         display: flex;
         flex-direction: column;
         align-items: center;
         justify-content: center;
         padding: 8px !important;
-        border: 2px solid #28a745 !important; /* ЗЕЛЕНА РАМКА */
+        border: 2px solid #28a745 !important; 
         border-radius: 8px;
         height: 65px;
         background: #fff;
     }
 
-    /* Підписи всередині зелених рамок */
     .reportTable td::before {
         content: attr(data-label);
         font-size: 8px;
@@ -415,7 +352,7 @@
         text-transform: uppercase;
     }
 
-    /* 5. Комірка "Різниця" (остання) */
+    /* Комірка "Різниця" */
     .reportTable tr td:last-child {
         grid-column: span 2;
         border: none !important;
@@ -435,13 +372,9 @@
         color: #333;
     }
 
-    /* Інпути */
     .reportTable input {
-        width: 70px !important;
+        width: 100% !important;
         height: 30px;
-        border: 1px solid #ddd;
-        border-radius: 4px;
         text-align: center;
-        font-size: 14px;
     }
 }
