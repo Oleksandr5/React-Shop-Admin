@@ -85,91 +85,117 @@ class CustomersOrders extends Component {
 
 	}
 
-	renderOrders(orders, indexOrderInHistory, customerId) {
+	renderOrders(order, indexOrderInHistory) {
+		const products = this.props.products;
+		const productsDeleted = this.props.productsDeleted;
 
-		//        const orders = this.props.orders        
+		// Працюємо з об'єктом замовлення напряму
+		const ordersThis = order;
 
-		const products = this.props.products
-		const productsDeleted = this.props.productsDeleted
-
-		let { ordersThis } = this.getThisOrder(orders, customerId)
-
-		let isOrdersThisCart
-
-		if (ordersThis) {
-			let ordersThisCart = Object.keys(ordersThis).filter(order => order === 'cart')[0] ? true : false
-			if (ordersThisCart) {
-				isOrdersThisCart = ordersThis.cart[0] ? true : false
-			}
-		}
-
-		//        this.props.updateIsOrdersHistoryThisCart(isOrdersThisCart)
+		// Перевірка наявності товарів у кошику
+		const isOrdersThisCart = ordersThis && ordersThis.cart && ordersThis.cart.length > 0;
 
 		if (isOrdersThisCart) {
-			const thisCart = ordersThis.cart
+			const thisCart = ordersThis.cart;
 
-			if (thisCart) {
+			return thisCart.map(product => {
+				const { id } = product; // Отримуємо id безпосередньо з історії
+
+				// Шукаємо дані про товар в основному списку або у видалених
+				let thisProduct = products.find(p => p.id === id);
+
+				if (!thisProduct) {
+					thisProduct = productsDeleted.find(p => p.id === id);
+				}
 
 				return (
-					thisCart.map(product => {
-						const { id } = product
+					<form
+						key={id}
+						className="row w-100 py-3 justify-content-between border-top border-bottom product_cart_history"
+						id={`product_cart_history_${id}`}
+					>
+						<NavLink to={'/product/' + id} className="col-12 col-md-6 d-flex align-items-center order-1 mb-3 mb-md-0">
+							<div
+								className={`mb-3 ${classes.productFoto}`}
+								style={{
+									backgroundImage: `url(${thisProduct?.image || ''})`,
+									backgroundSize: 'cover'
+								}}
+							></div>
+							<p className="ml-3 font-weight text-dark">
+								{thisProduct?.name || "Товар не знайдено"}
+							</p>
+						</NavLink>
 
-						let thisProduct = products.filter(product => {
-							return (
-								product.id === id
-							)
-						})[0]
+						<div className="col-12 col-md-6 d-flex justify-content-between align-items-center order-3 order-md-2">
+							<Input
+								type="number"
+								className={`${classes.inputPrice}`}
+								name={`product_${id}_inHistory_${indexOrderInHistory}`}
+								id={`input_product_${id}_inHistory_${indexOrderInHistory}`}
+								data_price={`${product.price}`}
+								defaultValue={product.quantity}
+								readOnly="readOnly"
+							/>
+							<p className="mb-0" id={`product_price_${id}_inHistory_${indexOrderInHistory}`}>
+								<span name={`product_price_inHistory_${indexOrderInHistory}`}>
+									{+(product.price * product.quantity).toFixed(1)}
+								</span> грн
+							</p>
+						</div>
 
-						if (!thisProduct) {
-							thisProduct = productsDeleted.filter(product => {
-								return (
-									product.id === id
-								)
-							})[0]
-							console.log('renderOrders_thisProductDeleted', thisProduct)
-						}
-
-						return (
-
-							<form
-								key={thisProduct.id}
-								className={`row w-100 py-3 justify-content-between border-top border-bottom product_cart_history`}
-								id={`product_cart_history_${thisProduct.id}`}
-							>
-								<NavLink to={'/product/' + thisProduct.id} className="col-12 col-md-6 d-flex align-items-center order-1 mb-3 mb-md-0">
-
-									<div className={`mb-3 ${classes.productFoto}`} style={{ backgroundImage: `url(${thisProduct.image})`, backgroundSize: 'cover' }}>
-
+						{/* --- НОВИЙ БЛОК: Коментар до ТОВАРУ --- */}
+						{product.comment ? (
+							<div className="col-12 order-5 mt-2">
+								<div className="p-2 rounded" style={{
+									backgroundColor: '#f1faff', // Дуже легкий блакитний фон
+									borderLeft: '4px solid #17a2b8', // Товстіша акцентна лінія
+									border: '1px solid #dee2e6', // Тонка рамка навколо всього блоку
+									borderLeftColor: '#17a2b8', // Повертаємо колір акцентній лінії
+									boxShadow: 'inset 0 1px 2px rgba(0,0,0,0.05)', // Легка внутрішня тінь для об'єму
+									fontSize: '0.85rem'
+								}}>
+									<div className="d-flex align-items-start">
+										<i className="fas fa-comment-dots mt-1 mr-2 text-info" style={{ opacity: 0.8 }}></i>
+										<div>
+											<span className="text-info font-weight-bold" style={{ fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+												Коментар до товару:
+											</span>
+											<p className="mb-0 mt-1 text-dark" style={{
+												fontStyle: 'italic',
+												lineHeight: '1.4',
+												whiteSpace: 'pre-wrap' // Зберігає переноси рядків
+											}}>
+												{product.comment}
+											</p>
+										</div>
 									</div>
-									<p className="ml-3 font-weight text-dark">
-										{thisProduct.name}
+								</div>
+							</div>
+						) : null}
+						{/* -------------------------------------- */}
+
+						<div className="col order-4">
+							{thisProduct ? (
+								!thisProduct.status ? (
+									<p className="mb-0 text-danger mt-3 rounded p-2" id={`warning_cart_${id}`}>
+										Доступно: <span className="text-primary">{`${thisProduct.quantity} ${thisProduct.units}.`}</span>
 									</p>
-								</NavLink>
-								<div className="col-12 col-md-6 d-flex justify-content-between align-items-center order-3 order-md-2">
-
-									<Input type="number" className={`${classes.inputPrice}`} name={`product_${thisProduct.id}_inHistory_${indexOrderInHistory}`} id={`input_product_${thisProduct.id}_inHistory_${indexOrderInHistory}`} data_price={`${product.price}`} defaultValue={product.quantity} readOnly="readOnly" />
-
-									<p className="mb-0" id={`product_price_${thisProduct.id}_inHistory_${indexOrderInHistory}`}><span name={`product_price_inHistory_${indexOrderInHistory}`}>{+(product.price * product.quantity).toFixed(1)}</span> грн</p>
-								</div>
-								<div className="col order-4">
-									{!thisProduct.status
-										?
-										<p className="mb-0 text-danger mt-3 rounded p-2" id={`warning_cart_${thisProduct.id}`} >Доступно: <span className="text-primary">{`${thisProduct.quantity} ${thisProduct.units}.`}</span></p>
-										:
-										<p className="mb-0 text-danger mt-1 mt-sm-3 rounded p-2" id={`warning_${thisProduct.id}`} >Товар відсутній</p>
-									}
-
-								</div>
-
-							</form>
-						)
-					})
-				)
-			}
+								) : (
+									<p className="mb-0 text-danger mt-1 mt-sm-3 rounded p-2" id={`warning_${id}`}>
+										Товар відсутній
+									</p>
+								)
+							) : (
+								<p className="mb-0 text-muted mt-3 p-2">Дані про товар відсутні в базі</p>
+							)}
+						</div>
+					</form>
+				);
+			});
 		} else {
-			return <h6 className="text-danger">Немає замовлення !!!</h6>
+			return <h6 className="text-danger">Немає замовлення !!!</h6>;
 		}
-
 	}
 
 	selectChangeStatusOrder(event, customerId, orderHistoryId) {
@@ -211,11 +237,12 @@ class CustomersOrders extends Component {
 		let url = window.location.pathname
 		let customerId = +url.substring(url.lastIndexOf('/') + 1)
 
-		const thisCustomer = this.props.customers.filter(customer => customer.id === customerId)[0]
+		const thisCustomer = this.props.customers.find(customer => customer.id === customerId) || { name: 'Завантаження...', id: customerId }
 		let name = thisCustomer.name
 		const ordersHistory = this.props.ordersHistory
 
-		const thisOrdersHistory = ordersHistory.filter(order => order.customerId === customerId)[0] ? ordersHistory.filter(order => order.customerId === customerId)[0].cartsHistory : null
+		const customerHistory = ordersHistory.find(order => order.customerId === customerId)
+		const thisOrdersHistory = customerHistory ? customerHistory.cartsHistory : null
 
 		return (
 
@@ -242,48 +269,72 @@ class CustomersOrders extends Component {
 								<h3 className={"mb-2 border-bottom text-center h1Title"}>Замовлення:</h3>
 
 								{
+									thisOrdersHistory
+										? [...thisOrdersHistory].reverse().map((order) => { // Створюємо копію через [...], потім reverse
 
-									thisOrdersHistory ? thisOrdersHistory.map((order) => {
+											const selectStatusOrder = (
+												<Select
+													name="statusorder"
+													className={`addOptionToProduct_${order.orderHistoryId} ${order.status === "in process..." ? "text-danger" : "text-success"}`}
+													onChange={event => this.selectChangeStatusOrder(event, customerId, order.orderHistoryId)}
+													option={this.optionStatusOrder(order.status)}
+												/>
+											);
 
-										const selectStatusOrder = (
-											<Select
-												name="statusorder"
-												className={`addOptionToProduct_${order.orderHistoryId} ${order.status === "in process..." ? "text-danger" : "text-success"}`}
-												onChange={event => this.selectChangeStatusOrder(event, customerId, order.orderHistoryId)}
-												option={this.optionStatusOrder(order.status)}
-											/>
-										);
+											return (
+												<div key={order.orderHistoryId} className={`position-relative border border-success p-3 mb-5`} id={`customer_order_${order.orderHistoryId}`}>
+													<h5 className={`text-primary ${classes.h5}`}>Дата замовлення: &nbsp;<span className={"text-info"}>{order.date}</span></h5>
+													<h5 className={`${classes.h5}`}>Статус: &nbsp;<span className={"text-warning"}>{selectStatusOrder}</span></h5>
 
-										return (
-											<div key={order.orderHistoryId} className={`position-relative border border-success p-3 mb-5`} id={`customer_order_${order.orderHistoryId}`}>
-												<h5 className={`text-primary ${classes.h5}`}>Дата замовлення: &nbsp;<span className={"text-info"}>{order.date}</span></h5>
-												<h5 className={`${classes.h5}`}>Статус: &nbsp;<span className={"text-warning"}>{selectStatusOrder}</span></h5>
+													{this.renderOrders(order, order.orderHistoryId)}
 
-												{this.renderOrders([order], order.orderHistoryId, customerId)}
+													{/* Виведення коментаря */}
+													{order.orderComment ? ( // Змінено з .comment на .orderComment
+														<div className="mt-3 p-3 rounded" style={{
+															backgroundColor: '#fffdf5', // Легкий кремовий фон (як папір для нотаток)
+															border: '1px solid #e9ecef',
+															borderLeft: '5px solid #ffc107', // Жовтий акцент (попередження/увага)
+															boxShadow: '0 2px 4px rgba(0,0,0,0.05)'
+														}}>
+															<div className="d-flex align-items-center mb-2">
+																<i className="fas fa-truck text-warning mr-2"></i>
+																<h6 className="font-weight-bold text-dark mb-0" style={{ fontSize: '0.9rem', textTransform: 'uppercase' }}>
+																	Коментар до замовлення:
+																</h6>
+															</div>
+															<p className="mb-0 text-dark" style={{
+																whiteSpace: 'pre-wrap',
+																fontSize: '1rem',
+																lineHeight: '1.5',
+																color: '#333'
+															}}>
+																{order.orderComment}
+															</p>
+														</div>
+													) : null}
 
-												<div className="d-flex justify-content-end">
-													<p className="mr-3 font-weight-bold">Загальна сума:&nbsp;
-														<span className="text-primary" id={`totalPrice_inHistory_${order.orderHistoryId}`}>
-															{this.calculationTotalPriceForCart([order], customerId)}
-														</span><span className="text-primary"> грн</span>
-													</p>
+													<div className="d-flex justify-content-end mt-3">
+														<p className="mr-3 font-weight-bold">Загальна сума:&nbsp;
+															<span className="text-primary" id={`totalPrice_inHistory_${order.orderHistoryId}`}>
+																{this.calculationTotalPriceForCart([order], customerId)}
+															</span><span className="text-primary"> грн</span>
+														</p>
+													</div>
+
+													<button
+														className={`position-absolute ${classes.btnRemove}`}
+														onClick={() => {
+															if (window.confirm(`Видалити замовлення клієнта ${name}?`)) {
+																this.props.removeOrderHistoryCustomer(customerId, order.orderHistoryId);
+															}
+														}}
+													>
+														<i className="fa fa-times" aria-hidden="true"></i>
+													</button>
 												</div>
-
-												<button
-													className={`position-absolute ${classes.btnRemove}`}
-													onClick={() => {
-														if (window.confirm(`Видалити замовлення клієнта ${name}?`)) {
-															this.props.removeOrderHistoryCustomer(customerId, order.orderHistoryId);
-														}
-													}}
-												>
-													<i className="fa fa-times" aria-hidden="true"></i>
-												</button>
-											</div>
-										)
-									}).reverse() : <h6 className="text-danger">Ви ще не зробили замовлення!!!</h6>
-
-
+											)
+										})
+										: <h6 className="text-danger">Ви ще не зробили замовлення!!!</h6>
 								}
 
 								<Button

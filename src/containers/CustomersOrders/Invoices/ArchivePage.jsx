@@ -189,27 +189,34 @@ const ArchivePage = ({ hasAccount, customers, customerId }) => {
 
 	const userId = selectedUser ? String(selectedUser) : null;
 
-	const userData = (fullArchive && userId) ? {
+	const userData = (fullArchive && selectedUser) ? {
 		groupedInvoices: (() => {
-			const rawInvoices = fullArchive.invoicesHistory?.[userId];
+			// Використовуємо selectedUser замість userId
+			const rawInvoices = fullArchive.invoicesHistory?.[selectedUser];
+
 			if (!rawInvoices) return [];
-			return Object.values(rawInvoices).map((inv, index) => ({
-				id: inv.idOrderHistory || index + 1,
-				date: inv.date || (inv.createdAt ? new Date(inv.createdAt).toLocaleDateString() : '-'),
-				items: inv.items ? Object.values(inv.items) : (inv.name ? [inv] : [])
-			}));
+
+			// Перетворюємо об'єкт накладних у масив
+			return Object.values(rawInvoices)
+				.map((inv) => ({
+					id: inv.idOrderHistory,
+					date: inv.date || (inv.createdAt ? new Date(inv.createdAt).toLocaleString("uk-UA") : '-'),
+					orderComment: inv.orderComment || "",
+					// Перевірка: якщо це вже масив — лишаємо, якщо об'єкт — перетворюємо
+					items: Array.isArray(inv.items) ? inv.items : Object.values(inv.items || {})
+				}))
+				.sort((a, b) => b.id - a.id);
 		})(),
 
-		summary: fullArchive.invoicesSummaryHistory?.[userId] ? Object.values(fullArchive.invoicesSummaryHistory[userId]) : [],
+		// Переконайтеся, що ці ключі існують саме в об'єкті snapshot (fullArchive)
+		summary: fullArchive.invoicesSummaryHistory?.[selectedUser]
+			? Object.values(fullArchive.invoicesSummaryHistory[selectedUser])
+			: [],
+		historyLog: fullArchive.usedMaterialsHistoryHistory?.[selectedUser] || {},
+		used: fullArchive.usedMaterialsHistory?.[selectedUser] || {},
 
-		// ТУТ ВИПРАВЛЕНО ШЛЯХИ:
-		// historyLog тепер береться з використаної історії
-		historyLog: fullArchive.usedMaterialsHistoryHistory?.[userId] || {},
-
-		// used тепер береться з підсумків списання
-		used: fullArchive.usedMaterialsHistory?.[userId] || {},
-
-		stock: fullArchive.stockAtThatTime || {}
+		// ПЕРЕВІРТЕ ЦЕЙ КЛЮЧ у вашій БД (чи він точно stockAtThatTime?)
+		stock: fullArchive.stockAtThatTime || fullArchive.stock || {}
 	} : null;
 
 	const exportToCsv = (productId, productName) => {
@@ -381,97 +388,98 @@ const ArchivePage = ({ hasAccount, customers, customerId }) => {
 	};
 
 	const handlePrintOrderTable = (invoices, name) => {
-		// 1. Формуємо дати: беремо дату створення архіву (якщо є) або поточний час
 		const endDate = fullArchive?.archivedAt ? new Date(fullArchive.archivedAt) : new Date();
-
 		const currentFullDate = endDate.toLocaleString('uk-UA', {
-			day: '2-digit',
-			month: '2-digit',
-			year: 'numeric',
-			hour: '2-digit',
-			minute: '2-digit',
-			second: '2-digit'
+			day: '2-digit', month: '2-digit', year: 'numeric',
+			hour: '2-digit', minute: '2-digit', second: '2-digit'
 		});
 
 		const startOfMonth = new Date(endDate.getFullYear(), endDate.getMonth(), 1);
 		const startOfMonthFormatted = startOfMonth.toLocaleString('uk-UA', {
-			day: '2-digit',
-			month: '2-digit',
-			year: 'numeric',
-			hour: '2-digit',
-			minute: '2-digit',
-			second: '2-digit'
+			day: '2-digit', month: '2-digit', year: 'numeric'
 		});
 
-		const periodString = `${startOfMonthFormatted} — ${currentFullDate}`;
+		const periodString = `${startOfMonthFormatted} — ${currentFullDate.split(',')[0]}`;
 
-		// 2. Формуємо рядки таблиці (використовуємо дані з архіву)
-		// В архіві invoices зазвичай приходять як масив об'єктів (groupedInvoices)
 		const tableRowsHtml = invoices.map((invoice) => {
-			// Якщо це архів, товари зазвичай вже у масиві group.items
 			const items = invoice.items || [];
-			return items.map((item, itemIndex) => {
+			const orderComment = invoice.orderComment || "";
+			const totalRows = items.length + (orderComment ? 1 : 0);
+
+			const itemsHtml = items.map((item, itemIndex) => {
+				const itemNote = item.comment
+					? `<div style="color: #d35400; font-size: 11px; margin-top: 2px; font-weight: bold;">📝 ${item.comment}</div>`
+					: '';
+
 				return `
-                <tr>
-                    ${itemIndex === 0 ? `<td rowspan="${items.length}" style="text-align: center; font-weight: bold;">${invoice.id || invoice.idOrderHistory}</td>` : ''}
-                    <td>${item.name}</td>
-                    <td style="text-align: right; font-weight: bold;">${item.quantity} ${item.units}</td>
-                    ${itemIndex === 0 ? `<td rowspan="${items.length}" style="text-align: center;">${invoice.date}</td>` : ''}
-                </tr>
-            `;
+            <tr>
+                ${itemIndex === 0 ? `<td rowspan="${totalRows}" style="text-align: center; font-weight: bold; border: 1px solid #999;">${invoice.id || invoice.idOrderHistory}</td>` : ''}
+                <td style="border: 1px solid #999;">
+                    <div>${item.name}</div>
+                    ${itemNote}
+                </td>
+                <td style="text-align: right; font-weight: bold; border: 1px solid #999;">${item.quantity} ${item.units}</td>
+                ${itemIndex === 0 ? `<td rowspan="${totalRows}" style="text-align: center; border: 1px solid #999;">${invoice.date}</td>` : ''}
+            </tr>
+        `;
 			}).join('');
+
+			const commentRowHtml = orderComment
+				? `<tr>
+            <td colspan="2" style="background-color: #fff9db; color: #856404; font-size: 12px; padding: 5px 8px; border: 1px solid #999;">
+                <b>💬 Коментар:</b> ${orderComment}
+            </td>
+           </tr>`
+				: '';
+
+			return itemsHtml + commentRowHtml;
 		}).join('');
 
-		// 3. Відкриваємо вікно друку
 		const newWindow = window.open("", "_blank", "width=900,height=800");
 
 		if (newWindow) {
 			newWindow.document.write(`
-        <html>
-            <head>
-                <title>Друк замовлень: ${name}</title>
-                <style>
-                    body { font-family: sans-serif; padding: 20px; color: #333; }
-                    h2 { text-align: center; margin-bottom: 5px; }
-                    .period { text-align: center; font-size: 14px; color: #000; margin-bottom: 20px; border-bottom: 2px solid #333; padding-bottom: 10px; }
-                    table { width: 100%; border-collapse: collapse; margin-top: 10px; }
-                    th, td { border: 1px solid #999; padding: 8px; text-align: left; font-size: 13px; }
-                    th { background-color: #f2f2f2; }
-                    .customer-info { margin-bottom: 10px; font-size: 15px; }
-                    .no-print { text-align: center; margin-top: 30px; }
-                    button { padding: 10px 20px; cursor: pointer; background: #007bff; color: white; border: none; border-radius: 4px; font-weight: bold; }
-                    @media print { .no-print { display: none; } }
-                </style>
-            </head>
-            <body>
-                <h2>📑 Звіт по замовленням</h2>
-                <div class="period"><strong>Період:</strong> ${periodString}</div>
-                
-                <div class="customer-info"><strong>Клієнт:</strong> ${name || 'Не вказано'}</div>
-                
-                <table>
-                    <thead>
-                        <tr>
-                            <th style="text-align: center;">ID Замовлення</th>
-                            <th>Назва товару</th>
-                            <th style="text-align: right;">Кількість</th>
-                            <th style="text-align: center;">Дата замовлення</th>
-                        </tr>
-                    </thead>
-                    <tbody>${tableRowsHtml}</tbody>
-                </table>
-
-                <div style="margin-top: 20px; font-size: 11px; color: #888; text-align: right;">
-                    Звіт сформовано з архіву: ${currentFullDate}
-                </div>
-
-                <div class="no-print">
-                    <button onclick="window.print()">🖨️ Друкувати накладну</button>
-                    <button onclick="window.close()" style="background: #6c757d; margin-left: 10px;">Закрити</button>
-                </div>
-            </body>
-        </html>
-    `);
+            <html>
+                <head>
+                    <title>Друк замовлень: ${name}</title>
+                    <style>
+                        body { font-family: sans-serif; padding: 20px; color: #333; }
+                        h2 { text-align: center; margin-bottom: 5px; }
+                        .period { text-align: center; font-size: 14px; color: #000; margin-bottom: 20px; border-bottom: 2px solid #333; padding-bottom: 10px; }
+                        table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+                        th, td { border: 1px solid #999; padding: 8px; text-align: left; font-size: 13px; }
+                        th { background-color: #f2f2f2; }
+                        .customer-info { margin-bottom: 10px; font-size: 15px; }
+                        .no-print { text-align: center; margin-top: 30px; }
+                        button { padding: 10px 20px; cursor: pointer; background: #007bff; color: white; border: none; border-radius: 4px; font-weight: bold; }
+                        @media print { .no-print { display: none; } td { -webkit-print-color-adjust: exact; } }
+                    </style>
+                </head>
+                <body>
+                    <h2>📑 Звіт по замовленням (АРХІВ)</h2>
+                    <div class="period"><strong>Період архіву:</strong> ${periodString}</div>
+                    <div class="customer-info"><strong>Клієнт:</strong> ${name || 'Не вказано'}</div>
+                    <table>
+                        <thead>
+                            <tr>
+                                <th style="text-align: center;">ID</th>
+                                <th>Назва товару</th>
+                                <th style="text-align: right;">Кількість</th>
+                                <th style="text-align: center;">Дата замовлення</th>
+                            </tr>
+                        </thead>
+                        <tbody>${tableRowsHtml}</tbody>
+                    </table>
+                    <div style="margin-top: 20px; font-size: 11px; color: #888; text-align: right;">
+                        Звіт сформовано з архівного запису від: ${currentFullDate}
+                    </div>
+                    <div class="no-print">
+                        <button onclick="window.print()">🖨️ Друкувати накладну</button>
+                        <button onclick="window.close()" style="background: #6c757d; margin-left: 10px;">Закрити</button>
+                    </div>
+                </body>
+            </html>
+        `);
 			newWindow.document.close();
 		}
 	};
@@ -569,6 +577,139 @@ const ArchivePage = ({ hasAccount, customers, customerId }) => {
 		document.body.removeChild(link);
 	};
 
+	// --- ЗВІТ ПО УГОДАХ З АРХІВУ ---
+	const handlePrintAllAgreementsReport = () => {
+		try {
+			if (!fullArchive || !selectedUser) return;
+
+			const crewId = selectedUser;
+			const workerObj = customers.find(c => String(c.id) === String(crewId));
+			const crewDisplayName = workerObj ? `${workerObj.name} (${crewId})` : crewId;
+
+			// В архіві історія списань лежить тут:
+			const historyData = fullArchive.usedMaterialsHistory?.[crewId] || {};
+			const agreementsMap = {};
+
+			Object.entries(historyData).forEach(([productId, logs]) => {
+				if (!logs) return;
+				// Шукаємо назву товару в архівному складі
+				const productInfo = fullArchive.products?.[productId];
+				const name = productInfo?.name || `Товар #${productId}`;
+				const units = productInfo?.units || '';
+
+				Object.values(logs).forEach(log => {
+					const agreement = String(log.agreement || "Без угоди").trim();
+					if (!agreementsMap[agreement]) agreementsMap[agreement] = [];
+
+					agreementsMap[agreement].push({
+						name,
+						quantity: Number(log.value || 0),
+						units,
+						date: log.createdAt ? new Date(log.createdAt).toLocaleDateString("uk-UA") : "---"
+					});
+				});
+			});
+
+			// Формування HTML (аналогічно InvoicesPage)
+			generateReportWindow("Звіт по угодах (Архів)", crewDisplayName, agreementsMap, true);
+		} catch (err) {
+			console.error(err);
+			alert("Помилка при формуванні архівного звіту по угодах.");
+		}
+	};
+
+	// --- ЗВІТ ПО ІСТОРІЇ З АРХІВУ ---
+	const handlePrintFullHistoryReport = () => {
+		try {
+			if (!fullArchive || !selectedUser) return;
+
+			const crewId = selectedUser;
+			const workerObj = customers.find(c => String(c.id) === String(crewId));
+			const crewDisplayName = workerObj ? `${workerObj.name} (${crewId})` : crewId;
+
+			const historyData = fullArchive.usedMaterialsHistory?.[crewId] || {};
+			let reportHtml = `<html><head><title>Архівна історія списань</title><style>
+            body { font-family: sans-serif; padding: 20px; }
+            .header { text-align: center; border-bottom: 2px solid #333; margin-bottom: 20px; }
+            .product-section { margin-bottom: 30px; border: 1px solid #ccc; }
+            .product-title { background: #17a2b8; color: white; padding: 10px; display: flex; justify-content: space-between; }
+            table { width: 100%; border-collapse: collapse; font-size: 12px; }
+            th, td { border: 1px solid #eee; padding: 6px; text-align: left; }
+            th { background: #f9f9f9; }
+            @media print { .no-print { display: none; } }
+        </style></head><body>
+        <div class="header">
+            <h2>📜 Архівний звіт списань</h2>
+            <p><b>Екіпаж:</b> ${crewDisplayName} | <b>Дата архіву:</b> ${new Date(fullArchive.archivedAt).toLocaleDateString()}</p>
+        </div>`;
+
+			let hasData = false;
+			Object.entries(historyData).forEach(([productId, logs]) => {
+				const productInfo = fullArchive.products?.[productId];
+				const logsArray = Object.values(logs || {}).sort((a, b) => a.createdAt - b.createdAt);
+				if (logsArray.length === 0) return;
+				hasData = true;
+
+				let total = 0;
+				const rows = logsArray.map(log => {
+					total += Number(log.value || 0);
+					return `<tr>
+                    <td>${new Date(log.createdAt).toLocaleString("uk-UA")}</td>
+                    <td><b>${log.value}</b></td>
+                    <td>${log.agreement || "—"}</td>
+                    <td>${log.comment || ""}</td>
+                </tr>`;
+				}).reverse().join('');
+
+				reportHtml += `
+                <div class="product-section">
+                    <div class="product-title">
+                        <span>📦 ${productInfo?.name || productId}</span>
+                        <span>Разом: ${total} ${productInfo?.units || ''}</span>
+                    </div>
+                    <table>
+                        <thead><tr><th>Дата</th><th>К-сть</th><th>Угода</th><th>Примітка</th></tr></thead>
+                        <tbody>${rows}</tbody>
+                    </table>
+                </div>`;
+			});
+
+			reportHtml += hasData ? '<div class="no-print" style="text-align:center"><button onclick="window.print()">Друк</button></div>' : '<p>Дані відсутні</p>';
+			reportHtml += '</body></html>';
+
+			const win = window.open("", "_blank", "width=900,height=700");
+			win.document.write(reportHtml);
+			win.document.close();
+		} catch (err) {
+			alert("Помилка формування історії.");
+		}
+	};
+
+	// Допоміжна функція для вікна звітів по угодах
+	const generateReportWindow = (title, crew, dataMap, isArchive) => {
+		let html = `<html><head><title>${title}</title><style>
+        body { font-family: sans-serif; padding: 20px; }
+        .ag-block { margin-bottom: 25px; border: 1px solid #17a2b8; }
+        .ag-header { background: #17a2b8; color: white; padding: 8px; font-weight: bold; }
+        table { width: 100%; border-collapse: collapse; }
+        th, td { border: 1px solid #ccc; padding: 6px; font-size: 13px; }
+    </style></head><body>
+    <h2>${isArchive ? '📦 ' : ''}${title}</h2>
+    <p><b>Екіпаж:</b> ${crew}</p>`;
+
+		Object.keys(dataMap).sort().forEach(ag => {
+			html += `<div class="ag-block"><div class="ag-header">Угода № ${ag}</div><table>
+            <thead><tr><th>Дата</th><th>Товар</th><th>Кількість</th></tr></thead>
+            <tbody>${dataMap[ag].map(m => `<tr><td>${m.date}</td><td>${m.name}</td><td>${m.quantity} ${m.units}</td></tr>`).join('')}</tbody>
+        </table></div>`;
+		});
+
+		html += '<button onclick="window.print()">Друк</button></body></html>';
+		const win = window.open("", "_blank", "width=800,height=600");
+		win.document.write(html);
+		win.document.close();
+	};
+
 	return (
 		<div className={classes.archiveWrapper}>
 			<div className={classes.pageHeader} style={{
@@ -644,6 +785,7 @@ const ArchivePage = ({ hasAccount, customers, customerId }) => {
 			{userData ? (
 				<>
 					<h3 className={classes.sectionTitle}>📑 Деталізація замовлень:</h3>
+					{/* TABLE: АРХІВНІ НАКЛАДНІ */}
 					<table
 						className={classes.table}
 						style={{ cursor: 'pointer' }}
@@ -651,8 +793,6 @@ const ArchivePage = ({ hasAccount, customers, customerId }) => {
 							e.stopPropagation();
 							const selectedCustomerObj = customers.find(c => String(c.id) === String(selectedUser));
 							const finalName = selectedCustomerObj ? selectedCustomerObj.name : "Клієнт";
-
-							// Викликаємо друк для згрупованих замовлень
 							handlePrintOrderTable(userData.groupedInvoices, finalName);
 						}}
 					>
@@ -665,35 +805,61 @@ const ArchivePage = ({ hasAccount, customers, customerId }) => {
 							</tr>
 						</thead>
 						<tbody>
-							{userData.groupedInvoices.length > 0 ? userData.groupedInvoices.map((group, gIdx) => (
-								<React.Fragment key={gIdx}>
-									{group.items.map((item, iIdx) => {
-										const isLastRowInGroup = iIdx === group.items.length - 1;
-										const isNotLastGroup = gIdx !== userData.groupedInvoices.length - 1;
-										const shouldHaveDivider = isLastRowInGroup && isNotLastGroup;
+							{userData.groupedInvoices.length > 0 ? userData.groupedInvoices.map((group, gIdx) => {
+								<div style={{ marginBottom: '20px', textAlign: 'right' }}>
+									<button
+										onClick={() => exportToCsv(userData.groupedInvoices)}
+										className={classes.btnExport} // Додайте стиль у CSS або використайте inline
+										style={{ padding: '8px 16px', backgroundColor: '#27ae60', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer' }}
+									>
+										📥 Експортувати в CSV
+									</button>
+								</div>
+								const orderComment = group.orderComment;
+								const totalRows = group.items.length + (orderComment ? 1 : 0);
 
-										return (
-											<tr
-												key={`${gIdx}-${iIdx}`}
-												className={shouldHaveDivider ? classes.invoiceDivider : ""}
-											>
-												{iIdx === 0 && (
-													<td rowSpan={group.items.length} style={{ verticalAlign: 'middle', fontWeight: 'bold' }}>
-														{group.id}
+								return (
+									<React.Fragment key={gIdx}>
+										{group.items.map((item, iIdx) => {
+											const isLastItem = iIdx === group.items.length - 1;
+											const hasNoComment = !orderComment;
+											const shouldHaveDivider = isLastItem && hasNoComment && gIdx !== userData.groupedInvoices.length - 1;
+
+											return (
+												<tr key={`${gIdx}-${iIdx}`} className={shouldHaveDivider ? classes.invoiceDivider : ""}>
+													{iIdx === 0 && (
+														<td rowSpan={totalRows} style={{ verticalAlign: 'middle', fontWeight: 'bold' }}>
+															{group.id}
+														</td>
+													)}
+													<td>
+														<div style={{ fontWeight: '500' }}>{item.name}</div>
+														{item.comment && (
+															<div style={{ fontSize: '11px', color: '#d35400', fontWeight: 'bold', marginTop: '2px' }}>
+																📝 {item.comment}
+															</div>
+														)}
 													</td>
-												)}
-												<td>{item.name}</td>
-												<td className={classes.alignRight}>{item.quantity} {item.units}</td>
-												{iIdx === 0 && (
-													<td rowSpan={group.items.length} style={{ verticalAlign: 'middle' }}>
-														{group.date}
-													</td>
-												)}
+													<td className={classes.alignRight}>{item.quantity} {item.units}</td>
+													{iIdx === 0 && (
+														<td rowSpan={totalRows} style={{ verticalAlign: 'middle' }}>
+															{group.date}
+														</td>
+													)}
+												</tr>
+											);
+										})}
+										{/* Жовтий рядок коментаря */}
+										{orderComment && (
+											<tr className={gIdx !== userData.groupedInvoices.length - 1 ? classes.invoiceDivider : ""}>
+												<td colSpan="2" style={{ backgroundColor: '#fff9db', color: '#856404', fontSize: '12px', padding: '6px 10px' }}>
+													<b>💬 Коментар:</b> {orderComment}
+												</td>
 											</tr>
-										);
-									})}
-								</React.Fragment>
-							)) : (
+										)}
+									</React.Fragment>
+								);
+							}) : (
 								<tr><td colSpan="4" style={{ textAlign: 'center' }}>Дані відсутні</td></tr>
 							)}
 						</tbody>
@@ -756,6 +922,38 @@ const ArchivePage = ({ hasAccount, customers, customerId }) => {
 									<span style={{ fontSize: '13px', fontWeight: '600', color: '#495057', whiteSpace: 'nowrap' }}>
 										🔍 Пошук по угоді:
 									</span>
+									{isAdminFullAccess && (
+										<div style={{ marginTop: '20px', borderTop: '1px solid #eee', paddingTop: '20px' }}>
+											<button
+												onClick={handlePrintAllAgreementsReport}
+												className={classes.btnAdd}
+												style={{
+													backgroundColor: '#6c757d',
+													borderColor: '#5a6268',
+													width: '100%',
+													marginBottom: '10px'
+												}}
+											>
+												📋 Звіт по всіх угодах (Архів)
+											</button>
+											<button
+												onClick={handlePrintFullHistoryReport}
+												className={classes.btnHistory}
+												style={{
+													backgroundColor: '#17a2b8',
+													color: 'white',
+													padding: '8px 15px',
+													width: '100%',
+													display: 'flex',
+													justifyContent: 'center',
+													alignItems: 'center',
+													gap: '8px'
+												}}
+											>
+												📜 Звіт по всій історії списань (Архів)
+											</button>
+										</div>
+									)}
 									<input
 										type="text"
 										placeholder="№ угоди..."

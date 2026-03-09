@@ -10,7 +10,7 @@ import firebase from 'firebase'
 import { connect } from 'react-redux'
 import { onScrollCart, topFunctionCart, bottomFunctionCart, errorFunctionCart } from '../../redux/actions/menu'
 import { addNewCustomer } from '../../redux/actions/inform'
-import { addProductWithCartToOrdersHistory, updateIsOrdersThisCart, priceIncludedPromotion, onDelete, setQuantityAll, addProductToInvoiceStock } from '../../redux/actions/products'
+import { addProductWithCartToOrdersHistory, updateIsOrdersThisCart, priceIncludedPromotion, onDelete, setQuantityAll, addProductToInvoiceStock, updateFirebaseOrderComment, updateFirebaseProductComment } from '../../redux/actions/products'
 
 class Cart extends Component {
 
@@ -69,7 +69,9 @@ class Cart extends Component {
 		},
 		email: '',
 		fullAccess: false, // 🔹 новий вид доступу
-		admins: {}
+		admins: {},
+		productComments: {}, // тут будуть коментарі до товарів: { productId: "текст" }
+		orderComment: ''     // загальний коментар
 	}
 
 	handleClose = () => {
@@ -244,7 +246,12 @@ class Cart extends Component {
 				const arrThisCart = ordersThis.cart
 
 				// Додаємо замовлення до історії (без змін у products)
-				this.props.addProductWithCartToOrdersHistory({ customerId: this.props.customerId, email: emailAccount })
+				this.props.addProductWithCartToOrdersHistory({
+					customerId: this.props.customerId,
+					email: emailAccount,
+					productComments: this.state.productComments, // передаємо об'єкт з коментарями до товарів
+					orderComment: this.state.orderComment        // передаємо загальний коментар
+				})
 
 				// очищення кошика
 				const formControls = Object.assign({ ...this.state.formControls })
@@ -255,31 +262,30 @@ class Cart extends Component {
 					formControls[name].touched = false
 				})
 
+				// 4. Оновлюємо інтерфейс через DOM (повідомлення про успіх)
+				const blockInfo = document.getElementById('blockInfo')
+				if (blockInfo) {
+					const infoParagraph = blockInfo.querySelector('p.text-info')
+					const errorInfo = blockInfo.querySelector('.errorInfo')
+					const successInfo = blockInfo.querySelector('.successInfo')
+
+					if (infoParagraph) {
+						infoParagraph.classList.remove("font-weight-bold", "text-danger")
+						infoParagraph.innerHTML = `Замовлення відправлене, ми з Вами зв'яжемося найближчим часом! Щоб відслідковувати свої замовлення перейдіть у "Ваші оформлені замовлення!" ↓`
+					}
+
+					blockInfo.classList.remove("d-none")
+					if (errorInfo) errorInfo.classList.add("d-none")
+					if (successInfo) successInfo.classList.remove("d-none")
+				}
+				// Після успішної відправки:
 				this.setState({
-					formControls, email: ""
-				})
-
-				let successfulInfo = `Замовлення відправлене, ми з Вами зв\'яжемося найближчим часом! Щоб відслідковувати свої замовлення перейдіть у "Ваші оформлені замовлення!" ↓`
-
-				let successfulOrder = document.getElementById('blockInfo')
-
-				let errorInfo = document.getElementById('blockInfo').querySelector('.errorInfo')
-				let successInfo = document.getElementById('blockInfo').querySelector('.successInfo')
-
-				successfulOrder_Info.classList.remove("font-weight-bold")
-				successfulOrder_Info.classList.remove("text-danger")
-				successfulOrder_Info.innerHTML = successfulInfo
-
-				this.setState({
-					successfulOrder: true
-				})
-
-				successfulOrder.classList.remove("d-none")
-				errorInfo.classList.add("d-none")
-				successInfo.classList.remove("d-none")
-
-				this.setState({
-					isOrdersThisCart: false
+					successfulOrder: true,
+					isOrdersThisCart: false,
+					orderComment: '',      // Очищаємо загальний коментар
+					productComments: {},   // Очищаємо коментарі до товарів
+					formControls,          // Очищаємо форму (ви це вже робите вище)
+					email: ""
 				})
 
 			} catch (e) {
@@ -615,8 +621,10 @@ class Cart extends Component {
 			const thisCart = ordersThis.cart
 
 			if (thisCart) {
+				// 1. Знаходимо індекс замовлення в глобальному масиві orders
+				const orderIndex = orders.findIndex(order => order.customerId === customerId);
 				return (
-					thisCart.map(product => {
+					thisCart.map((product, cartIndex) => {
 						const { id } = product
 
 						const thisProduct = products.filter(product => {
@@ -693,6 +701,51 @@ class Cart extends Component {
 											: <p className="mb-0 text-danger mt-1 mt-sm-3 rounded p-2" id={`warning_cart_${thisProduct.id}`} >Товару немає в наявності</p>
 									}
 								</div>
+								{/* ПРАВИЛЬНЕ МІСЦЕ: Коментар на всю ширину */}
+								<div className="col-12 order-5 px-0 mt-2">
+									<div className="p-2 rounded" style={{
+										backgroundColor: '#f1faff',
+										borderLeft: '4px solid #17a2b8',
+										border: '1px solid #dee2e6',
+										borderLeftColor: '#17a2b8',
+										boxShadow: 'inset 0 1px 2px rgba(0,0,0,0.05)',
+										fontSize: '0.85rem'
+									}}>
+										<div className="d-flex align-items-start">
+											<i className="fas fa-comment-dots mt-1 mr-2 text-info" style={{ opacity: 0.8 }}></i>
+											<div className="w-100">
+												<span className="text-info font-weight-bold" style={{ fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+													Коментар до товару:
+												</span>
+												<input
+													type="text"
+													className={classes.productCommentInput}
+													placeholder="Ваш коментар..."
+													style={{
+														width: '100%',
+														backgroundColor: 'transparent',
+														border: 'none',
+														outline: 'none',
+														fontStyle: 'italic',
+														color: '#333',
+														marginTop: '4px'
+													}}
+													value={this.state.productComments[product.id] || ''}
+													onChange={(e) => {
+														const comments = { ...this.state.productComments };
+														comments[product.id] = e.target.value;
+														this.setState({ productComments: comments });
+													}}
+													onBlur={(e) => {
+														if (typeof orderIndex !== 'undefined' && typeof cartIndex !== 'undefined') {
+															this.props.updateFirebaseProductComment(orderIndex, cartIndex, e.target.value);
+														}
+													}}
+												/>
+											</div>
+										</div>
+									</div>
+								</div>
 							</div>
 						)
 					})
@@ -709,6 +762,7 @@ class Cart extends Component {
 		let idThisCustomers = this.props.customerId
 		const { fullAccess, admins } = this.state;
 		const { hasAccount } = this.props
+		const customerId = this.props.customerId
 
 		// ✅ перевірка, чи користувач має fullAccess		
 		const isAdminFullAccess = hasAccount && admins[idThisCustomers]?.fullAccess;
@@ -718,7 +772,10 @@ class Cart extends Component {
 		//        let statusButtonDisabled = (this.props.hasAccount ? false : !this.state.isFormValid) || !this.state.isOrdersThisCart
 
 		//        let valid = this.props.customerName === 'Шановний клієнт' ? false : true
+		// 1. ПЕРЕД ТИМ ЯК ПОВЕРТАТИ JSX (return), знайдіть індекс замовлення в масиві
+		const orderIndex = orders.findIndex(order => order.customerId === customerId);
 
+		// Тепер orderIndex доступний для всього коду нижче
 		return (
 			<React.Fragment>
 				<Button
@@ -764,13 +821,50 @@ class Cart extends Component {
 							}
 
 							<form onSubmit={event => this.sendOrders({ hasAccount: this.props.hasAccount, event, idThisCustomers })}  >
-								<div>
-									<div className={`${classes.renderOrders}`} >
-										{this.renderOrders()}
 
+								{/* Показуємо товари та коментар ТІЛЬКИ якщо кошик активний і не порожній */}
+								{this.state.isOrdersThisCart && (
+									<div>
+										<div className={classes.renderOrders}>
+											{this.renderOrders()}
+										</div>
+
+										<div className="mt-4 mb-3 p-3 rounded" style={{
+											backgroundColor: '#fffdf5',
+											border: '1px solid #e9ecef',
+											borderLeft: '5px solid #ffc107',
+											boxShadow: '0 2px 4px rgba(0,0,0,0.05)'
+										}}>
+											<div className="d-flex align-items-center mb-2">
+												<i className="fas fa-truck text-warning mr-2"></i>
+												<h6 className="font-weight-bold text-dark mb-0" style={{ fontSize: '0.9rem', textTransform: 'uppercase' }}>
+													Загальний коментар до замовлення:
+												</h6>
+											</div>
+											<textarea
+												className={classes.orderCommentArea}
+												rows="3"
+												placeholder="Коментар до всього замовлення..."
+												style={{
+													width: '100%',
+													backgroundColor: 'transparent', // Щоб було видно фон обгортки
+													border: 'none',
+													outline: 'none',
+													fontSize: '1rem',
+													lineHeight: '1.5',
+													color: '#333'
+												}}
+												value={this.state.orderComment || ''}
+												onChange={(e) => this.setState({ orderComment: e.target.value })}
+												onBlur={(e) => {
+													if (typeof orderIndex !== 'undefined') {
+														this.props.updateFirebaseOrderComment(orderIndex, e.target.value);
+													}
+												}}
+											/>
+										</div>
 									</div>
-								</div>
-
+								)}
 
 								<div id={'blockInfo'} className="d-none my-3 flex-column flex-sm-row justify-content-between align-items-center p-2 shadow text-info">
 									<h2 className="errorInfo text-dark d-none"><span className="text-danger">Вибачте!!!</span> Такої кількості товару <span className="text-danger nameProducts"></span> немає в наявності.  <br />На складі залишилося:</h2>
@@ -800,9 +894,12 @@ class Cart extends Component {
 										</Button>
 
 									</div>
+
 									: null
 
 								}
+
+
 
 								{this.props.customerName === 'Шановний клієнт' && !this.state.isFormValid ?
 									<div>
@@ -1044,6 +1141,67 @@ class Cart extends Component {
 			let admins = snapshot.val() || {};
 			this.setState({ admins });
 		});
+
+		// --- ДОДАЄМО ЛОГІКУ ДЛЯ КОМЕНТАРІВ ---
+		const { orders, customerId } = this.props;
+		console.log("Доступні ключі в першому замовленні:", orders[0] ? Object.keys(orders[0]) : "Масив порожній");
+		// 1. Знаходимо замовлення саме цього клієнта серед усіх замовлень
+		const currentOrder = orders && orders.find(o => String(o.customerId) === String(customerId));
+
+		// Цей лог покаже в консолі браузера (F12), чи знайшлося замовлення
+		console.log("Знайдене замовлення:", currentOrder);
+
+		if (currentOrder) {
+			// 2. Готуємо об'єкт для коментарів до товарів
+			const productComments = {};
+			if (currentOrder.cart) {
+				currentOrder.cart.forEach(product => {
+					if (product.comment) {
+						productComments[product.id] = product.comment;
+					}
+				});
+			}
+
+			// 3. Оновлюємо state, щоб при відкритті поля вже були заповнені
+			this.setState({
+				orderComment: currentOrder.orderComment || currentOrder.comment || '',
+				productComments: productComments
+			});
+		}
+	}
+
+	componentDidUpdate(prevProps) {
+		// 1. Якщо раніше замовлень не було, а тепер є
+		// 2. АБО якщо список замовлень оновився (наприклад, після запису в БД)
+		if (prevProps.orders !== this.props.orders && this.props.orders.length > 0) {
+			this.syncCommentsFromProps();
+		}
+	}
+
+	// Винесемо логіку пошуку в окрему функцію, щоб не дублювати код
+	syncCommentsFromProps = () => {
+		const { orders, customerId } = this.props;
+
+		// Шукаємо замовлення (використовуємо == для ігнорування типу даних)
+		const currentOrder = orders && orders.find(o => o.customerId == customerId);
+
+		if (currentOrder) {
+			console.log("Замовлення знайдено в componentDidUpdate:", currentOrder);
+
+			const productComments = {};
+			if (currentOrder.cart) {
+				currentOrder.cart.forEach(product => {
+					if (product.comment) {
+						productComments[product.id] = product.comment;
+					}
+				});
+			}
+
+			this.setState({
+				orderComment: currentOrder.orderComment || currentOrder.comment || '',
+				productComments: productComments
+			});
+		}
 	}
 
 	// Маленька рекомендація (правильна очистка listener) Щоб не було витоків пам’яті. Це зніме listener при виході з компонента.
@@ -1092,7 +1250,11 @@ function mapDispatchToProps(dispatch) {
 		topFunctionCart: () => dispatch(topFunctionCart()),
 		bottomFunctionCart: () => dispatch(bottomFunctionCart()),
 		errorFunctionCart: () => dispatch(errorFunctionCart()),
-		addProductToInvoiceStock: (obj) => dispatch(addProductToInvoiceStock(obj))
+		addProductToInvoiceStock: (obj) => dispatch(addProductToInvoiceStock(obj)),
+		updateFirebaseProductComment: (gIndex, cIndex, comment) =>
+			dispatch(updateFirebaseProductComment(gIndex, cIndex, comment)),
+		updateFirebaseOrderComment: (gIndex, comment) =>
+			dispatch(updateFirebaseOrderComment(gIndex, comment))
 	}
 }
 

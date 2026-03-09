@@ -1470,35 +1470,67 @@ const InvoicesPage = ({
 		const customerId = notification.customerId;
 		const orderId = notification.orderId;
 
+		console.log("--- ПОЧАТОК ПОШУКУ ЗАМОВЛЕННЯ ---");
+		console.log("Шукаємо для клієнта:", customerId, "Замовлення №:", orderId);
+
 		try {
 			const path = `invoices/${customerId}/${orderId}`;
 			const snapshot = await firebase.database().ref(path).once('value');
 			const orderData = snapshot.val();
 
+			// ЛОГ 1: Весь об'єкт з бази
+			console.log("ДАНІ З FIREBASE (orderData):", orderData);
+
 			if (!orderData) {
+				console.error("Замовлення не знайдено за шляхом:", path);
 				alert(`Замовлення #${orderId} не знайдено.`);
 				return;
 			}
 
-			const items = orderData.items || [];
-			const itemsText = items.map(item => `• ${item.name}: ${item.quantity} ${item.units}`).join('\n');
+			// 1. Формуємо список товарів
+			const items = orderData.cart || orderData.items || [];
+			console.log("СПИСОК ТОВАРІВ (items):", items);
 
+			const itemsText = items.map((item, index) => {
+				const name = item.name || `Товар ID:${item.id}`;
+				const itemNote = item.comment ? ` 📝 [Примітка: ${item.comment}]` : '';
+
+				// ЛОГ 2: Перевірка кожного товару на наявність коментаря
+				console.log(`Товар #${index} (${name}):`, {
+					comment: item.comment,
+					hasNote: !!itemNote
+				});
+
+				return `• ${name}: ${item.quantity} ${item.units || 'шт.'}${itemNote}`;
+			}).join('\n');
+
+			// 2. Формуємо загальний коментар
+			// Перевіряємо всі можливі варіанти назви поля
+			const rawComment = orderData.orderComment || orderData.comment || orderData.msg || "";
+			console.log("ЗАГАЛЬНИЙ КОМЕНТАР (raw):", rawComment);
+
+			const generalComment = rawComment ? `\n\n💬 КОМЕНТАР: ${rawComment}\n` : '';
+
+			// 3. Пошук імені клієнта
 			let clientName = "ID " + customerId;
 			try {
 				if (typeof customers !== 'undefined') {
 					const customer = customers.find(c => String(c.id) === String(customerId));
 					if (customer) clientName = customer.name;
 				}
-			} catch (e) { /* ignore */ }
+			} catch (e) { console.log("Помилка пошуку клієнта в масиві:", e); }
 
+			// 4. Фінальний текст
 			const fullMessage = `📦 Деталі замовлення #${orderId}\n` +
 				`👤 Клієнт: ${clientName}\n` +
 				`📅 Дата: ${orderData.date || notification.date}\n` +
 				`✅ Статус: ${orderData.status || 'Виконано'}\n` +
+				generalComment +
 				`--------------------------\n` +
 				`${itemsText}`;
 
-			// --- НОВА ЛОГІКА ВИБОРУ ---
+			console.log("ФІНАЛЬНИЙ ТЕКСТ ПОВІДОМЛЕННЯ:\n", fullMessage);
+
 			const isPrint = window.confirm(
 				"Деталі замовлення отримано. Оберіть дію:\n\n" +
 				"✅ OK — Швидкий перегляд (Alert)\n" +
@@ -1510,56 +1542,20 @@ const InvoicesPage = ({
 				return;
 			}
 
-			// Відкриваємо гарне вікно для друку
 			const newWindow = window.open("", "_blank", "width=800,height=750");
-
 			if (newWindow) {
 				newWindow.document.write(`
             <html>
                 <head>
                     <title>Замовлення #${orderId}</title>
                     <style>
-                        body { 
-                            padding: 40px; 
-                            font-family: 'Segoe UI', sans-serif; 
-                            background: #f0f2f5; 
-                            color: #333; 
-                        }
-                        .invoice-card { 
-                            background: white; 
-                            padding: 30px; 
-                            border-radius: 12px; 
-                            box-shadow: 0 4px 15px rgba(0,0,0,0.1); 
-                            max-width: 600px; 
-                            margin: 0 auto; 
-                        }
-                        pre { 
-                            white-space: pre-wrap; 
-                            font-family: 'Courier New', monospace; 
-                            font-size: 15px; 
-                            line-height: 1.6; 
-                            background: #fafafa; 
-                            padding: 20px; 
-                            border: 1px solid #eee; 
-                            border-radius: 8px;
-                        }
+                        body { padding: 40px; font-family: 'Segoe UI', sans-serif; background: #f0f2f5; color: #333; }
+                        .invoice-card { background: white; padding: 30px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); max-width: 600px; margin: 0 auto; }
+                        pre { white-space: pre-wrap; font-family: inherit; font-size: 15px; line-height: 1.6; background: #fafafa; padding: 20px; border: 1px solid #eee; border-radius: 8px; }
                         .btn-group { margin-top: 25px; display: flex; gap: 10px; justify-content: flex-end; }
-                        button { 
-                            padding: 12px 25px; 
-                            border: none; 
-                            border-radius: 8px; 
-                            cursor: pointer; 
-                            font-weight: bold; 
-                            transition: 0.2s;
-                        }
+                        button { padding: 12px 25px; border: none; border-radius: 8px; cursor: pointer; font-weight: bold; }
                         .print-btn { background: #007bff; color: white; }
                         .close-btn { background: #6c757d; color: white; }
-                        
-                        @media print {
-                            .btn-group { display: none; }
-                            body { background: white; padding: 0; }
-                            .invoice-card { box-shadow: none; border: none; width: 100%; max-width: 100%; }
-                        }
                     </style>
                 </head>
                 <body>
@@ -1575,36 +1571,24 @@ const InvoicesPage = ({
             </html>
             `);
 				newWindow.document.close();
-			} else {
-				alert("Браузер заблокував вікно. Дозвольте спливаючі вікна.");
 			}
 
 		} catch (error) {
-			console.error("Помилка:", error);
-			alert("Сталася помилка при завантаженні даних замовлення.");
+			console.error("КРИТИЧНА ПОМИЛКА В handleOrderDetails:", error);
+			alert("Сталася помилка при завантаженні даних.");
 		}
 	};
 
 	const handlePrintOrderTable = (invoices, name) => {
-		// 1. Формуємо дати: початок місяця та поточний час
 		const now = new Date();
 		const currentFullDate = now.toLocaleString('uk-UA', {
-			day: '2-digit',
-			month: '2-digit',
-			year: 'numeric',
-			hour: '2-digit',
-			minute: '2-digit',
-			second: '2-digit'
+			day: '2-digit', month: '2-digit', year: 'numeric',
+			hour: '2-digit', minute: '2-digit', second: '2-digit'
 		});
 
 		const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
 		const startOfMonthFormatted = startOfMonth.toLocaleString('uk-UA', {
-			day: '2-digit',
-			month: '2-digit',
-			year: 'numeric',
-			hour: '2-digit',
-			minute: '2-digit',
-			second: '2-digit'
+			day: '2-digit', month: '2-digit', year: 'numeric'
 		});
 
 		const periodString = `${startOfMonthFormatted} — ${currentFullDate}`;
@@ -1612,19 +1596,42 @@ const InvoicesPage = ({
 		// 2. Формуємо рядки таблиці
 		const tableRowsHtml = invoices.map((invoice) => {
 			const itemsArray = invoice.items ? Object.entries(invoice.items) : [];
-			return itemsArray.map(([id, item], itemIndex) => {
+			const orderComment = invoice.orderComment || invoice.comment || "";
+
+			// Розраховуємо rowspan: кількість товарів + 1 (якщо є загальний коментар)
+			const totalRows = itemsArray.length + (orderComment ? 1 : 0);
+
+			const itemsHtml = itemsArray.map(([id, item], itemIndex) => {
+				// Примітка до товару (📝)
+				const itemNote = item.comment
+					? `<div style="color: #d35400; font-size: 11px; margin-top: 2px; font-weight: bold;">📝 ${item.comment}</div>`
+					: '';
+
 				return `
                 <tr>
-                    ${itemIndex === 0 ? `<td rowspan="${itemsArray.length}">${invoice.idOrderHistory}</td>` : ''}
-                    <td>${item.name}</td>
+                    ${itemIndex === 0 ? `<td rowspan="${totalRows}">${invoice.idOrderHistory}</td>` : ''}
+                    <td>
+                        <div>${item.name}</div>
+                        ${itemNote}
+                    </td>
                     <td style="text-align: right;">${item.quantity} ${item.units}</td>
-                    ${itemIndex === 0 ? `<td rowspan="${itemsArray.length}">${invoice.date}</td>` : ''}
+                    ${itemIndex === 0 ? `<td rowspan="${totalRows}">${invoice.date}</td>` : ''}
                 </tr>
             `;
 			}).join('');
+
+			// Рядок загального коментаря (💬)
+			const commentRowHtml = orderComment
+				? `<tr>
+                <td colspan="2" style="background-color: #fff9db; color: #856404; font-size: 12px; padding: 5px 8px; border: 1px solid #999;">
+                    <b>💬 Коментар:</b> ${orderComment}
+                </td>
+               </tr>`
+				: '';
+
+			return itemsHtml + commentRowHtml;
 		}).join('');
 
-		// 3. Відкриваємо вікно друку
 		const newWindow = window.open("", "_blank", "width=900,height=800");
 
 		if (newWindow) {
@@ -1636,13 +1643,21 @@ const InvoicesPage = ({
                         body { font-family: sans-serif; padding: 20px; color: #333; }
                         h2 { text-align: center; margin-bottom: 5px; }
                         .period { text-align: center; font-size: 13px; color: #666; margin-bottom: 20px; border-bottom: 1px solid #ddd; padding-bottom: 10px; }
+                        
+                        /* ВАШІ ОРИГІНАЛЬНІ СТИЛІ ТАБЛИЦІ */
                         table { width: 100%; border-collapse: collapse; margin-top: 10px; }
                         th, td { border: 1px solid #999; padding: 8px; text-align: left; font-size: 13px; }
                         th { background-color: #f2f2f2; }
+                        
                         .customer-info { margin-bottom: 10px; font-size: 15px; }
                         .no-print { text-align: center; margin-top: 30px; }
                         button { padding: 10px 20px; cursor: pointer; background: #007bff; color: white; border: none; border-radius: 4px; font-weight: bold; }
-                        @media print { .no-print { display: none; } }
+                        
+                        @media print { 
+                            .no-print { display: none; } 
+                            /* Щоб колір коментаря друкувався */
+                            tr td { -webkit-print-color-adjust: exact; }
+                        }
                     </style>
                 </head>
                 <body>
@@ -1668,7 +1683,7 @@ const InvoicesPage = ({
                     </div>
 
                     <div class="no-print">
-                        <button onclick="window.print()">🖨️ Друкувати накладну</button>
+                        <button onclick="window.print()">🖨️ Друкувати звіт</button>
                         <button onclick="window.close()" style="background: #6c757d; margin-left: 10px;">Закрити</button>
                     </div>
                 </body>
@@ -1936,12 +1951,8 @@ const InvoicesPage = ({
 				style={{ cursor: 'pointer' }}
 				onClick={(e) => {
 					e.stopPropagation();
-
-					// Знаходимо ім'я клієнта зі списку customers за вибраним ID
 					const selectedCustomerObj = customers.find(c => String(c.id) === String(selectedUser));
 					const finalName = selectedCustomerObj ? selectedCustomerObj.name : "Клієнт";
-
-					// Викликаємо функцію БЕЗ "this."
 					handlePrintOrderTable(invoices, finalName);
 				}}
 			>
@@ -1957,20 +1968,57 @@ const InvoicesPage = ({
 				<tbody>
 					{invoices.map((invoice, index) => {
 						const itemsArray = invoice.items ? Object.entries(invoice.items) : [];
-						return itemsArray.map(([id, item], itemIndex) => {
-							const isLastRowInInvoice = itemIndex === itemsArray.length - 1;
-							const isNotLastInvoice = index !== invoices.length - 1;
-							const shouldHaveBorder = isLastRowInInvoice && isNotLastInvoice;
+						const orderComment = invoice.orderComment || invoice.comment || "";
 
-							return (
-								<tr key={`${index} -${id} `} className={shouldHaveBorder ? classes.invoiceDivider : ""}>
-									{itemIndex === 0 && <td rowSpan={itemsArray.length}>{invoice.idOrderHistory}</td>}
-									<td>{item.name}</td>
-									<td className={classes.alignRight}>{item.quantity} {item.units}</td>
-									{itemIndex === 0 && <td rowSpan={itemsArray.length}>{invoice.date}</td>}
-								</tr>
-							);
-						});
+						// Розраховуємо rowspan: кількість товарів + 1 (якщо є загальний коментар)
+						const totalRows = itemsArray.length + (orderComment ? 1 : 0);
+
+						return (
+							<React.Fragment key={`invoice-${index}`}>
+								{/* Рядки товарів */}
+								{itemsArray.map(([id, item], itemIndex) => {
+									const isLastItem = itemIndex === itemsArray.length - 1;
+									const hasNoComment = !orderComment;
+									// Малюємо лінію розділення, якщо це остання позиція в накладній і немає коментаря під нею
+									const isDividerRow = isLastItem && hasNoComment && index !== invoices.length - 1;
+
+									return (
+										<tr key={`${index}-${id}`} className={isDividerRow ? classes.invoiceDivider : ""}>
+											{itemIndex === 0 && (
+												<td rowSpan={totalRows} style={{ verticalAlign: 'top', paddingTop: '10px' }}>
+													{invoice.idOrderHistory}
+												</td>
+											)}
+											<td>
+												<div style={{ fontWeight: '500' }}>{item.name}</div>
+												{item.comment && (
+													<div style={{ fontSize: '11px', color: '#d35400', fontWeight: 'bold', marginTop: '2px' }}>
+														📝 {item.comment}
+													</div>
+												)}
+											</td>
+											<td className={classes.alignRight}>
+												{item.quantity} {item.units}
+											</td>
+											{itemIndex === 0 && (
+												<td rowSpan={totalRows} style={{ verticalAlign: 'top', paddingTop: '10px' }}>
+													{invoice.date}
+												</td>
+											)}
+										</tr>
+									);
+								})}
+
+								{/* Рядок загального коментаря (якщо він є) */}
+								{orderComment && (
+									<tr className={index !== invoices.length - 1 ? classes.invoiceDivider : ""}>
+										<td colSpan="2" style={{ backgroundColor: '#fff9db', color: '#856404', fontSize: '12px', padding: '6px 10px' }}>
+											<b>💬 Коментар:</b> {orderComment}
+										</td>
+									</tr>
+								)}
+							</React.Fragment>
+						);
 					})}
 				</tbody>
 			</table>

@@ -39,17 +39,29 @@ class InvoiceStock extends Component {
 		const customerName = thisCustomer ? thisCustomer.name : `Клієнт ID: ${customerId}`;
 
 		return invoices.slice().reverse().map((invoice) => {
+			// ЛОГ ДЛЯ ПЕРЕВІРКИ: виводимо всю накладну, щоб побачити структуру полів
+			console.log(`Накладна №${invoice.invoiceStockId} дані:`, invoice);
+
 			return (
 				<div
 					key={invoice.invoiceStockId}
 					className={`position-relative border border-primary p-3 mb-5 bg-white shadow-sm`}
-					style={{ cursor: 'pointer' }} // Робимо курсор вказівним
-					onClick={() => this.handlePrintInvoice(invoice, customerName)} // Виклик вікна друку
+					style={{ cursor: 'pointer' }}
+					onClick={() => this.handlePrintInvoice(invoice, customerName)}
 				>
 					<h5 className={`text-primary ${classes.h5}`}>
 						Накладна №{invoice.invoiceStockId}
 					</h5>
 					<p className="small text-muted mb-2">Дата поставки: {invoice.date}</p>
+
+					{/* --- ЗАГАЛЬНИЙ КОМЕНТАР ДО НАКЛАДНОЇ --- */}
+					{(invoice.orderComment || invoice.comment) && (
+						<div className="alert alert-warning py-1 px-2 small mb-3">
+							<strong><i className="fa fa-commenting"></i> Коментар до замовлення:</strong>
+							<div style={{ whiteSpace: 'pre-wrap' }}>{invoice.orderComment || invoice.comment}</div>
+						</div>
+					)}
+
 					<div onClick={(e) => e.stopPropagation()}>
 						<h5 className={`${classes.h5}`}>Статус: &nbsp;
 							<Select
@@ -77,7 +89,14 @@ class InvoiceStock extends Component {
 									return (
 										<tr key={item.id}>
 											<td className="font-weight-bold">
-												{product ? product.name : `ID: ${item.id}`}
+												<div>{product ? product.name : `ID: ${item.id}`}</div>
+
+												{/* --- КОМЕНТАР ДО КОНКРЕТНОГО ТОВАРУ --- */}
+												{item.comment && (
+													<div className="text-muted font-italic small" style={{ fontWeight: 'normal', fontSize: '11px' }}>
+														<i className="fa fa-pencil"></i> {item.comment}
+													</div>
+												)}
 											</td>
 											<td className="text-center text-primary font-weight-bold">
 												+{item.quantity} шт
@@ -98,13 +117,11 @@ class InvoiceStock extends Component {
 						</table>
 					</div>
 
-					{/* Кнопка видалення однієї накладної */}
 					<button
 						className="btn btn-outline-danger btn-sm position-absolute"
 						style={{ top: '10px', right: '10px' }}
 						onClick={(e) => {
 							e.stopPropagation();
-							// Використовуємо `${}` для вставки номера накладної
 							if (window.confirm(`Видалити накладну №${invoice.invoiceStockId}?`)) {
 								this.props.removeInvoiceStockCustomer(customerId, invoice.invoiceStockId);
 							}
@@ -120,67 +137,126 @@ class InvoiceStock extends Component {
 	handlePrintInvoice = (invoice, customerName) => {
 		const { products, productsDeleted } = this.props;
 
-		// 1. Формуємо текст товарів
-		const itemsText = invoice.cart.map(item => {
+		// 1. Формуємо список товарів з HTML-тегами для підсвічування коментарів
+		const itemsHTML = invoice.cart.map(item => {
 			const product = (products || []).find(p => p.id === item.id) ||
 				(productsDeleted || []).find(p => p.id === item.id);
 			const name = product ? product.name : `ID: ${item.id}`;
-			return `• ${name}: ${item.quantity} шт.`;
+
+			// Додаємо кольорову примітку з іконкою 📝
+			const itemComment = item.comment
+				? ` <span class="item-comment">📝 (Примітка: ${item.comment})</span>`
+				: '';
+
+			return `• ${name}: ${item.quantity} шт.${itemComment}`;
 		}).join('\n');
 
-		// 2. Формуємо повне текстове повідомлення
-		const fullMessage = `📄 НАКЛАДНА №${invoice.invoiceStockId}\n` +
-			`👤 Отримувач: ${customerName || '---'}\n` +
-			`📅 Дата поставки: ${invoice.date}\n` +
-			`✅ Статус: ${invoice.status}\n` +
-			`--------------------------\n` +
-			`${itemsText}`;
+		// 2. Формуємо блок загального коментаря з іконкою 💬
+		const rawComment = invoice.orderComment || invoice.comment || "";
+		const generalCommentHTML = rawComment
+			? `<div class="general-comment">
+            <span class="main-icon">💬</span> 
+            <div class="comment-text">
+                <span class="label">КОМЕНТАР:</span><br/>
+                ${rawComment}
+            </div>
+           </div>`
+			: '';
 
-		// 3. Питаємо користувача: Друк чи Alert?
-		// "OK" поверне true (Друк), "Скасувати" поверне false (Alert)
+		// 3. Текст для Alert (без HTML-тегів, з пошуком назви товару)
+		const alertMessage = `📄 НАКЛАДНА №${invoice.invoiceStockId}\n` +
+			`👤 Отримувач: ${customerName || '---'}\n` +
+			`📅 Дата: ${invoice.date}\n` +
+			(rawComment ? `💬 Коментар: ${rawComment}\n` : '') +
+			`--------------------------\n` +
+			invoice.cart.map(item => {
+				// ЛОГІКА ПОШУКУ НАЗВИ:
+				const product = (products || []).find(p => p.id === item.id) ||
+					(productsDeleted || []).find(p => p.id === item.id);
+				const name = product ? product.name : `ID: ${item.id}`;
+
+				const note = item.comment ? ` 📝 ${item.comment}` : '';
+
+				return `• ${name}: ${item.quantity} шт.${note}`;
+			}).join('\n');
+
 		const isPrint = window.confirm(
-			"Деталі постачання отримано. Оберіть дію:\n\n" +
-			"✅ OK для швидкого ПЕРЕГЛЯДУ (Alert)\n" +
-			"❌ Скасувати для відкриття вікна ДРУКУ"
+			"Деталі отримано. Оберіть дію:\n\n" +
+			"✅ OK — Швидкий перегляд (Alert)\n" +
+			"❌ Скасувати — ДРУК (Кольоровий з іконками)"
 		);
 
 		if (isPrint) {
-			// Якщо вибрано "Скасувати" — показуємо звичайний alert
-			alert(fullMessage);
-			return; // Зупиняємо функцію, вікно друку не відкриється
+			alert(alertMessage);
+			return;
 		}
 
-		// 4. Якщо користувач натиснув "OK" — відкриваємо вікно для друку
-		const newWindow = window.open("", "_blank", "width=800,height=700");
+		// 4. Відкриваємо вікно для друку з покращеними стилями
+		const newWindow = window.open("", "_blank", "width=800,height=750");
 
 		if (newWindow) {
 			newWindow.document.write(`
-        <html>
-            <head>
-                <title>Накладна №${invoice.invoiceStockId}</title>
-                <style>
-                    body { padding: 40px; font-family: 'Segoe UI', sans-serif; background: #f0f2f5; }
-                    .card { background: white; padding: 30px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); max-width: 600px; margin: 0 auto; }
-                    h2 { color: #007bff; border-bottom: 2px solid #eee; padding-bottom: 10px; }
-                    pre { white-space: pre-wrap; font-family: monospace; font-size: 15px; background: #fafafa; padding: 15px; border: 1px solid #eee; line-height: 1.5; }
-                    .btns { margin-top: 20px; display: flex; gap: 10px; }
-                    button { padding: 10px 20px; border: none; border-radius: 6px; cursor: pointer; font-weight: bold; }
-                    .print { background: #007bff; color: white; }
-                    @media print { .btns { display: none; } body { background: white; padding: 0; } .card { box-shadow: none; border: none; width: 100%; max-width: none; } }
-                </style>
-            </head>
-            <body>
-                <div class="card">
-                    <h2>📋 Накладна на склад</h2>
-                    <pre>${fullMessage}</pre>
-                    <div class="btns">
-                        <button class="print" onclick="window.print()">🖨️ Друк</button>
-                        <button onclick="window.close()">Закрити</button>
-                    </div>
+    <html>
+        <head>
+            <title>Накладна №${invoice.invoiceStockId}</title>
+            <style>
+                body { padding: 40px; font-family: 'Segoe UI', Tahoma, sans-serif; background: #f0f2f5; color: #333; }
+                .card { background: white; padding: 35px; border-radius: 15px; box-shadow: 0 10px 25px rgba(0,0,0,0.08); max-width: 650px; margin: 0 auto; border: 1px solid #e1e4e8; }
+                
+                h2 { color: #007bff; border-bottom: 2px solid #007bff; padding-bottom: 12px; margin-top: 0; display: flex; align-items: center; gap: 10px; }
+                .info-row { margin-bottom: 8px; font-size: 16px; display: flex; gap: 8px; }
+                
+                .content-box { 
+                    white-space: pre-wrap; background: #f8f9fa; padding: 20px; 
+                    border: 1px solid #dee2e6; border-radius: 10px; line-height: 1.7; font-size: 15px; 
+                }
+
+                /* СТИЛІ КОМЕНТАРІВ */
+                .item-comment { color: #d35400; font-weight: bold; margin-left: 5px; }
+                
+                .general-comment { 
+                    display: flex; align-items: flex-start; gap: 15px;
+                    background: #fff9db; color: #856404; padding: 18px;
+                    border-left: 6px solid #fcc419; margin: 20px 0; border-radius: 8px;
+                }
+                .main-icon { font-size: 24px; }
+                .label { font-size: 11px; font-weight: bold; color: #b7791f; text-transform: uppercase; letter-spacing: 1px; }
+                .comment-text { font-size: 16px; line-height: 1.4; }
+
+                .btns { margin-top: 30px; display: flex; gap: 12px; justify-content: flex-end; }
+                button { padding: 12px 24px; border: none; border-radius: 8px; cursor: pointer; font-weight: bold; }
+                .print-btn { background: #007bff; color: white; }
+
+                @media print { 
+                    .btns { display: none; } 
+                    body { background: white; padding: 0; } 
+                    .card { box-shadow: none; border: none; width: 100%; max-width: none; }
+                    .general-comment { background: #fff9db !important; -webkit-print-color-adjust: exact; }
+                }
+            </style>
+        </head>
+        <body>
+            <div class="card">
+                <h2><span>📋</span> Накладна на склад №${invoice.invoiceStockId}</h2>
+                
+                <div class="info-row"><b>👤 Отримувач:</b> ${customerName || '---'}</div>
+                <div class="info-row"><b>📅 Дата поставки:</b> ${invoice.date}</div>
+                <div class="info-row"><b>✅ Статус:</b> ${invoice.status}</div>
+
+                ${generalCommentHTML}
+
+                <div style="margin: 15px 0; color: #adb5bd;">------------------------------------------</div>
+                
+                <div class="content-box">${itemsHTML}</div>
+
+                <div class="btns">
+                    <button class="print-btn" onclick="window.print()">🖨️ ДРУКУВАТИ</button>
+                    <button onclick="window.close()">Закрити</button>
                 </div>
-            </body>
-        </html>
-        `);
+            </div>
+        </body>
+    </html>
+    `);
 			newWindow.document.close();
 		}
 	}

@@ -73,6 +73,31 @@
 	padding: 10px;
 }
 
+.productCommentInput {
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    padding: 4px 8px;
+    font-size: 13px;
+    width: 100%;
+    margin-top: 5px;
+    outline: none; /* додайте, щоб не було синьої рамки при натисканні */
+}
+
+.productCommentInput:focus {
+    border-color: #4a6cf7; /* підсвітка при вводі */
+}
+
+.orderCommentArea {
+    border: 1px solid #ccc; /* краще 1px, щоб не вибивалося з загального дизайну */
+    padding: 10px;
+    width: 100%;
+    border-radius: 8px;
+    font-size: 14px;
+    margin-top: 10px;
+    min-height: 80px;
+    resize: vertical; /* дозволить користувачу розтягувати поле по висоті */
+}
+
 @media (max-width: 991.98px) {
 	.btnCart {
 		height: 30px;

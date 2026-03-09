@@ -238,7 +238,38 @@ class YourOrders extends Component {
 											: <p className="mb-0 text-danger mt-1 mt-sm-3 rounded p-2" id={`warning_${thisProduct.id}`} >Товару немає в наявності</p>
 									}
 								</div>
-
+								{/* КОМЕНТАР ДО ТОВАРУ (аналогічно до CustomersCarts) */}
+								{product.comment && (
+									<div className="col-12 order-5 mt-2 px-0">
+										<div className="p-2 rounded" style={{
+											backgroundColor: '#f1faff',
+											border: '1px solid #dee2e6',
+											borderLeft: '4px solid #17a2b8',
+											boxShadow: 'inset 0 1px 2px rgba(0,0,0,0.05)',
+											fontSize: '0.85rem'
+										}}>
+											<div className="d-flex align-items-start">
+												<i className="fas fa-comment-dots mt-1 mr-2 text-info" style={{ opacity: 0.8 }}></i>
+												<div>
+													<span className="text-info font-weight-bold" style={{
+														fontSize: '0.75rem',
+														textTransform: 'uppercase',
+														letterSpacing: '0.5px'
+													}}>
+														Ваш коментар до товару:
+													</span>
+													<p className="mb-0 mt-1 text-dark" style={{
+														fontStyle: 'italic',
+														lineHeight: '1.4',
+														whiteSpace: 'pre-wrap'
+													}}>
+														{product.comment}
+													</p>
+												</div>
+											</div>
+										</div>
+									</div>
+								)}
 							</form>
 						)
 					})
@@ -312,9 +343,28 @@ class YourOrders extends Component {
 											</div>
 
 											{this.renderOrders([order], index)}
+											{/* ЗАГАЛЬНИЙ КОМЕНТАР ДО ЗАМОВЛЕННЯ */}
+											{(order.orderComment || order.comment) && (
+												<div className="mt-3 p-3 rounded" style={{
+													backgroundColor: '#fffdf5',
+													border: '1px solid #e9ecef',
+													borderLeft: '5px solid #ffc107',
+													boxShadow: '0 2px 4px rgba(0,0,0,0.05)'
+												}}>
+													<div className="d-flex align-items-center mb-2">
+														<i className="fas fa-truck text-warning mr-2"></i>
+														<h6 className="font-weight-bold text-dark mb-0" style={{ fontSize: '0.9rem', textTransform: 'uppercase' }}>
+															Ваш коментар до замовлення:
+														</h6>
+													</div>
+													<p className="mb-0 text-dark" style={{ whiteSpace: 'pre-wrap', fontSize: '1rem', lineHeight: '1.5', color: '#333' }}>
+														{order.orderComment || order.comment}
+													</p>
+												</div>
+											)}
 											<div className="d-flex justify-content-end">
 												<p className="mr-3 font-weight-bold">Загальна сума замовлення:&nbsp;
-										<span className="text-primary" id={`totalPrice_inHistory_${index}`}>
+													<span className="text-primary" id={`totalPrice_inHistory_${index}`}>
 														{this.calculationTotalPriceForCart([order])}
 
 													</span> <span className="text-primary">грн</span>

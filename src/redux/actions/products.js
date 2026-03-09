@@ -1727,7 +1727,7 @@ export function addProductWithCartToOrdersHistory(obj) {
 
 		const db = firebase.database()
 		let { customerId } = obj
-		const { email } = obj
+		const { email, productComments, orderComment } = obj
 
 		const customersState = [...getState().inform.customers]
 		const responseOrders = await axios.get(`orders.json`)
@@ -1759,6 +1759,10 @@ export function addProductWithCartToOrdersHistory(obj) {
 
 					ordersThis.cart[index].price = priceIncludedPromotion2(productsData[i].price, productsData[i].promotion)
 
+					if (productComments && productComments[cart.id]) {
+						ordersThis.cart[index].comment = productComments[cart.id]
+					}
+
 					counterIdInOrdersThisCart++
 				}
 
@@ -1787,6 +1791,16 @@ export function addProductWithCartToOrdersHistory(obj) {
 
 		const orderHistoryId = await addOrderHistoryId(db);
 
+		const newCartHistoryItem = {
+			orderHistoryId,
+			cart: ordersThis.cart,
+			date: time,
+			status: 'in process...',
+			customerId,
+			checked: false,
+			orderComment: orderComment || '' // Зберігаємо загальний коментар
+		}
+
 		if (ordersHistoryData[0]) {
 
 			// find indexOrders in the database ordersHistory
@@ -1795,10 +1809,10 @@ export function addProductWithCartToOrdersHistory(obj) {
 			if (ordersHistoryThis) {
 
 				orders = { ...ordersHistoryThis }
-				orders.cartsHistory.push({ orderHistoryId, cart: ordersThis.cart, date: time, status: 'in process...', customerId, checked: false })
+				orders.cartsHistory.push(newCartHistoryItem)
 
 			} else {
-				orders = { customerId, cartsHistory: [{ orderHistoryId, cart: ordersThis.cart, date: time, status: 'in process...', customerId, checked: false }], checked: false }
+				orders = { customerId, cartsHistory: [newCartHistoryItem], checked: false }
 			}
 
 			ordersHistoryData[indexOrdersHistory] = orders
@@ -1817,7 +1831,7 @@ export function addProductWithCartToOrdersHistory(obj) {
 
 
 		} else {
-			orders = { customerId, cartsHistory: [{ orderHistoryId, cart: ordersThis.cart, date: time, status: 'in process...', customerId, checked: false }], checked: false }
+			orders = { customerId, cartsHistory: [newCartHistoryItem], checked: false }
 
 			ordersHistoryData[0] = orders
 
@@ -1921,6 +1935,7 @@ export function addProductToInvoiceStock(obj) {
 				updatedStockEntry.cartsHistory.push({
 					invoiceStockId, // Використовуємо новий ID
 					cart: ordersThis.cart,
+					orderComment: ordersThis.orderComment || ordersThis.comment || '',
 					date: time,
 					status: 'in process...',
 					customerId
@@ -1929,7 +1944,14 @@ export function addProductToInvoiceStock(obj) {
 			} else {
 				updatedStockEntry = {
 					customerId,
-					cartsHistory: [{ invoiceStockId, cart: ordersThis.cart, date: time, status: 'in process...', customerId }]
+					cartsHistory: [{
+						invoiceStockId,
+						cart: ordersThis.cart,
+						orderComment: ordersThis.orderComment || ordersThis.comment || '', // ДОДАТИ ТУТ
+						date: time,
+						status: 'in process...',
+						customerId
+					}]
 				};
 				stockData.push(updatedStockEntry);
 				indexStock = stockData.length - 1;
@@ -2091,7 +2113,9 @@ export function changeStatusCustomersOrders(customerId, orderHistoryId, valueSel
 					name: product?.name || product?.title || item.productName || item.nameProduct || 'Без назви',
 					units: product?.units || 'шт',
 					quantity: Number(item.quantity) || 0,
-					price: product?.price || 0
+					price: product?.price || 0,
+					// ДОДАЄМО КОМЕНТАР ДО ТОВАРУ
+					comment: item.comment || ""
 				};
 			});
 
@@ -2100,7 +2124,9 @@ export function changeStatusCustomersOrders(customerId, orderHistoryId, valueSel
 				customerId,
 				date: cartItem.date,
 				status: 'done',
-				items: invoiceItems
+				items: invoiceItems,
+				// ДОДАЄМО ЗАГАЛЬНИЙ КОМЕНТАР ЗАМОВЛЕННЯ
+				orderComment: cartItem.orderComment || ""
 			};
 
 			await invoiceRef.set(invoiceData);
@@ -2986,4 +3012,43 @@ export function removeSubcategories(idCategory, subcategoryId) {
 
 	}
 
+}
+
+// Оновлення загального коментаря замовлення
+export function updateFirebaseOrderComment(orderIndex, comment) {
+	return async (dispatch, getState) => {
+		try {
+			const val = comment || "";
+			// Шлях: /orders/7/orderComment
+			await firebase.database().ref('orders').child(orderIndex).update({
+				orderComment: val
+			});
+
+			const orders = [...getState().products.orders];
+			// Знаходимо замовлення саме за індексом, який прийшов
+			if (orders[orderIndex]) {
+				orders[orderIndex].orderComment = val;
+				dispatch({ type: 'FETCH_ORDERS_SUCCESS', orders });
+			}
+		} catch (e) { console.error(e) }
+	}
+}
+
+// Оновлення коментаря до товару
+export function updateFirebaseProductComment(orderIndex, cartIndex, comment) {
+	return async (dispatch, getState) => {
+		try {
+			const val = comment || "";
+			// Шлях: /orders/7/cart/0/comment
+			await firebase.database().ref(`orders/${orderIndex}/cart/${cartIndex}`).update({
+				comment: val
+			});
+
+			const orders = [...getState().products.orders];
+			if (orders[orderIndex] && orders[orderIndex].cart[cartIndex]) {
+				orders[orderIndex].cart[cartIndex].comment = val;
+				dispatch({ type: 'FETCH_ORDERS_SUCCESS', orders });
+			}
+		} catch (e) { console.error(e) }
+	}
 }

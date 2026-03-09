@@ -13,15 +13,14 @@ class SwitchCustomersOrders extends Component {
 	}
 
 	renderNavLink() {
-
 		if (this.props.ordersHistory.length) {
 			return this.props.ordersHistory.map(orders => {
 
-				const thisCustomer = this.props.customers.filter(customer => customer.id === orders.customerId)[0]
+				const thisCustomer = this.props.customers.find(customer => customer.id === orders.customerId)
 
-				const statusInProcess = orders.cartsHistory.reverse().filter(order => order.status === "in process...")[0]
+				// Робимо копію через [...], щоб не поламати оригінальний список в Redux
+				const statusInProcess = [...orders.cartsHistory].reverse().find(order => order.status === "in process...")
 				const dateLastOrdersInProcess = statusInProcess ? statusInProcess.date : null
-
 
 				return (
 					<li
@@ -29,14 +28,27 @@ class SwitchCustomersOrders extends Component {
 						className={"d-flex flex-column flex-md-row justify-content-center justify-content-md-between align-items-end mr-3 border-top border-bottom"}
 						id={`li_customer_orders_${orders.customerId}`}
 					>
+						{/* Повернув text-dunger, як було у вашому початковому коді */}
 						<NavLink to={`/customers-orders/${orders.customerId}`} className={`text-dunger ${classes.navLinkOrders}`} >
-							<p>Замовлення користувача <span className="text-info">{thisCustomer.name}</span> під id = <span className="text-info">{orders.customerId}</span><span className="d-block"></span> Статус: {statusInProcess ? <span><span className="text-danger">in process...</span><span className="d-block"></span>date:  <span className="text-dark">{`${dateLastOrdersInProcess} 2`}</span></span> : <span className="text-success">completed</span>}</p>
-
+							<p>
+								Замовлення користувача
+								<span className="text-info">{thisCustomer?.name || 'Невідомий клієнт'}</span>
+								під id = <span className="text-info">{orders.customerId}</span>
+								<span className="d-block"></span>
+								Статус: {statusInProcess ?
+									<span>
+										<span className="text-danger">in process...</span>
+										<span className="d-block"></span>
+										date: <span className="text-dark">{`${dateLastOrdersInProcess} 2`}</span>
+									</span>
+									: <span className="text-success">completed</span>}
+							</p>
 						</NavLink>
 						<button
 							className={`ml-0 mb-2 mb-md-0 ml-md-auto ${classes.btnRemove}`}
 							onClick={() => {
-								if (window.confirm(`Видалити всі замовлення клієнта ${thisCustomer.name}?`)) {
+								const name = thisCustomer?.name || 'Невідомого клієнта';
+								if (window.confirm(`Видалити всі замовлення клієнта ${name}?`)) {
 									this.props.removeOrdersHistoryCustomer(orders.customerId, 'SwitchCustomersOrders');
 								}
 							}}

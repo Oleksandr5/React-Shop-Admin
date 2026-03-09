@@ -31,13 +31,13 @@ class SwitchCustomersCarts extends Component {
 						id={`li_customer_orders_${orders.customerId}`}
 					>
 						<NavLink to={`/customers-carts/${orders.customerId}`} className={`text-dunger ${classes.navLinkOrders}`} >
-							<p>Замовлення користувача <span className="text-info">{thisCustomer.name}</span> під id = <span className="text-info">{orders.customerId}</span><span className="d-block"></span> Статус: {statusInProcess ? <span><span className="text-danger">in process...</span><span className="d-block"></span>date:  <span className="text-dark">{`${dateLastOrder} 2`}</span></span> : <span className="text-success">completed</span>}</p>
+							<p>Замовлення користувача <span className="text-info">{thisCustomer?.name || 'Невідомий клієнт'}</span> під id = <span className="text-info">{orders.customerId}</span><span className="d-block"></span> Статус: {statusInProcess ? <span><span className="text-danger">in process...</span><span className="d-block"></span>date:  <span className="text-dark">{`${dateLastOrder} 2`}</span></span> : <span className="text-success">completed</span>}</p>
 
 						</NavLink>
 						<button
 							className={`ml-0 mb-2 mb-md-0 ml-md-auto ${classes.btnRemove}`}
 							onClick={() => {
-								if (window.confirm(`Видалити всі кошики клієнта ${thisCustomer.name}?`)) {
+								if (window.confirm(`Видалити всі кошики клієнта ${thisCustomer?.name || 'Невідомий клієнт'}?`)) {
 									this.props.removeOrdersCustomer(orders.customerId);
 								}
 							}}
