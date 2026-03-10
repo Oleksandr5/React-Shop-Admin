@@ -7,13 +7,25 @@ export function fetchCustomersData() {
 
 		try {
 
+			// Отримуємо налаштування (включаючи назву магазину)
+			const settingsResponse = await axios.get('settings.json');
+			const nameShop = settingsResponse.data ? settingsResponse.data.nameShop : 'Магазин';
+
+			if (settingsResponse.data === null || !settingsResponse.data.nameShop) {
+				const db = firebase.database();
+				db.ref('settings/nameShop').set('Новий Магазин'); // Назва за замовчуванням
+			}
+
+
+			// 2. Отримуємо клієнтів
 			const responseCustomers = await axios.get('customers.json')
 			const customersData = responseCustomers.data
 
+			// 3. Отримуємо останній ID
 			const responseIdLastCustomer = await axios.get('idLastCustomer.json')
 			const idLastCustomerData = responseIdLastCustomer.data
 
-			dispatch(fetchCustomersDataSuccess(customersData, idLastCustomerData))
+			dispatch(fetchCustomersDataSuccess(customersData, idLastCustomerData, nameShop))
 
 			// update quantityVisitors````````
 
@@ -76,6 +88,13 @@ export function fetchCustomersData() {
 		} catch (e) {
 			dispatch(fetchCustomersDataError(e))
 		}
+	}
+}
+
+export function fetchCustomersDataSuccess(customers, idLastCustomer, nameShop) {
+	return {
+		type: FETCH_CUSTOMERS_DATA_SUCCESS,
+		payload: { customers, idLastCustomer, nameShop }
 	}
 }
 
@@ -641,13 +660,6 @@ export function hasAccount(obj) {
 	return {
 		type: HAS_ACCOUNT,
 		payload: { hasAccount, textErrorAuth, customerId, customerName }
-	}
-}
-
-export function fetchCustomersDataSuccess(customers, idLastCustomer) {
-	return {
-		type: FETCH_CUSTOMERS_DATA_SUCCESS,
-		payload: { customers, idLastCustomer }
 	}
 }
 

@@ -1,7 +1,7 @@
 import { ADD_NEW_CUSTOMER, HAS_ACCOUNT, FETCH_CUSTOMERS_DATA_SUCCESS, FETCH_CUSTOMERS_DATA_ERROR, CUSTOMER_NEXT_ID, TOGGLE_ALL_CUSTOMERS, UPDATE_CUSTOMERS, UPDATE_CUSTOMER_NAME, UPDATE_CUSTOMER_ID, UPDATE_ID_LAST_CUSTOMER, AUTH_SUCCESS, AUTH_SUCCESS_ADMIN, AUTH_LOGOUT, AUTH_LOGOUT_ADMIN, FETCH_DATE_OF_FIRST_VISIT_NEW_CUSTOMER, FETCH_QUANTITY_VISITORS, FETCH_QUANTITY_OF_DOWNLOADS } from '../actions/actionTypes'
 
 const initialState = {
-	nameShop: 'Admin',
+	nameShop: 'Завантаження...', // Тимчасова назва
 	customers: [],
 	idLastCustomer: null,
 	customerId: window.localStorage.getItem('idThisCustomers') ? +window.localStorage.getItem('idThisCustomers') : window.localStorage.getItem('idThisUnKnownCustomers') ? +window.localStorage.getItem('idThisUnKnownCustomers') : null,
@@ -44,7 +44,8 @@ export default function inform(state = initialState, action) {
 			return {
 				...state,
 				customers: action.payload.customers === null ? [] : action.payload.customers,
-				idLastCustomer: action.payload.idLastCustomer === null ? null : action.payload.idLastCustomer
+				idLastCustomer: action.payload.idLastCustomer === null ? null : action.payload.idLastCustomer,
+				nameShop: action.payload.nameShop // Оновлюємо назву з бази
 			}
 		case CUSTOMER_NEXT_ID:
 			return {

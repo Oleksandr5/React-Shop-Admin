@@ -81,9 +81,9 @@ class Layout extends Component {
 								<div className={`row d-flex align-items-center justify-content-between px-3`}>
 									<h5 className="mb-0">Footer</h5>
 
-									<div className={`${classes.lnIcon} d-flex align-items-center justify-content-center`}>
+									{/* <div className={`${classes.lnIcon} d-flex align-items-center justify-content-center`}>
 										<a href="https://www.linkedin.com/in/oleksandr-haliatkin/" rel="noreferrer" target="_blank"><i src="linkedin.com/in/oleksandr-haliatkin" className="fa fa-linkedin" aria-hidden="true"></i></a>
-									</div>
+									</div> */}
 
 								</div>
 							</div>
