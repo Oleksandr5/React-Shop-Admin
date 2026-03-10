@@ -194,6 +194,25 @@
 .inputSmall { width: 70px; }
 .inputAgreement { width: 100px; }
 
+/* Виправити: додаємо стилі для коментаря, копіюючи базу з .inputSmall та .inputAgreement */
+.inputComment {
+    height: 36px;            /* Така ж висота, як у інших */
+    padding: 0 8px;          /* Внутрішні відступи */
+    border: 1px solid #ccc;  /* Сіра рамка за замовчуванням */
+    border-radius: 4px;      /* Заокруглення */
+    font-size: 14px;         /* Розмір тексту */
+    box-sizing: border-box;  /* Щоб падінги не роздували ширину */
+    width: 150px;            /* Ширина для коментаря (трохи більше за угоду) */
+    margin-left: 5px;        /* Відступ від попереднього інпута */
+    transition: border-color 0.2s;
+}
+
+/* Виправити: додаємо колір при фокусі, щоб було як у всій системі */
+.inputComment:focus {
+    border-color: #17a2b8;   /* Ваш фірмовий синій/бірюзовий колір */
+    outline: none;
+}
+
 .btnAdd, .btnHistory, .btnUndo, .clearBtn {
     height: 36px;
     padding: 0 15px;
@@ -376,5 +395,79 @@
         width: 100% !important;
         height: 30px;
         text-align: center;
+    }
+
+    .inputComment {
+        width: 100% !important;
+        margin-left: 0;
+        margin-top: 5px;
+    }
+}
+
+/* Базовий контейнер модалки (залишаємо для десктопа і мобілки) */
+.modalContentCustom {
+    background: white;
+    padding: 25px;
+    border-radius: 12px;
+    width: 95%;
+    max-width: 900px;
+    max-height: 85vh;
+    overflow-y: auto;
+    box-shadow: 0 15px 35px rgba(0,0,0,0.5);
+}
+
+@media (max-width: 768px) {
+    /* Ховаємо шапку таблиці */
+    .invoiceTable thead {
+        display: none;
+    }
+
+    /* Рядок стає карткою */
+    .invoiceTable tr {
+        display: block;
+        margin-bottom: 25px;
+        background: #ffffff;
+        border: 2px solid #28a745; /* Насичений зелений */
+        border-radius: 15px;
+        /* Ваша зелена тінь */
+        box-shadow: 0 4px 12px hsla(121, 82%, 36%, 0.1); 
+        padding: 15px;
+        overflow: hidden;
+    }
+
+    /* Комірка стає рядком у картці */
+    .invoiceTable td {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 12px 5px !important;
+        border: none !important;
+        border-bottom: 1px solid #f1f1f1 !important;
+    }
+
+    .invoiceTable td:last-child {
+        border-bottom: none !important;
+        justify-content: center;
+        padding-top: 20px !important;
+        background: #f9fffb; /* Легкий зелений фон для зони кнопок */
+        margin: 10px -15px -15px -15px; /* Розтягуємо фон на всю ширину карти */
+        border-radius: 0 0 13px 13px;
+    }
+
+    /* Підписи зліва */
+    .invoiceTable td::before {
+        content: attr(data-label);
+        font-weight: 700;
+        color: #1e7e34; /* Темно-зелений для тексту */
+        font-size: 14px;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+
+    /* Особливий стиль для суми */
+    .invoiceTable td[data-label="Сумарно"] {
+        background-color: #f0fdf4 !important;
+        font-weight: 800;
+        color: #155724;
     }
 }

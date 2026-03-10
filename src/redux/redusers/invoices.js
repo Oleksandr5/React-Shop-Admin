@@ -1,6 +1,6 @@
 import {
 	UPDATE_INVOICES, UPDATE_INVOICES_SUMMARY, SET_NOTIFICATIONS,
-	SET_USED_MATERIALS, ARCHIVE_DATA_SUCCESS
+	SET_USED_MATERIALS, ARCHIVE_DATA_SUCCESS, UPDATE_USED_MATERIAL_SUCCESS
 } from "../actions/invoices"; // шлях під твій проект
 
 const initialState = {
@@ -42,6 +42,16 @@ export default function invoicesReducer(state = initialState, action) {
 			return {
 				...state,
 				lastArchived: new Date().toISOString()
+			};
+
+		case UPDATE_USED_MATERIAL_SUCCESS:
+			const { productId, value } = action.payload;
+			return {
+				...state,
+				usedMaterials: {
+					...state.usedMaterials,
+					[String(productId)]: Number(value) // Оновлюємо прямо в корені
+				}
 			};
 
 		default:

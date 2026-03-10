@@ -1,7 +1,8 @@
-import React, { useEffect, useState, useMemo } from 'react'
+import React, { useEffect, useState, useMemo, useRef } from 'react'
 import { connect, useDispatch } from 'react-redux'
-import { fetchInvoices, fetchInvoicesSummary, fetchOrderNotifications, deleteNotification, clearNotifications, fetchUsedMaterials, addUsedMaterial, fetchUsedMaterialsHistory, archiveAllDataMonthly } from '../../../redux/actions/invoices'
-import classes from './InvoicesPage.module.css'
+import { fetchInvoices, fetchInvoicesSummary, fetchOrderNotifications, deleteNotification, clearNotifications, fetchUsedMaterials, addUsedMaterial, fetchUsedMaterialsHistory, archiveAllDataMonthly, updateUsedMaterialLocal } from '../../../redux/actions/invoices'; // шлях до ваших екшенів інвойсів
+
+import classes from './InvoicesPage.module.css';
 import firebase from 'firebase';
 
 // =========================================================================
@@ -711,6 +712,7 @@ const CrewInventoryReport = ({
 
 const UsedMaterialsTable = ({
 	selectedUser,
+	inputRef,
 	customers,
 	invoicesSummary,
 	usedMaterials,
@@ -728,6 +730,10 @@ const UsedMaterialsTable = ({
 	const [searchAgreement, setSearchAgreement] = useState('');
 	const [isEditingIds, setIsEditingIds] = useState(false);
 	const [newIdsString, setNewIdsString] = useState("");
+	const [historyModal, setHistoryModal] = useState({ isOpen: false, data: [], productId: null });
+	const [editingEntryId, setEditingEntryId] = useState(null);
+	const [commentValues, setCommentValues] = useState({}); // Стейт для коментарів у таблиці
+	const dispatch = useDispatch(); // Додайте цей рядок сюди!
 
 	// Знаходимо користувача в масиві за його ID
 	const userObj = customers?.find(c => String(c.id) === String(selectedUser));
@@ -788,17 +794,24 @@ const UsedMaterialsTable = ({
 					if (matches.length > 0) {
 						const productInfo = fullMaterialsList.find(s => Number(s.productId) === Number(productId));
 
-						// Збираємо дати та кількості для кожного окремого списання по цій угоді
 						matches.forEach(match => {
 							const date = match.createdAt
-								? new Date(match.createdAt).toLocaleString("uk-UA", { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' })
+								? new Date(match.createdAt).toLocaleString("uk-UA", {
+									day: '2-digit',
+									month: '2-digit',
+									year: '2-digit',
+									hour: '2-digit',
+									minute: '2-digit'
+								})
 								: "---";
 
+							// ВИПРАВЛЕНО: Додаємо comment в об'єкт
 							foundMaterials.push({
 								name: productInfo?.name || `Товар #${productId}`,
 								quantity: Number(match.value || 0),
 								units: productInfo?.units || '',
-								date: date
+								date: date,
+								comment: match.comment || "" // Отримуємо коментар
 							});
 						});
 					}
@@ -808,9 +821,12 @@ const UsedMaterialsTable = ({
 			if (foundMaterials.length === 0) {
 				alert(`По угоді №${term} не списано товарів`);
 			} else {
-				// Формуємо текст: тепер додаємо дату в кожен рядок
+				// ВИПРАВЛЕНО: Формуємо текст з урахуванням коментаря (якщо він є)
 				const listText = foundMaterials
-					.map(m => `• [${m.date}] ${m.name}: ${m.quantity} ${m.units}`)
+					.map(m => {
+						const commentPart = m.comment ? ` (Прим: ${m.comment})` : "";
+						return `• [${m.date}] ${m.name}: ${m.quantity} ${m.units}${commentPart}`;
+					})
 					.join('\n');
 
 				alert(`📦 Товари списані на угоду №${term}:\n\n${listText}`);
@@ -849,6 +865,8 @@ const UsedMaterialsTable = ({
 		const valueToAdd = Number(inputValues[productId]);
 		const localAgreement = (agreementValues[productId] || "").trim();
 		const agreement = localAgreement !== "" ? localAgreement : commonAgreement;
+		// добавити: отримуємо коментар зі стейту
+		const comment = (commentValues[productId] || "").trim();
 
 		if (!valueToAdd || valueToAdd <= 0) {
 			alert("Введіть коректну кількість");
@@ -860,48 +878,78 @@ const UsedMaterialsTable = ({
 		}
 
 		try {
-			await addUsedMaterial(selectedUser, productId, valueToAdd, agreement);
+			// добавити: додаємо comment як сьомим аргумент у вашу функцію
+			await addUsedMaterial(selectedUser, productId, valueToAdd, agreement, null, null, comment);
+
 			await fetchUsedMaterials(selectedUser);
 			setInputValues(prev => ({ ...prev, [productId]: "" }));
+			// ДОДАЄМО ЦЕ: Очищуємо поле угоди для цього productId
+			setAgreementValues(prev => ({ ...prev, [productId]: "" }));
+			// добавити: очищуємо поле коментаря після успішного додавання
+			setCommentValues(prev => ({ ...prev, [productId]: "" }));
 			alert("Дані успішно додано");
 		} catch (err) {
 			console.error("Помилка додавання:", err);
 		}
 	};
 
+	// const handleHistory = async (productId) => {
+	// 	try {
+	// 		const hist = await fetchUsedMaterialsHistory(selectedUser, productId);
+	// 		const productInfo = fullMaterialsList.find(s => Number(s.productId) === Number(productId));
+	// 		const productName = productInfo?.name || `Товар #${productId}`;
+	// 		const units = productInfo?.units || '';
+
+	// 		if (!hist || hist.length === 0) {
+	// 			alert(`Історія для "${productName}" порожня.`);
+	// 			return;
+	// 		}
+
+	// 		const sortedLogs = [...hist].sort((a, b) => a.createdAt - b.createdAt);
+	// 		let runningTotal = 0;
+
+	// 		const historyLines = sortedLogs.map(log => {
+	// 			const val = Number(log.value || 0);
+	// 			runningTotal += val;
+	// 			const date = log.createdAt ? new Date(log.createdAt).toLocaleString("uk-UA") : "---";
+	// 			return `${date} — Списано: ${val} ${units} (Сумарно: ${runningTotal}) ${log.agreement ? `[Угода: ${log.agreement}]` : ''}`;
+	// 		});
+
+	// 		const historyText = historyLines.reverse().join('\n');
+	// 		const fullMessage = `📜 Історія списань для: ${productName}\n📊 Всього списано: ${runningTotal} ${units}\n\n${historyText}`;
+
+	// 		if (fullMessage.length > 1000) {
+	// 			const newWindow = window.open("", "_blank", "width=700,height=500");
+	// 			if (newWindow) {
+	// 				newWindow.document.write(`<html><head><title>Історія</title></head><body style="padding:20px; font-family:monospace; background:#f4f4f4;"><pre>${fullMessage}</pre></body></html>`);
+	// 				newWindow.document.close();
+	// 			} else { alert(fullMessage); }
+	// 		} else { alert(fullMessage); }
+	// 	} catch (err) { alert("Не вдалося завантажити історію."); }
+	// };
+
 	const handleHistory = async (productId) => {
 		try {
-			const hist = await fetchUsedMaterialsHistory(selectedUser, productId);
-			const productInfo = fullMaterialsList.find(s => Number(s.productId) === Number(productId));
-			const productName = productInfo?.name || `Товар #${productId}`;
-			const units = productInfo?.units || '';
+			const snapshot = await firebase.database().ref(`usedMaterialsHistory/${selectedUser}/${productId}`).once('value');
+			const res = snapshot.val() || {};
 
-			if (!hist || hist.length === 0) {
-				alert(`Історія для "${productName}" порожня.`);
-				return;
-			}
+			// ПЕРЕТВОРЮЄМО ОБ'ЄКТ У МАСИВ З ID
+			const historyArray = Object.keys(res).map(key => ({
+				id: key, // ОСЬ ТУТ МИ ПРИВ'ЯЗУЄМО КЛЮЧ FIREBASE
+				...res[key]
+			}));
 
-			const sortedLogs = [...hist].sort((a, b) => a.createdAt - b.createdAt);
-			let runningTotal = 0;
+			// Сортуємо за часом і рахуємо суми
+			const finalData = recalculateWithTime(historyArray);
 
-			const historyLines = sortedLogs.map(log => {
-				const val = Number(log.value || 0);
-				runningTotal += val;
-				const date = log.createdAt ? new Date(log.createdAt).toLocaleString("uk-UA") : "---";
-				return `${date} — Списано: ${val} ${units} (Сумарно: ${runningTotal}) ${log.agreement ? `[Угода: ${log.agreement}]` : ''}`;
+			setHistoryModal({
+				isOpen: true,
+				productId: productId,
+				data: finalData
 			});
-
-			const historyText = historyLines.reverse().join('\n');
-			const fullMessage = `📜 Історія списань для: ${productName}\n📊 Всього списано: ${runningTotal} ${units}\n\n${historyText}`;
-
-			if (fullMessage.length > 1000) {
-				const newWindow = window.open("", "_blank", "width=700,height=500");
-				if (newWindow) {
-					newWindow.document.write(`<html><head><title>Історія</title></head><body style="padding:20px; font-family:monospace; background:#f4f4f4;"><pre>${fullMessage}</pre></body></html>`);
-					newWindow.document.close();
-				} else { alert(fullMessage); }
-			} else { alert(fullMessage); }
-		} catch (err) { alert("Не вдалося завантажити історію."); }
+		} catch (err) {
+			console.error("Помилка завантаження:", err);
+		}
 	};
 
 	const handleUndo = async (productId) => {
@@ -963,10 +1011,12 @@ const UsedMaterialsTable = ({
 						if (!agreementsMap[agreement]) {
 							agreementsMap[agreement] = [];
 						}
+						// ВИПРАВЛЕНО: Додаємо поле comment в об'єкт
 						agreementsMap[agreement].push({
 							name,
 							quantity: Number(log.value || 0),
 							units,
+							comment: log.comment || "", // Беремо коментар з логу
 							date: log.createdAt ? new Date(log.createdAt).toLocaleString("uk-UA", { day: '2-digit', month: '2-digit', year: '2-digit' }) : "---"
 						});
 					});
@@ -976,26 +1026,26 @@ const UsedMaterialsTable = ({
 			// 3. Формуємо HTML
 			const currentDate = new Date().toLocaleString('uk-UA');
 			let reportHtml = `
-            <html>
-            <head>
-                <title>Звіт по угодах</title>
-                <style>
-                    body { font-family: sans-serif; padding: 20px; line-height: 1.4; }
-                    .header { text-align: center; border-bottom: 2px solid #333; margin-bottom: 20px; padding-bottom: 10px; }
-                    .agreement-section { margin-bottom: 40px; page-break-inside: avoid; }
-                    .agreement-title { background: #17a2b8; color: white; padding: 10px; font-weight: bold; margin-bottom: 0; }
-                    table { width: 100%; border-collapse: collapse; font-size: 13px; margin-top: 0; }
-                    th, td { border: 1px solid #ccc; padding: 8px 10px; text-align: left; }
-                    th { background: #f2f2f2; font-weight: bold; }
-                    .no-print { text-align: center; margin: 20px; }
-                    @media print { .no-print { display: none; } }
-                </style>
-            </head>
-            <body>
-                <div class="header">
-                    <h2>📋 Повний звіт списань по всіх угодах</h2>
-                    <p><b>Екіпаж:</b> ${crewDisplayName} | <b>Дата формування:</b> ${currentDate}</p>
-                </div>
+        <html>
+        <head>
+            <title>Звіт по угодах</title>
+            <style>
+                body { font-family: sans-serif; padding: 20px; line-height: 1.4; }
+                .header { text-align: center; border-bottom: 2px solid #333; margin-bottom: 20px; padding-bottom: 10px; }
+                .agreement-section { margin-bottom: 40px; page-break-inside: avoid; }
+                .agreement-title { background: #17a2b8; color: white; padding: 10px; font-weight: bold; margin-bottom: 0; }
+                table { width: 100%; border-collapse: collapse; font-size: 13px; margin-top: 0; }
+                th, td { border: 1px solid #ccc; padding: 8px 10px; text-align: left; }
+                th { background: #f2f2f2; font-weight: bold; }
+                .no-print { text-align: center; margin: 20px; }
+                @media print { .no-print { display: none; } }
+            </style>
+        </head>
+        <body>
+            <div class="header">
+                <h2>📋 Повний звіт списань по всіх угодах</h2>
+                <p><b>Екіпаж:</b> ${crewDisplayName} | <b>Дата формування:</b> ${currentDate}</p>
+            </div>
         `;
 
 			const sortedAgreements = Object.keys(agreementsMap).sort();
@@ -1004,27 +1054,27 @@ const UsedMaterialsTable = ({
 				sortedAgreements.forEach(agNum => {
 					const items = agreementsMap[agNum];
 					reportHtml += `
-                    <div class="agreement-section">
-                        <div class="agreement-title">📄 Угода №: ${agNum}</div>
-                        <table>
-                            <thead>
+                <div class="agreement-section">
+                    <div class="agreement-title">📄 Угода №: ${agNum}</div>
+                    <table>
+                        <thead>
+                            <tr>
+                                <th style="width: 15%">Дата</th>
+                                <th style="width: 35%">Товар</th>
+                                <th style="width: 15%; text-align: right;">Кількість</th>
+                                <th>Примітка</th> </tr>
+                        </thead>
+                        <tbody>
+                            ${items.map(m => `
                                 <tr>
-                                    <th style="width: 25%">Дата</th>
-                                    <th>Товар</th>
-                                    <th style="width: 20%; text-align: right;">Кількість</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                ${items.map(m => `
-                                    <tr>
-                                        <td>${m.date}</td>
-                                        <td>${m.name}</td>
-                                        <td style="text-align: right;"><b>${m.quantity}</b> ${m.units}</td>
-                                    </tr>
-                                `).join('')}
-                            </tbody>
-                        </table>
-                    </div>
+                                    <td>${m.date}</td>
+                                    <td>${m.name}</td>
+                                    <td style="text-align: right;"><b>${m.quantity}</b> ${m.units}</td>
+                                    <td>${m.comment}</td> </tr>
+                            `).join('')}
+                        </tbody>
+                    </table>
+                </div>
                 `;
 				});
 			} else {
@@ -1032,14 +1082,14 @@ const UsedMaterialsTable = ({
 			}
 
 			reportHtml += `
-                <div class="no-print">
-                    <button onclick="window.print()" style="padding: 12px 24px; background: #28a745; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 16px; font-weight: bold;">🖨️ Роздрукувати звіт</button>
-                </div>
-            </body>
-            </html>
+            <div class="no-print">
+                <button onclick="window.print()" style="padding: 12px 24px; background: #28a745; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 16px; font-weight: bold;">🖨️ Роздрукувати звіт</button>
+            </div>
+        </body>
+        </html>
         `;
 
-			const newWindow = window.open("", "_blank", "width=900,height=700");
+			const newWindow = window.open("", "_blank", "width=1000,height=800");
 			if (newWindow) {
 				newWindow.document.write(reportHtml);
 				newWindow.document.close();
@@ -1177,7 +1227,131 @@ const UsedMaterialsTable = ({
 		}
 	};
 
+	// --- ФУНКЦІЯ ПЕРЕРАХУНКУ ЧЕРЕЗ createdAt --- Вона не містить запитів до БД, лише чиста логіка формування сум.
+	const recalculateWithTime = (dataArray) => {
+		console.log("%c [CALC] Початок перерахунку сум...", "color: #007bff; font-weight: bold;");
 
+		// 1. Сортуємо від найстаріших до найновіших
+		const sorted = [...dataArray].sort((a, b) => a.createdAt - b.createdAt);
+
+		let runningSum = 0;
+		const withSums = sorted.map(item => {
+			runningSum += Number(item.value || 0);
+			return {
+				...item,
+				cumulativeSum: runningSum // Це наше нове "currentValue"
+			};
+		});
+
+		console.log("Результат розрахунку (від старих до нових):", withSums);
+		// 2. Повертаємо реверсом (нові зверху) для відображення в модалці
+		return withSums.reverse();
+	};
+
+	// --- РЕДАГУВАННЯ --- Ця функція тепер оновлює всю гілку історії цього товару, щоб підтягнути всі currentValue.
+	const saveEdit = async (logId) => {
+		const inputElement = document.getElementById(`edit-val-${logId}`);
+		const agreementElement = document.getElementById(`edit-agrm-${logId}`); // Отримуємо елемент угоди
+		// добавити: знаходимо інпут коментаря за ID
+		const commentElement = document.getElementById(`edit-comment-${logId}`);
+
+		if (!inputElement || !agreementElement) return;
+
+		const newValue = Number(inputElement.value);
+		const newAgreement = agreementElement.value; // Зчитуємо текст угоди
+		// добавити: зчитуємо значення коментаря
+		const newComment = commentElement ? commentElement.value : "";
+
+		try {
+			// 1. Оновлюємо масив даних, додаючи нову угоду до потрібного рядка
+			const updatedRaw = historyModal.data.map(item =>
+				// добавити: додаємо comment та agreement в об'єкт масиву
+				item.id === logId ? { ...item, value: newValue, agreement: newAgreement, comment: newComment } : item
+			);
+
+			// Перераховуємо сумарні значення (cumulativeSum)
+			const finalData = recalculateWithTime(updatedRaw);
+
+			// 2. Підготовка оновлень для Firebase
+			const updates = {};
+			finalData.forEach(item => {
+				const basePath = `usedMaterialsHistory/${selectedUser}/${historyModal.productId}/${item.id}`;
+				updates[`${basePath}/value`] = item.value;
+				updates[`${basePath}/currentValue`] = item.cumulativeSum;
+
+				// Оновлюємо поле agreement в базі тільки для того запису, який редагували
+				if (item.id === logId) {
+					updates[`${basePath}/agreement`] = newAgreement;
+					updates[`${basePath}/comment`] = newComment;
+				}
+			});
+
+			// Оновлюємо загальний залишок у головній гілці
+			const finalTotal = finalData.length > 0 ? finalData[0].cumulativeSum : 0;
+			updates[`usedMaterials/${selectedUser}/${historyModal.productId}`] = finalTotal;
+
+			// 3. Запис у Firebase
+			await firebase.database().ref().update(updates);
+
+			// 4. Оновлення Redux локально
+			dispatch(updateUsedMaterialLocal(selectedUser, historyModal.productId, finalTotal));
+
+			// 5. Закриття режиму редагування в модалці
+			setHistoryModal(prev => ({ ...prev, data: finalData }));
+			setEditingEntryId(null);
+
+			console.log("%c [SUCCESS] Угода та значення оновлені", "color: #28a745;");
+		} catch (e) {
+			console.error("Помилка при збереженні:", e);
+			alert("Не вдалося зберегти зміни");
+		}
+	};
+
+	// --- ВИДАЛЕННЯ --- Тут та сама логіка: видаляємо один вузол, але перераховуємо суми в усіх інших.
+	const deleteHistoryItem = async (log) => {
+		// 1. Форматуємо дату для запитання
+
+		const formattedDate = new Date(log.createdAt).toLocaleString('uk-UA');
+		const currentValue = log.currentValue;
+
+		// 2. Виводимо підтвердження з датою
+		if (!window.confirm(`Видалити цей запис ${formattedDate} де сумарно ${currentValue}?`)) return;
+
+		const logId = log.id; // Дістаємо ID для подальшої роботи
+
+		try {
+			// 1. Видаляємо в Firebase
+			await firebase.database().ref(`usedMaterialsHistory/${selectedUser}/${historyModal.productId}/${logId}`).remove();
+
+			// 2. Перераховуємо локально
+			const updatedRaw = historyModal.data.filter(item => item.id !== logId);
+			const finalData = recalculateWithTime(updatedRaw);
+
+			const updates = {};
+			let finalTotal = finalData.length > 0 ? finalData[0].cumulativeSum : 0;
+
+			// Оновлюємо currentValue для залишків історії в БД
+			finalData.forEach(item => {
+				updates[`usedMaterialsHistory/${selectedUser}/${historyModal.productId}/${item.id}/currentValue`] = item.cumulativeSum;
+			});
+			updates[`usedMaterials/${selectedUser}/${historyModal.productId}`] = finalTotal;
+
+			await firebase.database().ref().update(updates);
+
+			// 3. ОНОВЛЕННЯ REDUX (для головної таблиці)
+			dispatch(updateUsedMaterialLocal(selectedUser, historyModal.productId, finalTotal));
+
+			setHistoryModal(prev => ({ ...prev, data: finalData }));
+		} catch (e) {
+			console.error("Помилка видалення:", e);
+		}
+	};
+
+	// Всередині UsedMaterialsTable
+	useEffect(() => {
+		// Як тільки таблиця з'явилася (mount) після зміни ключа - фокусуємося
+		inputRef.current?.focus();
+	}, []); // Порожній масив означає "виконати один раз при створенні"
 
 	return (
 		<div className={classes.usedMaterialsSection}>
@@ -1237,6 +1411,7 @@ const UsedMaterialsTable = ({
 					</div>
 					<label style={{ fontWeight: 'bold', color: '#2d3748' }}>📄 Загальна угода:</label>
 					<input
+						ref={inputRef}
 						type="text"
 						placeholder="Номер для всіх товарів..."
 						value={commonAgreement}
@@ -1367,6 +1542,13 @@ const UsedMaterialsTable = ({
 											onChange={e => setAgreementValues(prev => ({ ...prev, [productId]: e.target.value }))}
 											className={classes.inputAgreement}
 										/>
+										<input
+											type="text"
+											placeholder="Коментар..."
+											value={commentValues[productId] ?? ""}
+											onChange={e => setCommentValues(prev => ({ ...prev, [productId]: e.target.value }))}
+											className={classes.inputComment} // Додайте цей клас у CSS (наприклад, width: 120px)											
+										/>
 										<button className={classes.btnAdd} onClick={() => handleAddMaterial(productId)}>Додати</button>
 										<button className={classes.btnUndo} onClick={() => handleUndo(productId)}><span className="undoIcon">↩</span></button>
 										<button className={classes.btnHistory} onClick={() => handleHistory(productId)}>📜</button>
@@ -1377,6 +1559,155 @@ const UsedMaterialsTable = ({
 					})}
 				</tbody>
 			</table>
+			{/* МОДАЛКА ІСТОРІЇ */}
+			{historyModal.isOpen && (
+				<div style={{
+					position: 'fixed', top: 0, left: 0, width: '100%', height: '100%',
+					background: 'rgba(0,0,0,0.8)', zIndex: 2000, display: 'flex', justifyContent: 'center', alignItems: 'center',
+					backdropFilter: 'blur(5px)'
+				}}>
+					<div className={classes.modalContentCustom}> {/* Використовуємо клас для падінгів */}
+						<div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px', borderBottom: '2px solid #17a2b8', paddingBottom: '10px' }}>
+							<h3 className={classes.modalTitle} style={{ margin: 0, color: '#17a2b8' }}>
+								📜 Редагування історії: {stock.find(m => m.id === historyModal.productId)?.name}
+							</h3>
+							<button
+								onClick={() => { setHistoryModal({ ...historyModal, isOpen: false }); setEditingEntryId(null); }}
+								style={{ background: 'none', border: 'none', fontSize: '24px', cursor: 'pointer', color: '#888' }}
+							>✕</button>
+						</div>
+
+						{/* ОБГОРТКА ДЛЯ СКРОЛУ */}
+						<div className={classes.historyTableContainer}>
+							<table className={classes.invoiceTable} style={{ width: '100%', borderCollapse: 'collapse' }}>
+								<thead>
+									<tr style={{ background: '#f8f9fa' }}>
+										<th style={{ padding: '12px', textAlign: 'left' }}>Дата</th>
+										<th style={{ padding: '12px', textAlign: 'center' }}>Кількість</th>
+										<th style={{ padding: '12px', textAlign: 'center', color: '#007bff' }}>Сумарно</th>
+										<th style={{ padding: '12px', textAlign: 'left' }}>Угода</th>
+										<th style={{ padding: '12px', textAlign: 'left' }}>Коментар</th>
+										<th style={{ padding: '12px', textAlign: 'center' }}>Дії</th>
+									</tr>
+								</thead>
+								<tbody>
+									{historyModal.data.map((log) => (
+										<tr key={log.id} style={{ borderBottom: '1px solid #eee' }}>
+											{/* Атрибут data-label відповідає за текст зліва на мобілці */}
+											<td data-label="Дата" style={{ padding: '10px', fontSize: '14px', whiteSpace: 'nowrap' }}>
+												{new Date(log.createdAt).toLocaleString('uk-UA')}
+											</td>
+
+											<td data-label="Кількість" style={{ padding: '10px', textAlign: 'center' }}>
+												{editingEntryId === log.id ? (
+													<input
+														type="number"
+														id={`edit-val-${log.id}`}
+														defaultValue={log.value}
+														style={{ width: '70px', padding: '4px', border: '1px solid #17a2b8', borderRadius: '4px' }}
+														autoFocus
+													/>
+												) : (
+													<strong style={{ color: '#28a745' }}>{log.value}</strong>
+												)}
+											</td>
+
+											<td data-label="Сумарно" style={{ padding: '10px', textAlign: 'center', fontWeight: 'bold', backgroundColor: '#f0f7ff' }}>
+												{log.cumulativeSum}
+											</td>
+
+											<td data-label="Угода" style={{ padding: '10px', color: '#666', fontSize: '13px' }}>
+												{editingEntryId === log.id ? (
+													<input
+														type="text"
+														id={`edit-agrm-${log.id}`}
+														defaultValue={log.agreement || ''}
+														placeholder="Номер угоди..."
+														style={{
+															width: '100px',
+															padding: '4px',
+															border: '1px solid #17a2b8',
+															borderRadius: '4px',
+															fontSize: '12px'
+														}}
+													/>
+												) : (
+													log.agreement || '—'
+												)}
+											</td>
+
+											<td data-label="Коментар" style={{ padding: '10px', color: '#666', fontSize: '13px' }}>
+												{editingEntryId === log.id ? (
+													<input
+														id={`edit-comment-${log.id}`}
+														type="text"
+														defaultValue={log.comment || ''}
+														placeholder="Коментар..."
+														style={{
+															width: '100px',
+															padding: '4px',
+															border: '1px solid #17a2b8', // Виправити: додаємо фірмовий синій колір
+															borderRadius: '4px',         // Виправити: робимо заокруглення
+															fontSize: '12px',            // Виправити: вирівнюємо розмір шрифту
+															outline: 'none'              // Щоб при натисканні не з'являлася чорна рамка
+														}}
+													/>
+												) : (
+													log.comment || '—'
+												)}
+											</td>
+
+											<td data-label="Дії" style={{ padding: '10px', textAlign: 'center' }}>
+												{editingEntryId === log.id ? (
+													<div style={{ display: 'flex', gap: '8px', justifyContent: 'center' }}>
+														<button
+															className={classes.actionBtn}
+															onClick={() => saveEdit(log.id)}
+															style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '18px' }}
+															title="Зберегти"
+														>✅</button>
+														<button
+															className={classes.actionBtn}
+															onClick={() => setEditingEntryId(null)}
+															style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '18px' }}
+															title="Скасувати"
+														>❌</button>
+													</div>
+												) : (
+													<div style={{ display: 'flex', gap: '12px', justifyContent: 'center' }}>
+														<button
+															className={classes.actionBtn}
+															onClick={() => setEditingEntryId(log.id)}
+															style={{ background: 'none', border: 'none', cursor: 'pointer', opacity: 0.7 }}
+															title="Редагувати"
+														>✏️</button>
+														<button
+															className={classes.actionBtn}
+															onClick={() => deleteHistoryItem(log)}
+															style={{ background: 'none', border: 'none', cursor: 'pointer', opacity: 0.7, color: '#dc3545' }}
+															title="Видалити"
+														>🗑️</button>
+													</div>
+												)}
+											</td>
+										</tr>
+									))}
+								</tbody>
+							</table>
+						</div>
+
+						<div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '20px' }}>
+							<button
+								onClick={() => { setHistoryModal({ ...historyModal, isOpen: false }); setEditingEntryId(null); }}
+								className={classes.btnAdd}
+								style={{ width: 'auto', padding: '10px 30px', backgroundColor: '#6c757d' }}
+							>
+								Закрити
+							</button>
+						</div>
+					</div>
+				</div>
+			)}
 		</div>
 	);
 };
@@ -1387,6 +1718,8 @@ const InvoicesPage = ({
 	usedMaterials, fetchUsedMaterials, addUsedMaterial, archiveAllDataMonthly, stock
 }) => {
 
+	const agreementInputRef = useRef(null);
+
 	const [selectedUser, setSelectedUser] = useState(customerId || '');
 	// Коментар: НОВЕ: Стейт для збереження вибраного напарника
 	const [partnerUser, setPartnerUser] = useState('');
@@ -1395,6 +1728,27 @@ const InvoicesPage = ({
 	const [dynamicProductIds, setDynamicProductIds] = useState([]);
 
 	const idThisCustomers = window.localStorage.getItem("idThisCustomers");
+
+	// Додайте це на початку рендеру (всередині компонента InvoicesPage)
+	console.log('--- RENDER CHECK ---');
+	console.log('Current selectedUser ID (from state):', selectedUser); // ми використовуємо стан selectedUser
+	console.log('Current usedMaterials (from Redux):', usedMaterials); // використовуємо деструктурований пропс
+
+	// Перевіряємо: користувач залогінений ТА має відповідне поле "true" у базі адмінів
+	const isAdminInvoices = hasAccount && !!admins[idThisCustomers]?.invoices;
+	const isAdminUsedMaterials = hasAccount && !!admins[idThisCustomers]?.usedMaterials;
+	const isAdminFullAccess = hasAccount && !!admins[idThisCustomers]?.fullAccess;
+
+
+	const handleCustomerChange = (e) => {
+		const userId = e.target.value;
+		setSelectedUser(userId);
+		window.localStorage.setItem('idSelectedCustomer', userId);
+
+		// Очищуємо напарника, щоб звіт не показував старий екіпаж
+		setPartnerUser('');
+
+	};
 
 	useEffect(() => {
 		const ref = firebase.database().ref('settings/admins');
@@ -1432,11 +1786,6 @@ const InvoicesPage = ({
 		syncAndFetch();
 		return () => ref.off();
 	}, []);
-
-	// Перевіряємо: користувач залогінений ТА має відповідне поле "true" у базі адмінів
-	const isAdminInvoices = hasAccount && !!admins[idThisCustomers]?.invoices;
-	const isAdminUsedMaterials = hasAccount && !!admins[idThisCustomers]?.usedMaterials;
-	const isAdminFullAccess = hasAccount && !!admins[idThisCustomers]?.fullAccess;
 
 	useEffect(() => {
 		const savedId = window.localStorage.getItem('idSelectedCustomer') || idThisCustomers;
@@ -1823,8 +2172,6 @@ const InvoicesPage = ({
 		}
 	};
 
-
-
 	const handleExportStockToCSV = (stockData) => {
 		if (!stockData || stockData.length === 0) {
 			alert("Немає даних для експорту");
@@ -1848,6 +2195,7 @@ const InvoicesPage = ({
 		link.setAttribute("download", `Залишки_складу_${new Date().toLocaleDateString()}.csv`);
 		link.click();
 	};
+
 
 	return (
 		<div className={classes.wrapper}>
@@ -1880,7 +2228,11 @@ const InvoicesPage = ({
 				{isAdminInvoices && (
 					<div className={classes.selectWrapper}>
 						<label className={classes.label}>👤 Виберіть отримувача:</label>
-						<select className={classes.select} value={selectedUser} onChange={e => { setSelectedUser(e.target.value); window.localStorage.setItem('idSelectedCustomer', e.target.value); }}>
+						<select
+							className={classes.select}
+							value={selectedUser}
+							onChange={handleCustomerChange}
+						>
 							<option value="">--Choose customer--</option>
 							{customers.filter(c => (c.id === 7 || c.id > 127) && c.name !== "Шановний клієнт").map(c => (
 								<option key={c.id} value={c.id}>{c.name} ({c.email})</option>
@@ -1893,6 +2245,8 @@ const InvoicesPage = ({
 			{isAdminUsedMaterials && selectedUser && (
 				<>
 					<UsedMaterialsTable
+						key={selectedUser} // Коли змінюється ID користувача, компонент перемонтується і всі useState всередині нього скинуться в "" автоматично
+						inputRef={agreementInputRef} // Передаємо реф вниз
 						selectedUser={selectedUser}
 						customers={customers}
 						invoicesSummary={invoicesSummary}
@@ -1928,6 +2282,7 @@ const InvoicesPage = ({
 							</select>
 
 							<CrewInventoryReport
+								key={`${selectedUser}-${partnerUser}`} // Оновлюється при зміні будь-якого учасника
 								mainWorkerId={selectedUser}
 								partnerWorkerId={partnerUser}
 								stock={stock}

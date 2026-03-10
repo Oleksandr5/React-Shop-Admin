@@ -6,7 +6,7 @@ export const UPDATE_INVOICES_SUMMARY = "UPDATE_INVOICES_SUMMARY";
 export const SET_NOTIFICATIONS = "SET_NOTIFICATIONS";
 export const SET_USED_MATERIALS = "SET_USED_MATERIALS";
 export const ARCHIVE_DATA_SUCCESS = "ARCHIVE_DATA_SUCCESS";
-
+export const UPDATE_USED_MATERIAL_SUCCESS = "UPDATE_USED_MATERIAL_SUCCESS";
 
 // 2️⃣ Функції-екшени
 export function fetchInvoices(customerId) {
@@ -150,47 +150,119 @@ export function fetchUsedMaterials(customerId) {
 	};
 }
 
-export const addUsedMaterial = (customerId, productId, value = null, agreement = null, rollbackToValue = null) => async (dispatch) => {
+// export const addUsedMaterial = (customerId, productId, value = null, agreement = null, rollbackToValue = null) => async (dispatch) => {
+// 	try {
+// 		const dbRef = firebase.database().ref(`usedMaterials/${customerId}/${productId}`);
+// 		const historyRef = firebase.database().ref(`usedMaterialsHistory/${customerId}/${productId}`);
+
+// 		if (rollbackToValue !== null) {
+// 			// Логіка відкату (Rollback)
+// 			const snapshot = await historyRef.once("value");
+// 			const history = snapshot.val() || {};
+// 			const sortedHistory = Object.entries(history).sort((a, b) => a[1].createdAt - b[1].createdAt);
+
+// 			let newTotal = 0;
+// 			const updates = {};
+// 			for (const [id, h] of sortedHistory) {
+// 				if (newTotal + h.value <= rollbackToValue) {
+// 					newTotal += h.value;
+// 				} else {
+// 					updates[id] = null;
+// 				}
+// 			}
+// 			await historyRef.update(updates);
+// 			await dbRef.set(newTotal);
+// 		} else if (value) {
+// 			// Логіка додавання
+// 			const snapshot = await dbRef.once("value");
+// 			const currentValue = snapshot.val() || 0;
+// 			const newTotal = currentValue + Number(value);
+
+// 			await dbRef.set(newTotal);
+// 			await historyRef.push({
+// 				value: Number(value),
+// 				currentValue: newTotal,
+// 				createdAt: firebase.database.ServerValue.TIMESTAMP,
+// 				agreement
+// 			});
+// 		}
+
+// 		// Оновлюємо основний стейт через існуючий екшен
+// 		await dispatch(fetchUsedMaterials(customerId));
+// 	} catch (error) {
+// 		console.error("Error in addUsedMaterial:", error);
+// 	}
+// };
+
+export const addUsedMaterial = (customerId, productId, value = null, agreement = null, rollbackToValue = null, editId = null, comment = null) => async (dispatch) => {
 	try {
 		const dbRef = firebase.database().ref(`usedMaterials/${customerId}/${productId}`);
 		const historyRef = firebase.database().ref(`usedMaterialsHistory/${customerId}/${productId}`);
 
-		if (rollbackToValue !== null) {
-			// Логіка відкату (Rollback)
+		// --- ЛОГІКА ВІДКАТУ АБО РЕДАГУВАННЯ (Повний перерахунок) ---
+		if (rollbackToValue !== null || editId !== null) {
 			const snapshot = await historyRef.once("value");
 			const history = snapshot.val() || {};
-			const sortedHistory = Object.entries(history).sort((a, b) => a[1].createdAt - b[1].createdAt);
 
-			let newTotal = 0;
+			// Сортуємо історію за часом створення
+			const entries = Object.entries(history).sort((a, b) => a[1].createdAt - b[1].createdAt);
+
+			let runningTotal = 0;
 			const updates = {};
-			for (const [id, h] of sortedHistory) {
-				if (newTotal + h.value <= rollbackToValue) {
-					newTotal += h.value;
+
+			for (const [id, data] of entries) {
+				let itemValue = Number(data.value);
+
+				// Якщо ми редагуємо конкретний запис
+				if (id === editId) {
+					itemValue = Number(value);
+					updates[`${id}/value`] = itemValue;
+					if (agreement) updates[`${id}/agreement`] = agreement;
+					// Виправити: Додаємо оновлення коментаря при редагуванні існуючого запису
+					if (comment !== null) updates[`${id}/comment`] = comment;
+				}
+
+				// Логіка ВІДКАТУ (твоя стара логіка): видаляємо все, що перевищує ліміт
+				if (rollbackToValue !== null && (runningTotal + itemValue) > Number(rollbackToValue)) {
+					updates[id] = null; // Видаляємо запис
 				} else {
-					updates[id] = null;
+					// Оновлюємо накопичувальну суму (щоб історія була красивою)
+					runningTotal += itemValue;
+					updates[`${id}/currentValue`] = runningTotal;
 				}
 			}
-			await historyRef.update(updates);
-			await dbRef.set(newTotal);
-		} else if (value) {
-			// Логіка додавання
-			const snapshot = await dbRef.once("value");
-			const currentValue = snapshot.val() || 0;
-			const newTotal = currentValue + Number(value);
 
-			await dbRef.set(newTotal);
+			// Застосовуємо всі зміни в історії одним махом
+			await historyRef.update(updates);
+			// Оновлюємо головний лічильник
+			await dbRef.set(runningTotal);
+
+			// --- ЛОГІКА ДОДАВАННЯ (Нова, безпечна транзакція) ---
+		} else if (value !== null) {
+			const numericValue = Number(value);
+
+			// Транзакція гарантує, що якщо 2 майстри натиснуть "Додати" одночасно,
+			// дані не загубляться і не перезапишуться помилково.
+			const { snapshot } = await dbRef.transaction((current) => {
+				return (current || 0) + numericValue;
+			});
+
+			const newTotal = snapshot.val();
+
+			// Додаємо новий запис в історію
 			await historyRef.push({
-				value: Number(value),
+				value: numericValue,
 				currentValue: newTotal,
 				createdAt: firebase.database.ServerValue.TIMESTAMP,
-				agreement
+				agreement,
+				comment: comment || "" // Обов'язково записуємо коментар
 			});
 		}
 
-		// Оновлюємо основний стейт через існуючий екшен
+		// Оновлюємо Redux-стор
 		await dispatch(fetchUsedMaterials(customerId));
 	} catch (error) {
-		console.error("Error in addUsedMaterial:", error);
+		console.error("Помилка в addUsedMaterial:", error);
 	}
 };
 
@@ -267,3 +339,8 @@ export const archiveAllDataMonthly = () => {
 		}
 	};
 };
+
+export const updateUsedMaterialLocal = (workerId, productId, value) => ({
+	type: UPDATE_USED_MATERIAL_SUCCESS,
+	payload: { workerId, productId, value }
+});
