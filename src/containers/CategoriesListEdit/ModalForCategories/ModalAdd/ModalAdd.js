@@ -79,7 +79,7 @@ class ModalAdd extends Component {
 
 			return (
 				<Auxiliary key={controlName + index}>
-					{ <Input
+					{<Input
 						className={"w-100"}
 						value={control.value}
 						valid={control.valid}
@@ -91,15 +91,11 @@ class ModalAdd extends Component {
 					/>
 					}
 
-					{ index === 0 ? <hr /> : null}
+					{index === 0 ? <hr /> : null}
 				</Auxiliary>
 			)
 
 		})
-	}
-
-	componentDidMount() {
-
 	}
 
 	handleClose = () => {
@@ -173,10 +169,6 @@ class ModalAdd extends Component {
 				</Modal>
 			</React.Fragment>
 		)
-
-	}
-
-	componentDidMount() {
 
 	}
 

@@ -15,7 +15,9 @@ const CrewInventoryReport = ({
 	dynamicProductIds,
 	customers,
 	invoices,
-	invoicesSummary
+	invoicesSummary,
+	isVisible,
+	onToggle
 }) => {
 	const [combinedData, setCombinedData] = useState({ invoices: {}, used: {} });
 	const [realRemaining, setRealRemaining] = useState({});
@@ -523,6 +525,9 @@ const CrewInventoryReport = ({
 					<div className={classes.crewInfo}>
 						<strong>👷 Екіпаж:</strong> {crewNames || "Не обрано"}
 					</div>
+					<button className={classes.btnToggle} onClick={onToggle}>
+						{isVisible ? '▲ Згорнути таблицю звіту екіпажу' : '▼ Розгорнути таблицю звіт екіпажу'}
+					</button>
 				</div>
 
 				<div className={classes.topActions}>
@@ -562,146 +567,150 @@ const CrewInventoryReport = ({
 				</div>
 			</div>
 
-			<table className={`${classes.table} ${classes.reportTable}`}>
-				<thead>
-					<tr style={{ fontSize: '11px', backgroundColor: '#f1f4f9' }}>
-						<th>Товар</th>
-						<th>Залишок на початок місяця {!hasArchiveInDB && "(Введіть дані)"}</th>
-						<th>Взято</th>
-						<th>Списано</th>
-						<th>Порахований залишок</th>
-						<th>Фактичний залишок</th>
-						<th>Різниця</th>
-					</tr>
-				</thead>
-				<tbody>
-					{dynamicProductIds.map(pid => {
-						const product = stock?.find(s => s.id == pid);
+			{isVisible && (
+				<table className={`${classes.table} ${classes.reportTable}`}>
+					<thead>
+						<tr style={{ fontSize: '11px', backgroundColor: '#f1f4f9' }}>
+							<th>Товар</th>
+							<th>Залишок на початок місяця {!hasArchiveInDB && "(Введіть дані)"}</th>
+							<th>Взято</th>
+							<th>Списано</th>
+							<th>Порахований залишок</th>
+							<th>Фактичний залишок</th>
+							<th>Різниця</th>
+						</tr>
+					</thead>
+					<tbody>
+						{dynamicProductIds.map(pid => {
+							const product = stock?.find(s => s.id == pid);
 
-						const productId = pid;
-						const name = product?.name || `ID ${pid}`;
-						const isRowArchived = localArchivedRows[pid]; // перевірка зі стану
-						const valueInRedux = archiveHistory[pid] || 0; // поточне значення залишку
+							const productId = pid;
+							const name = product?.name || `ID ${pid}`;
+							const isRowArchived = localArchivedRows[pid]; // перевірка зі стану
+							const valueInRedux = archiveHistory[pid] || 0; // поточне значення залишку
 
-						const prev = Number(archiveHistory[pid] || 0);
-						const taken = Number(combinedData.invoices[pid] || 0);
-						const spent = Number(combinedData.used[pid] || 0);
-						const calc = prev + taken - spent;
-						const fact = Number(realRemaining[pid] || 0);
-						const diff = fact - calc;
+							const prev = Number(archiveHistory[pid] || 0);
+							const taken = Number(combinedData.invoices[pid] || 0);
+							const spent = Number(combinedData.used[pid] || 0);
+							const calc = prev + taken - spent;
+							const fact = Number(realRemaining[pid] || 0);
+							const diff = fact - calc;
 
-						return (
-							<tr key={pid}>
-								<td data-label="Товар" style={{ fontSize: '12px' }}>
-									{product?.name || `ID ${pid}`}
-								</td>
+							return (
+								<tr key={pid}>
+									<td data-label="Товар" style={{ fontSize: '12px' }}>
+										{product?.name || `ID ${pid}`}
+									</td>
 
-								<td data-label="Залишок на початок місяця" style={{ textAlign: 'center' }}>
-									{!hasArchiveInDB ? (
-										<div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-											<input
-												type="number"
-												value={archiveHistory[pid] || ''}
-												// 1. При фокусі встановлюємо, що цей рядок зараз редагується
-												onFocus={() => setEditingRow(pid)}
-												onChange={(e) => handleArchiveInputChange(pid, e.target.value)}
-												className={classes.inputSmall}
-												style={{
-													width: '50px',
-													border: editingRow === pid ? '1px solid #f39c12' : '1px solid #ccc',
-													outline: 'none'
-												}}
-											/>
+									<td data-label="Залишок на початок місяця" style={{ textAlign: 'center' }}>
+										{!hasArchiveInDB ? (
+											<div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+												<input
+													type="number"
+													value={archiveHistory[pid] || ''}
+													// 1. При фокусі встановлюємо, що цей рядок зараз редагується
+													onFocus={() => setEditingRow(pid)}
+													onChange={(e) => handleArchiveInputChange(pid, e.target.value)}
+													className={classes.inputSmall}
+													style={{
+														width: '50px',
+														border: editingRow === pid ? '1px solid #f39c12' : '1px solid #ccc',
+														outline: 'none'
+													}}
+												/>
 
-											{/* 2. Кнопка з'являється ТІЛЬКИ якщо:
+												{/* 2. Кнопка з'являється ТІЛЬКИ якщо:
                - ми клікнули в цей інпут (editingRow === pid)
                - і цей рядок ще не був успішно збережений (!localArchivedRows[pid])
             */}
-											{(editingRow === pid && !localArchivedRows[pid]) && (
+												{(editingRow === pid && !localArchivedRows[pid]) && (
+													<button
+														onClick={() => {
+															if (window.confirm(`Заархівувати поточне значення (${archiveHistory[pid] || 0}) для "${name}"?`)) {
+																saveRowToArchiveDB(pid, name, archiveHistory[pid] || 0);
+															}
+														}}
+														title="Зберегти лише цей рядок в архів"
+														style={{
+															background: '#f39c12',
+															color: '#fff',
+															border: 'none',
+															borderRadius: '4px',
+															padding: '4px 8px',
+															cursor: 'pointer',
+															fontSize: '12px',
+															marginLeft: '5px',
+															verticalAlign: 'middle'
+														}}
+													>
+														💾
+													</button>
+												)}
+											</div>
+										) : (
+											<span onClick={() => setHasArchiveInDB(false)} style={{ cursor: 'pointer' }}>
+												{prev}
+											</span>
+										)}
+									</td>
+									<td data-label="Взято" style={{ textAlign: 'center', color: 'green' }}>
+										+{taken}
+									</td>
+
+									<td data-label="Списано" style={{ textAlign: 'center', color: 'red' }}>
+										-{spent}
+									</td>
+
+									<td data-label="Порахований залишок" style={{ textAlign: 'center', fontWeight: 'bold' }}>
+										{calc}
+									</td>
+
+									<td data-label="Фактичний залишок" style={{ textAlign: 'center' }}>
+										<input
+											type="number"
+											value={realRemaining[pid] || ''}
+											onChange={async (e) => {
+												const val = e.target.value;
+												await firebase.database().ref(`remainingMaterials/${mainWorkerId}/${pid}`).set(Number(val));
+											}}
+											className={classes.inputSmall}
+											style={{ width: '50px', border: '1px solid #17a2b8' }}
+										/>
+									</td>
+
+									<td data-label="Різниця" style={{ textAlign: 'center', fontWeight: 'bold', color: diff > 0 ? 'red' : 'green' }}>
+										{diff === 0 ? '✓' : (
+											<div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '5px' }}>
+												<span>{diff > 0 ? `-${diff}` : `+${Math.abs(diff)}`}</span>
 												<button
 													onClick={() => {
-														if (window.confirm(`Заархівувати поточне значення (${archiveHistory[pid] || 0}) для "${name}"?`)) {
-															saveRowToArchiveDB(pid, name, archiveHistory[pid] || 0);
+														if (window.confirm("Синхронізувати лише цей рядок?")) {
+															handleSyncRow(pid);
 														}
 													}}
-													title="Зберегти лише цей рядок в архів"
+													title="Синхронізувати лише цей рядок"
 													style={{
-														background: '#f39c12',
-														color: '#fff',
-														border: 'none',
-														borderRadius: '4px',
-														padding: '4px 8px',
+														padding: '2px 5px',
+														fontSize: '10px',
 														cursor: 'pointer',
-														fontSize: '12px',
-														marginLeft: '5px',
-														verticalAlign: 'middle'
+														background: '#e9ecef',
+														border: '1px solid #ced4da',
+														borderRadius: '3px'
 													}}
 												>
-													💾
+													🔄
 												</button>
-											)}
-										</div>
-									) : (
-										<span onClick={() => setHasArchiveInDB(false)} style={{ cursor: 'pointer' }}>
-											{prev}
-										</span>
-									)}
-								</td>
-								<td data-label="Взято" style={{ textAlign: 'center', color: 'green' }}>
-									+{taken}
-								</td>
+											</div>
+										)}
+									</td>
+								</tr>
+							);
+						})}
+					</tbody>
+				</table>
+			)}
 
-								<td data-label="Списано" style={{ textAlign: 'center', color: 'red' }}>
-									-{spent}
-								</td>
 
-								<td data-label="Порахований залишок" style={{ textAlign: 'center', fontWeight: 'bold' }}>
-									{calc}
-								</td>
-
-								<td data-label="Фактичний залишок" style={{ textAlign: 'center' }}>
-									<input
-										type="number"
-										value={realRemaining[pid] || ''}
-										onChange={async (e) => {
-											const val = e.target.value;
-											await firebase.database().ref(`remainingMaterials/${mainWorkerId}/${pid}`).set(Number(val));
-										}}
-										className={classes.inputSmall}
-										style={{ width: '50px', border: '1px solid #17a2b8' }}
-									/>
-								</td>
-
-								<td data-label="Різниця" style={{ textAlign: 'center', fontWeight: 'bold', color: diff > 0 ? 'red' : 'green' }}>
-									{diff === 0 ? '✓' : (
-										<div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '5px' }}>
-											<span>{diff > 0 ? `-${diff}` : `+${Math.abs(diff)}`}</span>
-											<button
-												onClick={() => {
-													if (window.confirm("Синхронізувати лише цей рядок?")) {
-														handleSyncRow(pid);
-													}
-												}}
-												title="Синхронізувати лише цей рядок"
-												style={{
-													padding: '2px 5px',
-													fontSize: '10px',
-													cursor: 'pointer',
-													background: '#e9ecef',
-													border: '1px solid #ced4da',
-													borderRadius: '3px'
-												}}
-											>
-												🔄
-											</button>
-										</div>
-									)}
-								</td>
-							</tr>
-						);
-					})}
-				</tbody>
-			</table>
 		</div>
 	);
 };
@@ -722,7 +731,9 @@ const UsedMaterialsTable = ({
 	fetchUsedMaterialsHistory,
 	isAdminFullAccess,
 	dynamicProductIds, // ЗМІНА: тепер отримуємо це як пропс від батька
-	setDynamicProductIds
+	setDynamicProductIds,
+	isVisible,
+	onToggle
 }) => {
 	const [inputValues, setInputValues] = useState({});
 	const [agreementValues, setAgreementValues] = useState({});
@@ -1357,6 +1368,7 @@ const UsedMaterialsTable = ({
 		<div className={classes.usedMaterialsSection}>
 			<div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
 				<h3 className={classes.sectionTitle}>🛠 Використані матеріали</h3>
+
 				{/* Кнопка видима тільки якщо адмін має повний доступ */}
 				{isAdminFullAccess && (
 					<button
@@ -1369,6 +1381,9 @@ const UsedMaterialsTable = ({
 						{isEditingIds ? "✖ Закрити налаштування" : "⚙ Налаштувати список ID (productsForWorkOrders)"}
 					</button>
 				)}
+				<button className={classes.btnToggle} onClick={onToggle}>
+					{isVisible ? '▲ Згорнути таблицю Використані матеріали' : '▼ Розгорнути таблицю Використані матеріали'}
+				</button>
 			</div>
 
 			{isEditingIds && (
@@ -1506,59 +1521,64 @@ const UsedMaterialsTable = ({
 				</div>
 			</div>
 
-			<table className={classes.table}>
-				<thead>
-					<tr>
-						<th style={{ width: "35%", textAlign: "left" }}>Товар</th>
-						<th style={{ width: "15%", textAlign: "center" }}>Взято</th>
-						<th style={{ width: "50%", textAlign: "center" }}>Управління</th>
-					</tr>
-				</thead>
-				<tbody>
-					{fullMaterialsList.map((item) => {
-						const { productId, name, totalQuantity, units } = item;
-						const valueInRedux = usedMaterials?.[productId] ?? 0;
+			{isVisible && (
+				<table className={classes.table}>
+					<thead>
+						<tr>
+							<th style={{ width: "35%", textAlign: "left" }}>Товар</th>
+							<th style={{ width: "15%", textAlign: "center" }}>Взято</th>
+							<th style={{ width: "50%", textAlign: "center" }}>Управління</th>
+						</tr>
+					</thead>
+					<tbody>
+						{fullMaterialsList.map((item) => {
+							const { productId, name, totalQuantity, units } = item;
+							const valueInRedux = usedMaterials?.[productId] ?? 0;
 
-						return (
-							<tr key={productId}>
-								<td style={{ verticalAlign: "middle" }}>{name}</td>
-								<td style={{ textAlign: "center", fontWeight: "bold", color: "#555" }}>
-									{totalQuantity} {units}
-								</td>
-								<td style={{ verticalAlign: "middle" }}>
-									<div className={classes.usedWrapper} style={{ justifyContent: "center" }}>
-										<span className={classes.totalBadge}>{valueInRedux}</span>
-										<input
-											type="number"
-											value={inputValues[productId] ?? ""}
-											onChange={e => setInputValues(prev => ({ ...prev, [productId]: e.target.value }))}
-											className={classes.inputSmall}
-											placeholder="К-сть"
-										/>
-										<input
-											type="text"
-											placeholder={commonAgreement || "Угода №"}
-											value={agreementValues[productId] ?? ""}
-											onChange={e => setAgreementValues(prev => ({ ...prev, [productId]: e.target.value }))}
-											className={classes.inputAgreement}
-										/>
-										<input
-											type="text"
-											placeholder="Коментар..."
-											value={commentValues[productId] ?? ""}
-											onChange={e => setCommentValues(prev => ({ ...prev, [productId]: e.target.value }))}
-											className={classes.inputComment} // Додайте цей клас у CSS (наприклад, width: 120px)											
-										/>
-										<button className={classes.btnAdd} onClick={() => handleAddMaterial(productId)}>Додати</button>
-										<button className={classes.btnUndo} onClick={() => handleUndo(productId)}><span className="undoIcon">↩</span></button>
-										<button className={classes.btnHistory} onClick={() => handleHistory(productId)}>📜</button>
-									</div>
-								</td>
-							</tr>
-						);
-					})}
-				</tbody>
-			</table>
+							return (
+								<tr key={productId}>
+									<td style={{ verticalAlign: "middle" }}>{name}</td>
+									<td style={{ textAlign: "center", fontWeight: "bold", color: "#555" }}>
+										{totalQuantity} {units}
+									</td>
+									<td style={{ verticalAlign: "middle" }}>
+										<div className={classes.usedWrapper} style={{ justifyContent: "center" }}>
+											<span className={classes.totalBadge}>{valueInRedux}</span>
+											<input
+												type="number"
+												value={inputValues[productId] ?? ""}
+												onChange={e => setInputValues(prev => ({ ...prev, [productId]: e.target.value }))}
+												className={classes.inputSmall}
+												placeholder="К-сть"
+											/>
+											<input
+												type="text"
+												placeholder={commonAgreement || "Угода №"}
+												value={agreementValues[productId] ?? ""}
+												onChange={e => setAgreementValues(prev => ({ ...prev, [productId]: e.target.value }))}
+												className={classes.inputAgreement}
+											/>
+											<input
+												type="text"
+												placeholder="Коментар..."
+												value={commentValues[productId] ?? ""}
+												onChange={e => setCommentValues(prev => ({ ...prev, [productId]: e.target.value }))}
+												className={classes.inputComment} // Додайте цей клас у CSS (наприклад, width: 120px)											
+											/>
+											<button className={classes.btnAdd} onClick={() => handleAddMaterial(productId)}>Додати</button>
+											<button className={classes.btnUndo} onClick={() => handleUndo(productId)}><span className="undoIcon">↩</span></button>
+											<button className={classes.btnHistory} onClick={() => handleHistory(productId)}>📜</button>
+										</div>
+									</td>
+								</tr>
+							);
+						})}
+					</tbody>
+				</table>
+			)}
+
+
+
 			{/* МОДАЛКА ІСТОРІЇ */}
 			{historyModal.isOpen && (
 				<div style={{
@@ -1717,6 +1737,21 @@ const InvoicesPage = ({
 	customers, notifications, fetchOrderNotifications, deleteNotification, clearNotifications,
 	usedMaterials, fetchUsedMaterials, addUsedMaterial, archiveAllDataMonthly, stock
 }) => {
+
+	const [visibleTables, setVisibleTables] = useState({
+		orders: true,              // Таблиця "Активні сповіщення"
+		totalTakenProduct: true,   // Таблиця "Загальна кількість взятого товару"
+		remainingInStock: true,    // Таблиця "Залишок на складі"
+		usedMaterials: true,       // Таблиця в UsedMaterialsTable
+		crewReport: true           // Таблиця в CrewInventoryReport
+	});
+
+	const toggleTable = (tableName) => {
+		setVisibleTables(prev => ({
+			...prev,
+			[tableName]: !prev[tableName]
+		}));
+	};
 
 	const agreementInputRef = useRef(null);
 
@@ -2258,6 +2293,8 @@ const InvoicesPage = ({
 						isAdminFullAccess={isAdminFullAccess}
 						dynamicProductIds={dynamicProductIds}
 						setDynamicProductIds={setDynamicProductIds}
+						isVisible={visibleTables.usedMaterials}
+						onToggle={() => toggleTable('usedMaterials')}
 					/>
 
 					{/* Перевірка повного доступу для відображення звіту екіпажу */}
@@ -2290,6 +2327,8 @@ const InvoicesPage = ({
 								customers={customers}
 								invoices={invoices}
 								invoicesSummary={invoicesSummary}
+								isVisible={visibleTables.crewReport}
+								onToggle={() => toggleTable('crewReport')}
 							/>
 						</div>
 					)}
@@ -2431,35 +2470,68 @@ const InvoicesPage = ({
 							</button>
 						</div>
 
-						{/* Таблиця */}
-						<table
-							className={classes.table}
-							style={{ cursor: 'pointer' }}
-							onClick={(e) => {
-								e.stopPropagation();
-								handlePrintStock(stock);
-							}}
+						{/* Заголовок-кнопка для згортання */}
+						<h3
+							onClick={() => toggleTable('remainingInStock')}
+							className={classes.tableHeaderToggle}
 						>
-							<thead>
-								<tr>
-									<th>Товари</th>
-									<th className={classes.alignRight}>Кі-сть</th>
-								</tr>
-							</thead>
-							<tbody>
-								{stock?.filter(s => !!s.visibleproduct).map((s, index) => (
-									<tr key={s.id || index}>
-										<td>{s.name}</td>
-										<td className={classes.alignRight}>
-											{s.quantity} {s.units}
-										</td>
+							<span className={classes.headerTitle}>
+								📦 Залишок на складі {visibleTables.remainingInStock ? '▲' : '▼'}
+							</span>
+
+							<div className={classes.headerActions}>
+								<button
+									onClick={(e) => {
+										e.stopPropagation();
+										handlePrintStock(stock);
+									}}
+									className={classes.btnPrint}
+								>
+									🖨️ Друк
+								</button>
+
+								<button
+									onClick={(e) => {
+										e.stopPropagation();
+										handleExportStockToCSV(stock);
+									}}
+									className={`${classes.btnExport}`}
+								>
+									📥 Експорт Excel
+								</button>
+							</div>
+						</h3>
+
+						{visibleTables.remainingInStock && (
+							<table className={classes.table}>
+								<thead>
+									<tr>
+										<th>Товари</th>
+										<th className={classes.alignRight}>К-сть</th>
 									</tr>
-								))}
-								{stock?.filter(s => !!s.visibleproduct).length === 0 && (
-									<tr><td colSpan="2" style={{ textAlign: 'center' }}>Склад порожній</td></tr>
-								)}
-							</tbody>
-						</table>
+								</thead>
+								<tbody>
+									{/* Створюємо відфільтрований список один раз */}
+									{(() => {
+										const visibleStock = stock?.filter(s => !!s.visibleproduct) || [];
+
+										if (visibleStock.length === 0) {
+											return <tr><td colSpan="2" style={{ textAlign: 'center' }}>Склад порожній</td></tr>;
+										}
+
+										return visibleStock.map((s, index) => (
+											<tr key={s.id || index}>
+												<td>{s.name}</td>
+												<td className={classes.alignRight}>
+													{s.quantity} {s.units}
+												</td>
+											</tr>
+										));
+									})()}
+								</tbody>
+							</table>
+						)}
+
 					</>
 				)
 			}

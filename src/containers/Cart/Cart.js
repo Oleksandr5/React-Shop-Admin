@@ -426,14 +426,14 @@ class Cart extends Component {
 	//
 	//    }
 
-	totalPriceCart() {
+	// totalPriceCart() {
 
-		let priceAllProduct = [...document.querySelectorAll(`span[name = product_price_cart]`)]
+	// 	let priceAllProduct = [...document.querySelectorAll(`span[name = product_price_cart]`)]
 
-		const totalPrice = +(priceAllProduct.map(product => +product.innerText).reduce((sum, elem) => sum + elem, 0)).toFixed(1)
+	// 	const totalPrice = +(priceAllProduct.map(product => +product.innerText).reduce((sum, elem) => sum + elem, 0)).toFixed(1)
 
-		document.querySelector('#totalPrice').innerHTML = totalPrice
-	}
+	// 	document.querySelector('#totalPrice').innerHTML = totalPrice
+	// }
 
 
 	onBlurQuantity(obj) {
@@ -462,7 +462,7 @@ class Cart extends Component {
 		let thisPrice = +(+price * +quantity).toFixed(1)
 		document.querySelector(`p[id = product_price_${id}_cart]`).querySelector('span').innerHTML = thisPrice
 
-		this.totalPriceCart()
+		// this.totalPriceCart()
 
 		//
 

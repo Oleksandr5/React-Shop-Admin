@@ -471,3 +471,64 @@
         color: #155724;
     }
 }
+
+.tableHeaderToggle {
+    cursor: pointer;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap; /* Дозволяє кнопкам перестрибувати на новий рядок */
+    gap: 10px;
+    padding: 10px;
+    background: #f8f9fa;
+    border-radius: 4px;
+    margin-bottom: 10px;
+}
+
+.headerTitle {
+    font-size: 1.2rem;
+    flex: 1; /* Займає вільний простір зліва */
+    min-width: 200px;
+}
+
+.headerActions {
+    display: flex;
+    gap: 10px;
+}
+
+/* Кнопка експорту (зелена, як ви просили) */
+.btnExport, .btnPrint {
+    background: #28a745 !important;
+    color: white;
+    border: none;
+    height: 32px;
+    font-size: 12px;
+    padding: 0 12px;
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+/* МОБІЛЬНА ВЕРСІЯ (Екрани менше 600px) */
+@media (max-width: 768px) {
+    .tableHeaderToggle {
+        flex-direction: column; /* Заголовок зверху, кнопки знизу */
+        align-items: stretch;  /* Розтягуємо все на всю ширину */
+    }
+
+    .headerActions {
+        flex-direction: column; /* Кнопки одна під одною */
+        width: 100%;
+    }
+
+    .headerActions button {
+        width: 100%;       /* Кнопки на всю ширину */
+        height: 40px;      /* Трохи збільшимо для зручності натискання пальцем */
+        margin-top: 5px;
+        font-size: 14px;
+    }
+
+    .headerTitle {
+        text-align: center;
+        margin-bottom: 10px;
+    }
+}

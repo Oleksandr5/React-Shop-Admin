@@ -1722,6 +1722,166 @@ export const removeOrderHistoryIds = async (db) => {
 	}
 };
 
+// export function addProductWithCartToOrdersHistory(obj) {
+// 	return async (dispatch, getState) => {
+
+// 		const db = firebase.database()
+// 		let { customerId } = obj
+// 		const { email, productComments, orderComment } = obj
+
+// 		const customersState = [...getState().inform.customers]
+// 		const responseOrders = await axios.get(`orders.json`)
+// 		const ordersState = responseOrders.data ? responseOrders.data : []
+
+// 		// find indexOrders in the database orders
+// 		let { indexOrders, ordersThis } = getThisOrder(ordersState, customerId)
+
+// 		console.log('addProductWithCartToOrdersHistory_ordersThis_cart', ordersThis.cart)
+
+// 		// add price in ordersThis.cart`````````````````
+
+// 		const responseProducts = await axios.get(`products.json`)
+// 		const productsData = responseProducts.data
+
+// 		let counterIdInOrdersThisCart = 0
+// 		const arrPropsIsQuantityInDB = []
+
+// 		for (let i = 0; i < productsData.length; i++) {
+
+// 			if (counterIdInOrdersThisCart >= ordersThis.cart.length) {
+// 				console.log('The cycle ended with an iteration:', i)
+// 				break;
+// 			}
+
+// 			ordersThis.cart.forEach((cart, index) => {
+
+// 				if (productsData[i].id === cart.id) {
+
+// 					ordersThis.cart[index].price = priceIncludedPromotion2(productsData[i].price, productsData[i].promotion)
+
+// 					if (productComments && productComments[cart.id]) {
+// 						ordersThis.cart[index].comment = productComments[cart.id]
+// 					}
+
+// 					counterIdInOrdersThisCart++
+// 				}
+
+// 			})
+// 		}
+
+// 		console.log('addProductWithCartToOrdersHistory_ordersThisCart', ordersThis.cart)
+
+// 		// add price in ordersThis.cart..............
+
+// 		// check if there is a customer in the database customers
+// 		const customerInBase = customersState.filter(customer => customer.email === email)[0]
+
+// 		const idThisCustomerInBase = customerInBase ? customerInBase.id : null
+
+// 		if (idThisCustomerInBase) {
+// 			customerId = idThisCustomerInBase
+// 		}
+
+// 		const responseOrdersHistory = await axios.get(`ordersHistory.json`)
+// 		const ordersHistoryData = responseOrdersHistory.data ? responseOrdersHistory.data : []
+
+// 		let orders
+
+// 		let time = getDate()
+
+// 		const orderHistoryId = await addOrderHistoryId(db);
+
+// 		const newCartHistoryItem = {
+// 			orderHistoryId,
+// 			cart: ordersThis.cart,
+// 			date: time,
+// 			status: 'in process...',
+// 			customerId,
+// 			checked: false,
+// 			orderComment: orderComment || '' // Зберігаємо загальний коментар
+// 		}
+
+// 		if (ordersHistoryData[0]) {
+
+// 			// find indexOrders in the database ordersHistory
+// 			let { indexOrders: indexOrdersHistory, ordersThis: ordersHistoryThis } = getThisOrder(ordersHistoryData, idThisCustomerInBase)
+
+// 			if (ordersHistoryThis) {
+
+// 				orders = { ...ordersHistoryThis }
+// 				orders.cartsHistory.push(newCartHistoryItem)
+
+// 			} else {
+// 				orders = { customerId, cartsHistory: [newCartHistoryItem], checked: false }
+// 			}
+
+// 			ordersHistoryData[indexOrdersHistory] = orders
+
+// 			dispatch(updateOrdersHistory(ordersHistoryData))
+
+// 			try {
+// 				//            await axios.post(`orders/${customerId}`, this.state.orders)
+
+// 				db.ref(`ordersHistory/${indexOrdersHistory}`).set(orders)
+
+// 			} catch (e) {
+// 				console.log(e)
+// 			}
+
+
+
+// 		} else {
+// 			orders = { customerId, cartsHistory: [newCartHistoryItem], checked: false }
+
+// 			ordersHistoryData[0] = orders
+
+// 			dispatch(updateOrdersHistory(ordersHistoryData))
+
+// 			try {
+// 				//            await axios.post(`orders/${customerId}`, this.state.orders)
+
+// 				db.ref(`ordersHistory/0`).set(orders)
+
+// 			} catch (e) {
+// 				console.log(e)
+// 			}
+
+
+// 		}
+
+// 		//        const responseOrders = await axios.get(`orders.json`)
+// 		//
+// 		//        const ordersState = responseOrders.data  
+
+// 		ordersState.splice(indexOrders, 1)
+
+// 		dispatch(updateOrders(ordersState))
+
+// 		try {
+// 			//            await axios.post(`orders/${customerId}`, this.state.orders)
+
+// 			db.ref(`orders`).set(ordersState)
+
+// 		} catch (e) {
+// 			console.log(e)
+// 		}
+
+// 		dispatch(updateIsOrdersThisCart(false))
+
+// 		// try {
+
+// 		// 	db.ref(`requestProducts`).set(false)
+
+// 		// 	console.log('sended_your_order!!!')
+// 		// 	console.log('requestProducts_false')
+
+// 		// } catch (e) {
+// 		// 	console.log(e)
+// 		// }
+
+// 	}
+// }
+
 export function addProductWithCartToOrdersHistory(obj) {
 	return async (dispatch, getState) => {
 
@@ -1731,7 +1891,9 @@ export function addProductWithCartToOrdersHistory(obj) {
 
 		const customersState = [...getState().inform.customers]
 		const responseOrders = await axios.get(`orders.json`)
-		const ordersState = responseOrders.data ? responseOrders.data : []
+		/* Коментар: Перетворюємо дані в масив і видаляємо null-прогалини, щоб індекси були правильними */
+		const rawOrders = responseOrders.data ? responseOrders.data : []
+		const ordersState = (Array.isArray(rawOrders) ? rawOrders : Object.values(rawOrders)).filter(Boolean)
 
 		// find indexOrders in the database orders
 		let { indexOrders, ordersThis } = getThisOrder(ordersState, customerId)
@@ -1853,15 +2015,16 @@ export function addProductWithCartToOrdersHistory(obj) {
 		//
 		//        const ordersState = responseOrders.data  
 
+		/* Коментар: Використовуємо очищений масив для видалення */
 		ordersState.splice(indexOrders, 1)
 
+		/* Коментар: Якщо масив став порожнім, записуємо null в Firebase, щоб повністю очистити вузол і уникнути перетворення в об'єкт */
+		const finalOrdersToSet = ordersState.length > 0 ? ordersState : null
+
 		dispatch(updateOrders(ordersState))
-
 		try {
-			//            await axios.post(`orders/${customerId}`, this.state.orders)
-
-			db.ref(`orders`).set(ordersState)
-
+			/* Коментар: Записуємо або оновлений масив, або null (видалення вузла) */
+			await db.ref(`orders`).set(finalOrdersToSet)
 		} catch (e) {
 			console.log(e)
 		}
@@ -1882,6 +2045,122 @@ export function addProductWithCartToOrdersHistory(obj) {
 	}
 }
 
+// export function addProductToInvoiceStock(obj) {
+// 	return async (dispatch, getState) => {
+// 		const db = firebase.database();
+// 		const { customerId } = obj;
+
+// 		try {
+
+// 			dispatch(fetchProductsDataStart())
+// 			// 1. Отримуємо активні кошики
+// 			const responseOrders = await axios.get(`orders.json`);
+// 			const ordersState = responseOrders.data ? responseOrders.data : [];
+
+// 			// Знаходимо кошик саме цього адміна
+// 			const { indexOrders, ordersThis } = getThisOrder(ordersState, customerId);
+
+// 			console.log('addProductToInvoiceStock_ordersThis_cart', ordersThis.cart)
+
+// 			if (!ordersThis) {
+// 				console.error("Кошик не знайдено");
+// 				dispatch(fetchProductsDataError("Кошик не знайдено")); // Зупиняємо лоадер
+// 				return;
+// 			}
+
+// 			// 2. Актуалізуємо ціни перед поповненням складу
+// 			const responseProducts = await axios.get(`products.json`);
+// 			const productsData = responseProducts.data;
+
+// 			ordersThis.cart.forEach((cartItem, index) => {
+// 				const product = productsData.find(p => p.id === cartItem.id);
+// 				if (product) {
+// 					ordersThis.cart[index].price = priceIncludedPromotion2(product.price, product.promotion);
+// 				}
+// 			});
+
+// 			// 3. Отримуємо історію поповнень складу
+// 			const responseStock = await axios.get(`invoiceStock.json`);
+// 			// Перетворюємо в масив, якщо Firebase повернув об'єкт
+// 			let stockData = responseStock.data ? (Array.isArray(responseStock.data) ? responseStock.data : Object.values(responseStock.data)) : [];
+
+// 			let time = getDate();
+// 			// ВИКЛИКАЄМО ВАШУ НОВУ ФУНКЦІЮ ID
+// 			const invoiceStockId = await addInvoiceStockId();
+
+// 			// Шукаємо, чи є вже записи для цього customerId в історії складу
+// 			let { indexOrders: indexStock, ordersThis: stockThis } = getThisOrder(stockData, customerId);
+
+// 			let updatedStockEntry;
+
+// 			if (stockThis) {
+// 				updatedStockEntry = { ...stockThis };
+// 				updatedStockEntry.cartsHistory.push({
+// 					invoiceStockId, // Використовуємо новий ID
+// 					cart: ordersThis.cart,
+// 					orderComment: ordersThis.orderComment || ordersThis.comment || '',
+// 					date: time,
+// 					status: 'in process...',
+// 					customerId
+// 				});
+// 				stockData[indexStock] = updatedStockEntry;
+// 			} else {
+// 				updatedStockEntry = {
+// 					customerId,
+// 					cartsHistory: [{
+// 						invoiceStockId,
+// 						cart: ordersThis.cart,
+// 						orderComment: ordersThis.orderComment || ordersThis.comment || '', // ДОДАТИ ТУТ
+// 						date: time,
+// 						status: 'in process...',
+// 						customerId
+// 					}]
+// 				};
+// 				stockData.push(updatedStockEntry);
+// 				indexStock = stockData.length - 1;
+// 			}
+
+// 			// 4. ЗБЕРЕЖЕННЯ В БАЗУ ТА ОНОВЛЕННЯ REDUX
+// 			await db.ref(`invoiceStock/${indexStock}`).set(updatedStockEntry);
+
+// 			// Відправляємо в редюсер (переконайтеся, що UPDATE_INVOICE_STOCK імпортована)
+// 			dispatch({
+// 				type: UPDATE_INVOICE_STOCK,
+// 				payload: stockData
+// 			});
+
+// 			// 5. ВИДАЛЯЄМО активний кошик
+// 			ordersState.splice(indexOrders, 1);
+// 			await db.ref(`orders`).set(ordersState);
+
+// 			// Оновлюємо список активних кошиків у Redux
+// 			// ДОДАЙТЕ ПЕРЕВІРКУ: якщо ordersState порожній, передайте порожній масив []
+// 			dispatch(updateOrders(ordersState || []));
+
+// 			// Скидаємо статус активного кошика
+// 			// ТУТ ПОМИЛКА В СИНТАКСИСІ: ви передаєте об'єкт {status: false}, 
+// 			// а ваші інші функції передають просто false.
+// 			dispatch(updateIsOrdersThisCart(false));
+
+// 			// 🔥 ДОДАЙТЕ ЦЕ: Явний сигнал, що всі процеси завершені успішно
+// 			// Це скине loading у false через FETCH_PRODUCTS_DATA_SUCCESS
+// 			dispatch(fetchProductsDataSuccess(
+// 				getState().products.categories,
+// 				getState().products.products,
+// 				getState().products.productsDeleted,
+// 				ordersState, // нові замовлення
+// 				getState().products.ordersHistory,
+// 				stockData // нові дані складу
+// 			));
+
+// 		} catch (e) {
+// 			console.error("Помилка при поповненні складу:", e);
+// 			// ОБОВ'ЯЗКОВО додайте виклик екшену помилки, щоб лоадер зник
+// 			dispatch(fetchProductsDataError(e));
+// 		}
+// 	}
+// }
+
 export function addProductToInvoiceStock(obj) {
 	return async (dispatch, getState) => {
 		const db = firebase.database();
@@ -1892,7 +2171,9 @@ export function addProductToInvoiceStock(obj) {
 			dispatch(fetchProductsDataStart())
 			// 1. Отримуємо активні кошики
 			const responseOrders = await axios.get(`orders.json`);
-			const ordersState = responseOrders.data ? responseOrders.data : [];
+			/* Коментар: Захист від перетворення масиву в об'єкт та видалення "дірок" */
+			const rawOrders = responseOrders.data ? responseOrders.data : [];
+			const ordersState = (Array.isArray(rawOrders) ? rawOrders : Object.values(rawOrders)).filter(Boolean);
 
 			// Знаходимо кошик саме цього адміна
 			const { indexOrders, ordersThis } = getThisOrder(ordersState, customerId);
@@ -1968,11 +2249,12 @@ export function addProductToInvoiceStock(obj) {
 
 			// 5. ВИДАЛЯЄМО активний кошик
 			ordersState.splice(indexOrders, 1);
-			await db.ref(`orders`).set(ordersState);
+			/* Коментар: Перевірка на пустий масив перед записом, щоб не створювати порожніх вузлів у Firebase */
+			const finalOrdersToSet = ordersState.length > 0 ? ordersState : null;
+			await db.ref(`orders`).set(finalOrdersToSet);
 
 			// Оновлюємо список активних кошиків у Redux
-			// ДОДАЙТЕ ПЕРЕВІРКУ: якщо ordersState порожній, передайте порожній масив []
-			dispatch(updateOrders(ordersState || []));
+			dispatch(updateOrders(ordersState));
 
 			// Скидаємо статус активного кошика
 			// ТУТ ПОМИЛКА В СИНТАКСИСІ: ви передаєте об'єкт {status: false}, 

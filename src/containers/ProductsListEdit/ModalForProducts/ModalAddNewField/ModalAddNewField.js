@@ -124,7 +124,7 @@ class ModalAddNewField extends Component {
 						/>
 					}
 
-					{ index === 0 ? <hr /> : null}
+					{index === 0 ? <hr /> : null}
 				</Auxiliary>
 			)
 
@@ -159,11 +159,6 @@ class ModalAddNewField extends Component {
 		})
 
 		return thisTypeValOptions
-
-	}
-
-
-	componentDidMount() {
 
 	}
 
@@ -227,10 +222,6 @@ class ModalAddNewField extends Component {
 				</Modal>
 			</React.Fragment>
 		)
-
-	}
-
-	componentDidMount() {
 
 	}
 
