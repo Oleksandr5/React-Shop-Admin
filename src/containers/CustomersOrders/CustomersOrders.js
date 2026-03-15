@@ -249,7 +249,7 @@ class CustomersOrders extends Component {
 			this.props.loading
 
 				? <Loader />
-				: this.props.orders[0]
+				: this.props.ordersHistory?.length > 0
 					?
 					<div className={`wrapper ${classes.CustomersOrders}`} >
 
