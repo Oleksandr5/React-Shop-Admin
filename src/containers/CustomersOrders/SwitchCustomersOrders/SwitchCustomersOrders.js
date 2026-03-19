@@ -18,9 +18,19 @@ class SwitchCustomersOrders extends Component {
 
 				const thisCustomer = this.props.customers.find(customer => customer.id === orders.customerId)
 
-				// Робимо копію через [...], щоб не поламати оригінальний список в Redux
-				const statusInProcess = [...orders.cartsHistory].reverse().find(order => order.status === "in process...")
-				const dateLastOrdersInProcess = statusInProcess ? statusInProcess.date : null
+				// ПЕРЕВІРКА: додаємо захист від undefined/null через оператор ?. або || []
+				const statusInProcess = orders.cartsHistory
+					? [...orders.cartsHistory].reverse().find(order => order.status === "in process...")
+					: null;
+
+				// НОВА ПЕРЕВІРКА: тут у вас вже є захист, це добре
+				const returnInProcess = orders.stockHistory
+					? [...orders.stockHistory].reverse().find(ret => ret.status === "in process...")
+					: null;
+
+				// Визначаємо спільний статус для відображення дати та напису
+				const activeAction = statusInProcess || returnInProcess
+				const dateDisplay = statusInProcess ? statusInProcess.date : (returnInProcess ? returnInProcess.date : null)
 
 				return (
 					<li
@@ -28,18 +38,18 @@ class SwitchCustomersOrders extends Component {
 						className={"d-flex flex-column flex-md-row justify-content-center justify-content-md-between align-items-end mr-3 border-top border-bottom"}
 						id={`li_customer_orders_${orders.customerId}`}
 					>
-						{/* Повернув text-dunger, як було у вашому початковому коді */}
 						<NavLink to={`/customers-orders/${orders.customerId}`} className={`text-dunger ${classes.navLinkOrders}`} >
 							<p>
 								Замовлення користувача
-								<span className="text-info">{thisCustomer?.name || 'Невідомий клієнт'}</span>
+								<span className="text-info"> {thisCustomer?.name || 'Невідомий клієнт'}</span>
 								під id = <span className="text-info">{orders.customerId}</span>
 								<span className="d-block"></span>
-								Статус: {statusInProcess ?
+								Статус: {activeAction ?
 									<span>
 										<span className="text-danger">in process...</span>
 										<span className="d-block"></span>
-										date: <span className="text-dark">{`${dateLastOrdersInProcess} 2`}</span>
+										{/* Зберігаємо ваш формат з "2" в кінці дати */}
+										date: <span className="text-dark">{`${dateDisplay} 2`}</span>
 									</span>
 									: <span className="text-success">completed</span>}
 							</p>

@@ -151,11 +151,165 @@ class Cart extends Component {
 		}, 500);
 	}
 
+	// sendOrders(obj) {
+
+	// 	this.setState({
+	// 		disabledBtnSend: true,
+	// 		orderType: 'order' // <--- ДОДАЄМО ЦЕЙ РЯДОК
+	// 	})
+
+	// 	const { hasAccount, event, idThisCustomers } = obj
+
+	// 	event.preventDefault()
+
+	// 	let randomTime = Math.random() * 1000
+
+	// 	console.log('randomTime', +(randomTime / 1000).toFixed(1))
+
+	// 	// successfulInfo ```````
+	// 	let successfulOrder = document.getElementById('blockInfo')
+
+	// 	let successfulInfo = `Обробка даних...`
+
+	// 	let successfulOrder_Info = document.getElementById('blockInfo').querySelector('p.text-info')
+
+	// 	successfulOrder_Info.innerHTML = successfulInfo
+	// 	successfulOrder_Info.classList.add("font-weight-bold")
+	// 	successfulOrder.classList.remove("d-none")
+
+	// 	// successfulInfo .........   
+
+	// 	setTimeout(async () => {
+
+	// 		let emailAccount
+
+	// 		if (!hasAccount) {
+
+	// 			let { name, tel, email } = this.state
+
+	// 			if (window.localStorage.getItem('idThisCustomers')) {
+	// 				this.props.customers.forEach(customer => {
+	// 					if (customer.id === +window.localStorage.getItem('idThisCustomers')) {
+	// 						name = customer.name
+	// 						tel = customer.tel
+	// 						email = customer.email
+	// 					}
+	// 				})
+	// 			}
+
+	// 			emailAccount = email
+
+	// 			const thisCustomerEmailInBase = this.props.customers.filter(customer => customer.email === emailAccount)[0]
+
+	// 			const isThisCustomerEmailInBase = thisCustomerEmailInBase ? true : false
+
+	// 			if (!isThisCustomerEmailInBase) {
+	// 				this.props.addNewCustomer({ email, name, tel, hasAccount, auth: false })
+	// 			} else {
+	// 				const auth = thisCustomerEmailInBase.auth
+
+	// 				if (auth) {
+
+	// 					let errorAuthInfo = `Вибачте, під цим емейлом вже зареєстрований користувач, авторизуйтеся або введіть інший емейл!!!`
+
+	// 					successfulOrder_Info.innerHTML = errorAuthInfo
+	// 					successfulOrder_Info.classList.add("text-danger")
+
+	// 					this.props.errorFunctionCart()
+
+	// 					return
+
+	// 				} else {
+	// 					this.props.addNewCustomer({ email, name, tel, hasAccount, auth: false })
+	// 				}
+
+	// 			}
+
+	// 		} else {
+	// 			emailAccount = this.props.customers.filter(customer => customer.id === this.props.customerId)[0].email
+	// 		}
+
+	// 		try {
+
+	// 			console.log('sending_your_order...')
+
+	// 			// отримуємо поточні замовлення
+	// 			let orders = []
+	// 			try {
+	// 				const responseOrders = await axios.get(`orders.json`)
+	// 				orders = responseOrders.data ?? []
+	// 			} catch (err) {
+	// 				console.error('Помилка отримання orders:', err)
+	// 			}
+
+	// 			let { ordersThis } = this.getThisOrder(orders, idThisCustomers)
+	// 			const arrThisCart = ordersThis.cart
+
+	// 			// Додаємо замовлення до історії (без змін у products)
+	// 			this.props.addProductWithCartToOrdersHistory({
+	// 				customerId: this.props.customerId,
+	// 				email: emailAccount,
+	// 				productComments: this.state.productComments, // передаємо об'єкт з коментарями до товарів
+	// 				orderComment: this.state.orderComment        // передаємо загальний коментар
+	// 			})
+
+	// 			// очищення кошика
+	// 			const formControls = Object.assign({ ...this.state.formControls })
+
+	// 			Object.keys(formControls).forEach(name => {
+	// 				formControls[name].value = ''
+	// 				formControls[name].valid = false
+	// 				formControls[name].touched = false
+	// 			})
+
+	// 			// 4. Оновлюємо інтерфейс через DOM (повідомлення про успіх)
+	// 			const blockInfo = document.getElementById('blockInfo')
+	// 			if (blockInfo) {
+	// 				const infoParagraph = blockInfo.querySelector('p.text-info')
+	// 				const errorInfo = blockInfo.querySelector('.errorInfo')
+	// 				const successInfo = blockInfo.querySelector('.successInfo')
+
+	// 				if (infoParagraph) {
+	// 					infoParagraph.classList.remove("font-weight-bold", "text-danger")
+	// 					infoParagraph.innerHTML = `Замовлення відправлене, ми з Вами зв'яжемося найближчим часом! Щоб відслідковувати свої замовлення перейдіть у "Ваші оформлені замовлення!" ↓`
+	// 				}
+
+	// 				blockInfo.classList.remove("d-none")
+	// 				if (errorInfo) errorInfo.classList.add("d-none")
+	// 				if (successInfo) successInfo.classList.remove("d-none")
+	// 			}
+	// 			// Після успішної відправки:
+	// 			this.setState({
+	// 				successfulOrder: true,
+	// 				isOrdersThisCart: false,
+	// 				orderComment: '',      // Очищаємо загальний коментар
+	// 				productComments: {},   // Очищаємо коментарі до товарів
+	// 				formControls,          // Очищаємо форму (ви це вже робите вище)
+	// 				email: ""
+	// 			})
+
+	// 		} catch (e) {
+
+	// 			console.log('Помилка замовлення:', e);
+
+	// 		} finally {
+
+	// 			// 🔓 завжди розблоковуємо кнопку
+	// 			this.setState({ disabledBtnSend: false });
+
+	// 		}
+
+	// 	}, randomTime)
+
+	// }
+
 	sendOrders(obj) {
 
+		/* Коментар: Визначаємо поточний тип операції зі стану, щоб передати його в екшен */
+		const currentOrderType = this.state.orderType;
+
 		this.setState({
-			disabledBtnSend: true,
-			orderType: 'order' // <--- ДОДАЄМО ЦЕЙ РЯДОК
+			disabledBtnSend: true // /* Коментар: Видаляємо жорстке встановлення 'order', щоб зберегти 'return', якщо натиснуто кнопку повернення */
 		})
 
 		const { hasAccount, event, idThisCustomers } = obj
@@ -215,6 +369,12 @@ class Cart extends Component {
 						successfulOrder_Info.innerHTML = errorAuthInfo
 						successfulOrder_Info.classList.add("text-danger")
 
+						// Порада: додайте сюди приховування іконки успіху, якщо вона була відкрита раніше
+						const successInfo = document.getElementById('blockInfo').querySelector('.successInfo')
+						const errorInfo = document.getElementById('blockInfo').querySelector('.errorInfo')
+						if (successInfo) successInfo.classList.add("d-none")
+						if (errorInfo) errorInfo.classList.remove("d-none")
+
 						this.props.errorFunctionCart()
 
 						return
@@ -250,7 +410,9 @@ class Cart extends Component {
 					customerId: this.props.customerId,
 					email: emailAccount,
 					productComments: this.state.productComments, // передаємо об'єкт з коментарями до товарів
-					orderComment: this.state.orderComment        // передаємо загальний коментар
+					orderComment: this.state.orderComment, // передаємо загальний коментар
+					/* Коментар: Передаємо тип операції в екшен */
+					orderType: currentOrderType
 				})
 
 				// очищення кошика
@@ -271,14 +433,19 @@ class Cart extends Component {
 
 					if (infoParagraph) {
 						infoParagraph.classList.remove("font-weight-bold", "text-danger")
-						infoParagraph.innerHTML = `Замовлення відправлене, ми з Вами зв'яжемося найближчим часом! Щоб відслідковувати свої замовлення перейдіть у "Ваші оформлені замовлення!" ↓`
+
+						/* Коментар: Динамічно змінюємо текст залежно від того, чи це звичайне замовлення, чи повернення */
+						infoParagraph.innerHTML = currentOrderType === 'return'
+							? `Повернення оформлене! Щоб відслідковувати статус, перейдіть у "Ваші повернення на склад!" ↓`
+							: `Замовлення відправлене, ми з Вами зв'яжемося найближчим часом! Щоб відслідковувати свої замовлення перейдіть у "Ваші оформлені замовлення!" ↓`
 					}
 
+					// Коментар: Показуємо блок з інфою та керуємо видимістю іконок успіху/помилки
 					blockInfo.classList.remove("d-none")
 					if (errorInfo) errorInfo.classList.add("d-none")
 					if (successInfo) successInfo.classList.remove("d-none")
 				}
-				// Після успішної відправки:
+				// Коментар: Після успішної відправки очищаємо стан компонента
 				this.setState({
 					successfulOrder: true,
 					isOrdersThisCart: false,
@@ -302,8 +469,6 @@ class Cart extends Component {
 		}, randomTime)
 
 	}
-
-
 
 	submitHandler = event => {
 		event.preventDefault()
@@ -917,8 +1082,10 @@ class Cart extends Component {
 													type="submit"
 													className="btn btn-success"
 													disabled={this.state.disabledBtnSend}
-													// Додаємо тип 'order' при натисканні
-													onClick={() => this.setState({ orderType: 'order' })}
+													// Використовуємо колбек, щоб гарантувати оновлення стану перед відправкою
+													onClick={() => {
+														this.setState({ orderType: 'order' });
+													}}
 												>
 													Оформити замовлення
 												</Button>
@@ -931,12 +1098,13 @@ class Cart extends Component {
 														className="btn btn-success"
 														disabled={this.state.disabledBtnSend}
 														onClick={(event) => {
-															// Встановлюємо тип 'stock'
-															this.setState({ orderType: 'stock' });
-															this.addProductToStock({
-																hasAccount: this.props.hasAccount,
-																event,
-																idThisCustomers
+															// Спочатку ставимо тип 'stock', а в колбеку викликаємо функцію
+															this.setState({ orderType: 'stock' }, () => {
+																this.addProductToStock({
+																	hasAccount: this.props.hasAccount,
+																	event,
+																	idThisCustomers
+																});
 															});
 														}}
 													>
@@ -944,13 +1112,36 @@ class Cart extends Component {
 													</Button>
 												</div>
 											)}
+											{/* Блок Повернення — Бачать УСІ (і адмін, і користувач) */}
+											<div className="d-flex flex-column flex-sm-row justify-content-between align-items-center py-2">
+
+												<p className="mr-sm-3 font-weight-bold">Кількість позицій: {this.calculationTotalQuantityOfInvoiceItems()} шт</p>
+
+												<Button
+													type="button"
+													className="btn btn-warning"
+													disabled={this.state.disabledBtnSend}
+													onClick={(event) => {
+														const isConfirmed = window.confirm("Чи Ви справді хочете зробити повернення?");
+														if (isConfirmed) {
+															// Спочатку ставимо тип, потім викликаємо функцію
+															this.setState({ orderType: 'return' }, () => {
+																this.sendOrders({ hasAccount: this.props.hasAccount, event, idThisCustomers });
+															});
+														}
+													}}
+												>
+													Повернення на склад
+												</Button>
+											</div>
 										</div>
 
 										:
 
 										// --- БЛОК ПІСЛЯ ВІДПРАВКИ (Кошик порожній) ---
-										<div className="d-flex justify-content-center align-items-center py-2">
+										<div className="d-flex justify-content-center align-items-center py-2 flex-column">
 
+											{/* Варіант 1: Звичайне замовлення */}
 											{/* Показуємо "Замовлення", якщо натиснули першу кнопку */}
 											{this.state.orderType === 'order' && (
 												<NavLink to={'/your-orders'} className={`btn btn-success d-block mb-3 ${classes.btnBack}`} onClick={this.handleClose}>
@@ -958,10 +1149,18 @@ class Cart extends Component {
 												</NavLink>
 											)}
 
+											{/* Варіант 2: Поповнення складу (Адмін) */}
 											{/* Показуємо "Склад", якщо натиснули другу кнопку */}
 											{this.state.orderType === 'stock' && (
 												<NavLink to={'/invoice-stock'} className={`btn btn-success d-block mb-3 ${classes.btnBack}`} onClick={this.handleClose}>
 													Ваші поповнення складу!
+												</NavLink>
+											)}
+
+											{/* Варіант 3: Повернення */}
+											{this.state.orderType === 'return' && (
+												<NavLink to={'/your-orders'} className={`btn btn-success d-block mb-3 ${classes.btnBack}`} onClick={this.handleClose}>
+													Ваші повернення на склад!
 												</NavLink>
 											)}
 

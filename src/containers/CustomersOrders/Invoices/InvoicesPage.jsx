@@ -19,7 +19,11 @@ const CrewInventoryReport = ({
 	isVisible,
 	onToggle
 }) => {
-	const [combinedData, setCombinedData] = useState({ invoices: {}, used: {} });
+	const [combinedData, setCombinedData] = useState({
+		invoices: {},
+		invoiceReturn: {}, // Додайте це для ініціалізації
+		used: {}
+	});
 	const [realRemaining, setRealRemaining] = useState({});
 	const [archiveHistory, setArchiveHistory] = useState({});
 	const [hasArchiveInDB, setHasArchiveInDB] = useState(false); // Коментар: Чи існують дані в архіві БД
@@ -57,10 +61,13 @@ const CrewInventoryReport = ({
 			try {
 				const invoicesAcc = {};
 				const usedAcc = {};
+				const invoiceReturnAcc = {};
 
 				await Promise.all(ids.map(async (id) => {
 					const invSnap = await db.ref(`invoicesSummary/${id}`).once('value');
 					const usedSnap = await db.ref(`usedMaterials/${id}`).once('value');
+
+					const stockSnap = await db.ref(`invoiceReturn/${id}`).once('value');
 
 					const invData = invSnap.val() || {};
 					Object.values(invData).forEach(item => {
@@ -71,10 +78,16 @@ const CrewInventoryReport = ({
 					Object.entries(usedData).forEach(([pid, qty]) => {
 						usedAcc[pid] = (usedAcc[pid] || 0) + Number(qty || 0);
 					});
+
+					// Обробка ПОВЕРНЕНЬ (invoiceReturn)
+					const stockData = stockSnap.val() || {};
+					Object.entries(stockData).forEach(([pid, qty]) => {
+						invoiceReturnAcc[pid] = (invoiceReturnAcc[pid] || 0) + Number(qty || 0);
+					});
 				}));
 
 				const histData = await fetchArchiveData(mainWorkerId);
-				setCombinedData({ invoices: invoicesAcc, used: usedAcc });
+				setCombinedData({ invoices: invoicesAcc, used: usedAcc, invoiceReturn: invoiceReturnAcc });
 				setArchiveHistory(histData);
 			} catch (err) {
 				console.error("Error:", err);
@@ -231,93 +244,6 @@ const CrewInventoryReport = ({
 		}
 	};
 
-	// const archiveGlobalReport = async () => {
-	// 	if (!invoicesSummary || !stock) {
-	// 		alert("Помилка: Глобальні дані про накладні не завантажені.");
-	// 		return;
-	// 	}
-
-	// 	if (!window.confirm("Створити архівний знімок для ВСІХ клієнтів з реальними залишками?")) return;
-
-	// 	try {
-	// 		const date = new Date();
-	// 		const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
-	// 		const timeStamp = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}_${String(date.getHours()).padStart(2, '0')}-${String(date.getMinutes()).padStart(2, '0')}`;
-
-	// 		const db = firebase.database();
-
-	// 		// 1. Завантажуємо дані з ПРАВИЛЬНИХ шляхів
-	// 		const [usedSnap, remainsSnap, historySnap] = await Promise.all([
-	// 			db.ref('usedMaterialsSummary').once('value'),
-	// 			db.ref('remainingMaterials').once('value'), // ВИПРАВЛЕНО ШЛЯХ
-	// 			db.ref('inventoryArchive').once('value')     // Шлях для 'prev'
-	// 		]);
-
-	// 		const usedDataAll = usedSnap.val() || {};
-	// 		const remainsDataAll = remainsSnap.val() || {};
-	// 		const historyDataAll = historySnap.val() || {};
-
-	// 		const allReports = {};
-	// 		const customersList = Array.isArray(customers) ? customers : Object.values(customers || {});
-
-	// 		const relevantCustomers = customersList.filter(
-	// 			c => (Number(c.id) === 7 || Number(c.id) > 127) && c.name !== "Шановний клієнт"
-	// 		);
-
-	// 		relevantCustomers.forEach(worker => {
-	// 			const wId = String(worker.id);
-
-	// 			const reportData = (dynamicProductIds || []).map(pid => {
-	// 				const product = stock?.find(s => String(s.id) === String(pid));
-	// 				const pKey = String(pid);
-
-	// 				// Дані з накладних (вже в props)
-	// 				const taken = Number(invoicesSummary?.[wId]?.[pKey] || 0);
-
-	// 				// Списано (з usedMaterialsSummary)
-	// 				const spent = Number(usedDataAll?.[wId]?.[pKey] || 0);
-
-	// 				// ФАКТ (з remainingMaterials) - ТУТ БУЛИ НУЛІ
-	// 				const fact = Number(remainsDataAll?.[wId]?.[pKey] || 0);
-
-	// 				// Попередній залишок (з inventoryArchive)
-	// 				const prev = Number(historyDataAll?.[wId]?.[pKey] || 0);
-
-	// 				const calc = prev + taken - spent;
-
-	// 				return {
-	// 					productId: pid,
-	// 					name: product?.name || `Товар ID ${pid}`,
-	// 					units: product?.units || '',
-	// 					prev: prev,
-	// 					added: taken,
-	// 					spent: spent,
-	// 					calculated: calc,
-	// 					fact: fact,
-	// 					diff: fact - calc
-	// 				};
-	// 			});
-
-	// 			allReports[wId] = {
-	// 				workerName: worker.name,
-	// 				workerEmail: worker.email || '',
-	// 				reportDetails: reportData
-	// 			};
-	// 		});
-
-	// 		console.log("ПЕРЕВІРКА: ОВ-12 для ID 7 має бути 256. Об'єкт:", allReports["7"]);
-
-	// 		await db.ref(`archiveReports/${monthKey}/${timeStamp}`).set({
-	// 			archivedAt: date.toISOString(),
-	// 			reports: allReports
-	// 		});
-
-	// 		alert(`✅ Глобальний архів створено! Тепер дані для ID 7 та інших мають підтягнутися.`);
-	// 	} catch (error) {
-	// 		console.error("Помилка:", error);
-	// 		alert("Помилка: " + error.message);
-	// 	}
-	// };
 
 	// Коментар: НОВА ФУНКЦІЯ: Запис введених даних прямо в архів Firebase
 	const saveToArchiveDB = async () => {
@@ -383,66 +309,88 @@ const CrewInventoryReport = ({
 
 	const handleSync = async () => {
 		const updates = {};
+
 		dynamicProductIds.forEach(pid => {
-			const calc = (Number(archiveHistory[pid]) || 0) + (Number(combinedData.invoices[pid]) || 0) - (Number(combinedData.used[pid]) || 0);
+			// Збираємо всі складові
+			const prev = Number(archiveHistory[pid] || 0);
+			const taken = Number(combinedData.invoices[pid] || 0);
+			const backToStock = Number(combinedData.invoiceReturn[pid] || 0); // Додаємо повернення
+			const spent = Number(combinedData.used[pid] || 0);
+
+			// Рахуємо фінальне значення
+			const calc = prev + taken + backToStock - spent;
+
 			updates[`/remainingMaterials/${mainWorkerId}/${pid}`] = calc;
 		});
-		await firebase.database().ref().update(updates);
-		alert("✅ Синхронізовано з Факт");
+
+		try {
+			await firebase.database().ref().update(updates);
+			alert("✅ Всі товари синхронізовано з порахованим залишком!");
+		} catch (e) {
+			console.error("Bulk sync error:", e);
+			alert("Помилка при масовій синхронізації: " + e.message);
+		}
 	};
 
 	const handleSyncRow = async (pid) => {
-		// 1. Рахуємо значення "Система" для цього конкретного ID
+		// 1. Рахуємо значення "Система" з урахуванням повернень
 		const prev = Number(archiveHistory[pid] || 0);
 		const taken = Number(combinedData.invoices[pid] || 0);
+		const backToStock = Number(combinedData.invoiceReturn[pid] || 0); // Додаємо повернення
 		const spent = Number(combinedData.used[pid] || 0);
-		const calc = prev + taken - spent;
+
+		// Оновлена формула: додаємо backToStock
+		const calc = prev + taken + backToStock - spent;
 
 		try {
 			// 2. Оновлюємо тільки цей один запис у Firebase
 			await firebase.database().ref(`remainingMaterials/${mainWorkerId}/${pid}`).set(calc);
-			alert(`✅ Товар ID ${pid} синхронізовано!`);
+			alert(`✅ Товар ID ${pid} синхронізовано! (Новий залишок: ${calc})`);
 		} catch (e) {
-			alert("Помилка: " + e.message);
+			console.error("Sync error:", e);
+			alert("Помилка при синхронізації: " + e.message);
 		}
 	};
 
 	const handlePrintReport = () => {
 		const currentDate = new Date().toLocaleString('uk-UA');
 
-		// 1. Функція для пошуку імені: повертає "Ім'я (ID)" або просто "ID", якщо не знайдено
 		const getWorkerNameWithId = (id) => {
 			if (!id) return null;
-			// Шукаємо об'єкт користувача в масиві customers
 			const worker = customers?.find(c => String(c.id) === String(id));
 			return worker ? `${worker.name} (${id})` : `ID ${id}`;
 		};
 
-		// 2. Отримуємо відформатовані імена для основного працівника та напарника
 		const mainWorkerDisplay = getWorkerNameWithId(mainWorkerId);
 		const partnerWorkerDisplay = getWorkerNameWithId(partnerWorkerId);
 
-		// 3. Формуємо підсумковий рядок екіпажу
 		const crewNames = partnerWorkerId
 			? `${mainWorkerDisplay} / ${partnerWorkerDisplay}`
 			: mainWorkerDisplay;
 
 		const tableRowsHtml = dynamicProductIds.map(pid => {
 			const product = stock?.find(s => s.id == pid);
-			const prev = Number(archiveHistory[pid] || 0);
-			const taken = Number(combinedData.invoices[pid] || 0);
-			const spent = Number(combinedData.used[pid] || 0);
-			const calc = prev + taken - spent;
-			const fact = Number(realRemaining[pid] || 0);
-			const diff = fact - calc;
-			const diffText = diff === 0 ? '✓' : (diff > 0 ? `-${diff}` : `+${Math.abs(diff)}`);
+			const prev = Number(archiveHistory?.[pid] || 0);
+			const taken = Number(combinedData?.invoices?.[pid] || 0);
+			const backToStock = Number(combinedData?.invoiceReturn?.[pid] || 0); // Додано
+			const spent = Number(combinedData?.used?.[pid] || 0);
+
+			// Оновлена формула
+			const calc = prev + taken - backToStock - spent;
+
+			const fact = Number(realRemaining?.[pid] || 0);
+			const diff = calc - fact;
+			// Якщо diff > 0 — це нестача (пишемо число як є або з плюсом)
+			// Якщо diff < 0 — це надлишок (число вже буде з мінусом від JS)
+			const diffText = diff === 0 ? '✓' : (diff > 0 ? `+${diff}` : `${diff}`);
+			const diffStyle = diff === 0 ? 'color: green;' : 'color: red; font-weight: bold;';
 
 			return `
             <tr>
                 <td>${product?.name || `ID ${pid}`}</td>
                 <td style="text-align: center;">${prev}</td>
                 <td style="text-align: center; color: green;">+${taken}</td>
-                <td style="text-align: center; color: red;">-${spent}</td>
+                <td style="text-align: center; color: #28a745;">+${backToStock}</td> <td style="text-align: center; color: red;">-${spent}</td>
                 <td style="text-align: center; font-weight: bold;">${calc}</td>
                 <td style="text-align: center;">${fact}</td>
                 <td style="text-align: center; font-weight: bold;">${diffText}</td>
@@ -483,11 +431,11 @@ const CrewInventoryReport = ({
                         <thead>
                             <tr>
                                 <th>Товар</th>
-                                <th>Залишок на початок місяця</th>
+                                <th>Залишок поч.</th>
                                 <th>Взято</th>
-                                <th>Списано</th>
-                                <th>Порахований залишок</th>
-                                <th>Фактичний залишок</th>
+                                <th>Повернено</th> <th>Списано</th>
+                                <th>Порах. зал.</th>
+                                <th>Факт. зал.</th>
                                 <th>Різниця</th>
                             </tr>
                         </thead>
@@ -502,6 +450,193 @@ const CrewInventoryReport = ({
         `);
 			newWindow.document.close();
 		}
+	};
+
+	//Допоміжна функція для друку (щоб не дублювати HTML-код)
+
+	const renderPrintWindow = (title, tableRows, date) => {
+		const newWindow = window.open("", "_blank", "width=800,height=600");
+		if (!newWindow) return;
+		newWindow.document.write(`
+        <html>
+            <head>
+                <title>${title}</title>
+                <style>
+                    body { font-family: sans-serif; padding: 20px; }
+                    .header-info { display: flex; justify-content: space-between; border-bottom: 2px solid #333; margin-bottom: 20px; }
+                    table { width: 100%; border-collapse: collapse; }
+                    th, td { border: 1px solid #999; padding: 10px; text-align: left; }
+                    th { background-color: #f2f2f2; }
+                    .footer-date { margin-top: 15px; font-size: 12px; text-align: right; }
+                    @media print { .no-print { display: none; } }
+                </style>
+            </head>
+            <body>
+                <div class="header-info"><h2>${title}</h2><span>${date}</span></div>
+                <table>
+                    <thead><tr><th>Назва товару</th><th style="text-align: right;">Кількість</th></tr></thead>
+                    <tbody>${tableRows}</tbody>
+                </table>
+                <p class="footer-date">Сформовано: ${date}</p>
+                <div class="no-print" style="text-align: center; margin-top: 20px;">
+                    <button onclick="window.print()" style="padding: 10px 20px; background: #fb8c00; color: white; border: none; cursor: pointer;">Друк</button>
+                </div>
+            </body>
+        </html>
+    `);
+		newWindow.document.close();
+	};
+
+	//Функції для "Звіт екіпажу" (combinedData)
+
+	const handlePrintCombinedData = (
+		combinedData,
+		stock,
+		archiveHistory,
+		realRemaining,
+		dynamicProductIds,
+		customers,
+		mainWorkerId,
+		partnerWorkerId
+	) => {
+		const currentDate = new Date().toLocaleString('uk-UA');
+
+		const getWorkerNameWithId = (id) => {
+			if (!id) return null;
+			const worker = customers?.find(c => String(c.id) === String(id));
+			return worker ? `${worker.name} (${id})` : `ID ${id}`;
+		};
+
+		const crewNames = partnerWorkerId
+			? `${getWorkerNameWithId(mainWorkerId)} / ${getWorkerNameWithId(partnerWorkerId)}`
+			: getWorkerNameWithId(mainWorkerId) || "Не вказано";
+
+		const tableRowsHtml = (dynamicProductIds || []).map(pid => {
+			const product = stock?.find(s => String(s.id) === String(pid));
+			const prev = Number(archiveHistory?.[pid] || 0);
+			const taken = Number(combinedData?.invoices?.[pid] || 0);
+			const backToStock = Number(combinedData?.invoiceReturn?.[pid] || 0);
+			const spent = Number(combinedData?.used?.[pid] || 0);
+			const fact = Number(realRemaining?.[pid] || 0);
+
+			// ЄДИНА ФОРМУЛА: Початок + Взято - Повернено - Списано
+			const calc = prev + taken - backToStock - spent;
+			const diff = calc - fact;
+
+			if (prev === 0 && taken === 0 && backToStock === 0 && spent === 0 && fact === 0) return '';
+
+			const diffText = diff === 0 ? '✓' : (diff > 0 ? `+${diff}` : `${diff}`);
+			const diffStyle = diff === 0 ? 'color: green;' : 'color: red; font-weight: bold;';
+
+			return `
+        <tr>
+            <td>${product?.name || `ID ${pid}`}</td>
+            <td style="text-align: center;">${prev}</td>
+            <td style="text-align: center; color: green;">+${taken}</td>
+            <td style="text-align: center; color: #28a745;">-${backToStock}</td>
+            <td style="text-align: center; color: red;">-${spent}</td>
+            <td style="text-align: center; font-weight: bold; background: #f9f9f9;">${calc}</td>
+            <td style="text-align: center;">${fact}</td>
+            <td style="text-align: center; ${diffStyle}">${diffText}</td>
+        </tr>`;
+		}).join('');
+
+		if (!tableRowsHtml.trim()) {
+			alert("Звіт порожній");
+			return;
+		}
+
+		const newWindow = window.open("", "_blank", "width=900,height=700");
+		if (newWindow) {
+			newWindow.document.write(`
+            <html>
+                <head>
+                    <title>Звіт — ${crewNames}</title>
+                    <style>
+                        body { font-family: sans-serif; padding: 20px; color: #333; line-height: 1.4; }
+                        .header { border-bottom: 2px solid #17a2b8; margin-bottom: 20px; padding-bottom: 10px; }
+                        table { width: 100%; border-collapse: collapse; }
+                        th, td { border: 1px solid #ccc; padding: 8px; font-size: 12px; }
+                        th { background-color: #f1f4f9; }
+                        .no-print { display: flex; justify-content: center; gap: 15px; margin-top: 30px; }
+                        @media print { .no-print { display: none; } }
+                    </style>
+                </head>
+                <body>
+                    <div class="header">
+                        <h2>📊 Звіт залишків екіпажу</h2>
+                        <div><strong>👷 Екіпаж:</strong> ${crewNames}</div>
+                        <div style="font-size: 12px;">Дата: ${currentDate}</div>
+                    </div>
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Товар</th>
+                                <th>Поч. зал.</th>
+                                <th>Взято</th>
+                                <th>Поверн.</th>
+                                <th>Списано</th>
+                                <th>Порах. зал.</th>
+                                <th>Факт. зал.</th>
+                                <th>Різниця</th>
+                            </tr>
+                        </thead>
+                        <tbody>${tableRowsHtml}</tbody>
+                    </table>
+                    <div class="no-print">
+                        <button style="background:#17a2b8;color:white;padding:10px 20px;border:none;border-radius:5px;cursor:pointer;" onclick="window.print()">🖨️ Друкувати</button>
+                    </div>
+                </body>
+            </html>
+        `);
+			newWindow.document.close();
+		}
+	};
+
+	const handleExportCombinedDataToCSV = (combinedData, stock, archiveHistory, realRemaining, dynamicProductIds) => {
+		const header = [
+			"Товар",
+			"Початковий залишок",
+			"Взято (+)",
+			"Повернено на склад (-)",
+			"Списано (-)",
+			"Розрахунковий залишок",
+			"Фактичний залишок",
+			"Різниця"
+		].join(";");
+
+		const rows = dynamicProductIds.map(pid => {
+			const product = stock?.find(s => String(s.id) === String(pid));
+			const prev = Number(archiveHistory?.[pid] || 0);
+			const taken = Number(combinedData?.invoices?.[pid] || 0);
+			const backToStock = Number(combinedData?.invoiceReturn?.[pid] || 0);
+			const spent = Number(combinedData?.used?.[pid] || 0);
+			const fact = Number(realRemaining?.[pid] || 0);
+
+			if (prev === 0 && taken === 0 && backToStock === 0 && spent === 0 && fact === 0) return null;
+
+			const calc = prev + taken - backToStock - spent;
+			const diff = calc - fact;
+			const name = product?.name ? product.name.replace(/"/g, '""') : `ID ${pid}`;
+
+			return [
+				`"${name}"`,
+				prev,
+				taken,
+				backToStock,
+				spent,
+				calc,
+				fact,
+				diff === 0 ? "OK" : (diff > 0 ? `+${diff}` : diff)
+			].join(";");
+		}).filter(row => row !== null);
+
+		const csvContent = "\uFEFF" + [header, ...rows].join("\n");
+		const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+		const link = document.createElement("a");
+		link.setAttribute("href", URL.createObjectURL(blob));
+		link.setAttribute("download", `Crew_Report_${new Date().toLocaleDateString()}.csv`);
+		link.click();
 	};
 
 	// Знаходимо імена для відображення в інтерфейсі
@@ -525,48 +660,95 @@ const CrewInventoryReport = ({
 					<div className={classes.crewInfo}>
 						<strong>👷 Екіпаж:</strong> {crewNames || "Не обрано"}
 					</div>
-					<button className={classes.btnToggle} onClick={onToggle}>
-						{isVisible ? '▲ Згорнути таблицю звіту екіпажу' : '▼ Розгорнути таблицю звіт екіпажу'}
-					</button>
-				</div>
 
+				</div>
 				<div className={classes.topActions}>
-					{/* ДОДАНА КНОПКА АРХІВУВАННЯ ЗВІТУ */}
-					<button onClick={archiveGlobalReport} className={classes.btnAdd} style={{ background: '#27ae60' }}>
-						📸 Створити Глобальний Архів
+					{/* Створити Глобальний Архів */}
+					<button
+						onClick={archiveGlobalReport}
+						className={classes.actionBtn}
+						style={{ background: '#27ae60' }}
+					>
+						📸 Глобальний Архів
 					</button>
+
+					{/* Записати в архів */}
 					{!hasArchiveInDB && (
 						<button
 							onClick={saveToArchiveDB}
-							className={classes.btnHistory}
-							style={{ background: '#f39c12', color: '#fff' }}
+							className={classes.actionBtn}
+							style={{ background: '#f39c12' }}
 						>
 							💾 Записати в архів
 						</button>
 					)}
 
+					{/* Синхронізувати */}
 					<button
 						onClick={() => {
-							if (window.confirm("Ви впевнені, що хочете синхронізувати всі дані? Це оновить поточні залишки на основі бази даних.")) {
+							if (window.confirm("Ви впевнені, що хочете синхронізувати всі дані?")) {
 								handleSync();
 							}
 						}}
-						className={classes.btnHistory}
-						style={{ background: '#17a2b8', color: '#fff' }}
+						className={classes.actionBtn}
+						style={{ background: '#17a2b8' }}
 					>
 						🔄 Синхронізувати
 					</button>
 
+					{/* Друк / Ексель */}
 					<button
 						onClick={handlePrintReport}
-						className={classes.btnHistory}
-						style={{ background: '#27ae60', color: '#fff' }}
+						className={classes.actionBtn}
+						disabled={loading}
+						style={{ background: loading ? '#95a5a6' : '#2ecc71' }}
 					>
-						📥 Друк / Ексель
+						{loading ? (
+							'⏳ Завантаження...'
+						) : (
+							<>📥 Друк / Ексель</>
+						)}
 					</button>
 				</div>
 			</div>
-
+			<div className={classes.headerActions} style={{ marginBottom: '15px' }}>
+				<button
+					className={classes.btnPrint}
+					onClick={(e) => {
+						e.stopPropagation();
+						handlePrintCombinedData(
+							combinedData,
+							stock,
+							archiveHistory,
+							realRemaining,
+							dynamicProductIds,
+							customers,
+							mainWorkerId,
+							partnerWorkerId
+						);
+					}}
+				>
+					🖨️ Друк звіту
+				</button>
+				<button
+					className={classes.btnExport}
+					onClick={(e) => {
+						e.stopPropagation();
+						handleExportCombinedDataToCSV(
+							combinedData,
+							stock,
+							archiveHistory,
+							realRemaining,
+							dynamicProductIds
+						);
+					}}
+				>
+					📥 Експорт Excel
+				</button>
+			</div>
+			<button className={classes.btnToggle} onClick={onToggle}>
+				{isVisible ? '▲ Згорнути таблицю звіту екіпажу' : '▼ Розгорнути таблицю звіт екіпажу'}
+			</button>
 			{isVisible && (
 				<table className={`${classes.table} ${classes.reportTable}`}>
 					<thead>
@@ -574,6 +756,7 @@ const CrewInventoryReport = ({
 							<th>Товар</th>
 							<th>Залишок на початок місяця {!hasArchiveInDB && "(Введіть дані)"}</th>
 							<th>Взято</th>
+							<th>Повернено</th>
 							<th>Списано</th>
 							<th>Порахований залишок</th>
 							<th>Фактичний залишок</th>
@@ -586,14 +769,15 @@ const CrewInventoryReport = ({
 
 							const productId = pid;
 							const name = product?.name || `ID ${pid}`;
-							const isRowArchived = localArchivedRows[pid]; // перевірка зі стану
-							const valueInRedux = archiveHistory[pid] || 0; // поточне значення залишку
+							const isRowArchived = localArchivedRows?.[pid]; // перевірка зі стану
+							const valueInRedux = archiveHistory?.[pid] || 0; // поточне значення залишку
 
-							const prev = Number(archiveHistory[pid] || 0);
-							const taken = Number(combinedData.invoices[pid] || 0);
-							const spent = Number(combinedData.used[pid] || 0);
-							const calc = prev + taken - spent;
-							const fact = Number(realRemaining[pid] || 0);
+							const prev = Number(archiveHistory?.[pid] || 0);
+							const taken = Number(combinedData?.invoices?.[pid] || 0);
+							const backToStock = Number(combinedData?.invoiceReturn?.[pid] || 0); // Додаємо цю змінну
+							const spent = Number(combinedData?.used?.[pid] || 0);
+							const calc = prev + taken + backToStock - spent;
+							const fact = Number(realRemaining?.[pid] || 0);
 							const diff = fact - calc;
 
 							return (
@@ -611,7 +795,7 @@ const CrewInventoryReport = ({
 													// 1. При фокусі встановлюємо, що цей рядок зараз редагується
 													onFocus={() => setEditingRow(pid)}
 													onChange={(e) => handleArchiveInputChange(pid, e.target.value)}
-													className={classes.inputSmall}
+
 													style={{
 														width: '50px',
 														border: editingRow === pid ? '1px solid #f39c12' : '1px solid #ccc',
@@ -657,6 +841,10 @@ const CrewInventoryReport = ({
 										+{taken}
 									</td>
 
+									<td data-label="Повернено" style={{ textAlign: 'center', color: '#28a745' }}>
+										+{backToStock}
+									</td>
+
 									<td data-label="Списано" style={{ textAlign: 'center', color: 'red' }}>
 										-{spent}
 									</td>
@@ -673,7 +861,6 @@ const CrewInventoryReport = ({
 												const val = e.target.value;
 												await firebase.database().ref(`remainingMaterials/${mainWorkerId}/${pid}`).set(Number(val));
 											}}
-											className={classes.inputSmall}
 											style={{ width: '50px', border: '1px solid #17a2b8' }}
 										/>
 									</td>
@@ -1318,6 +1505,95 @@ const UsedMaterialsTable = ({
 		}
 	};
 
+	//Допоміжна функція для друку (щоб не дублювати HTML-код)
+
+	const renderPrintWindow = (title, tableRows, date) => {
+		const newWindow = window.open("", "_blank", "width=800,height=600");
+		if (!newWindow) return;
+		newWindow.document.write(`
+        <html>
+            <head>
+                <title>${title}</title>
+                <style>
+                    body { font-family: sans-serif; padding: 20px; }
+                    .header-info { display: flex; justify-content: space-between; border-bottom: 2px solid #333; margin-bottom: 20px; }
+                    table { width: 100%; border-collapse: collapse; }
+                    th, td { border: 1px solid #999; padding: 10px; text-align: left; }
+                    th { background-color: #f2f2f2; }
+                    .footer-date { margin-top: 15px; font-size: 12px; text-align: right; }
+                    @media print { .no-print { display: none; } }
+                </style>
+            </head>
+            <body>
+                <div class="header-info"><h2>${title}</h2><span>${date}</span></div>
+                <table>
+                    <thead><tr><th>Назва товару</th><th style="text-align: right;">Кількість</th></tr></thead>
+                    <tbody>${tableRows}</tbody>
+                </table>
+                <p class="footer-date">Сформовано: ${date}</p>
+                <div class="no-print" style="text-align: center; margin-top: 20px;">
+                    <button onclick="window.print()" style="padding: 10px 20px; background: #fb8c00; color: white; border: none; cursor: pointer;">Друк</button>
+                </div>
+            </body>
+        </html>
+    `);
+		newWindow.document.close();
+	};
+
+	//Функції для "Використані матеріали" (usedMaterials)
+
+	const handleExportUsedMaterialsToCSV = (usedMaterials, stock) => {
+		const entries = Object.entries(usedMaterials || {}).filter(([_, qty]) => qty > 0);
+
+		if (entries.length === 0) {
+			alert("Немає даних для експорту");
+			return;
+		}
+
+		const header = ["Товар", "Використано", "Одиниці"].join(";");
+		const rows = entries.map(([id, qty]) => {
+			const product = stock.find(p => String(p.id) === String(id));
+			const name = product ? product.name.replace(/"/g, '""') : `ID ${id}`;
+			const units = product?.units || "";
+			return `"${name}";"${qty}";"${units}"`;
+		});
+
+		const csvContent = [header, ...rows].join("\n");
+		const blob = new Blob(["\ufeff", csvContent], { type: 'text/csv;charset=utf-8;' });
+		const link = document.createElement("a");
+		link.setAttribute("href", URL.createObjectURL(blob));
+		link.setAttribute("download", `Used_Materials_${new Date().toLocaleDateString()}.csv`);
+		link.click();
+	};
+
+	const handlePrintUsedMaterials = (usedMaterials, stock) => {
+		const currentDate = new Date().toLocaleString('uk-UA');
+
+		// Перетворюємо об'єкт {103: 817, ...} у масив рядків таблиці
+		const tableRowsHtml = Object.entries(usedMaterials || {})
+			.filter(([_, qty]) => qty > 0) // Ігноруємо нулі (як ID 108)
+			.map(([id, qty]) => {
+				// Шукаємо товар у стоці за ID
+				const product = stock.find(p => String(p.id) === String(id));
+				const name = product ? product.name : `Товар ID: ${id}`;
+				const units = product?.units || "";
+
+				return `
+                <tr>
+                    <td>${name}</td>
+                    <td style="text-align: right;">${qty} ${units}</td>
+                </tr>
+            `;
+			}).join('');
+
+		if (!tableRowsHtml) {
+			alert("Немає даних для друку");
+			return;
+		}
+
+		renderPrintWindow("Використані матеріали", tableRowsHtml, currentDate);
+	};
+
 	// --- ВИДАЛЕННЯ --- Тут та сама логіка: видаляємо один вузол, але перераховуємо суми в усіх інших.
 	const deleteHistoryItem = async (log) => {
 		// 1. Форматуємо дату для запитання
@@ -1365,7 +1641,7 @@ const UsedMaterialsTable = ({
 	}, []); // Порожній масив означає "виконати один раз при створенні"
 
 	return (
-		<div className={classes.usedMaterialsSection}>
+		<div className={classes.usedMaterialsSection} style={{ marginTop: '40px', borderTop: '5px solid #17a2b8', paddingTop: '20px' }}>
 			<div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
 				<h3 className={classes.sectionTitle}>🛠 Використані матеріали</h3>
 
@@ -1381,9 +1657,7 @@ const UsedMaterialsTable = ({
 						{isEditingIds ? "✖ Закрити налаштування" : "⚙ Налаштувати список ID (productsForWorkOrders)"}
 					</button>
 				)}
-				<button className={classes.btnToggle} onClick={onToggle}>
-					{isVisible ? '▲ Згорнути таблицю Використані матеріали' : '▼ Розгорнути таблицю Використані матеріали'}
-				</button>
+
 			</div>
 
 			{isEditingIds && (
@@ -1518,11 +1792,36 @@ const UsedMaterialsTable = ({
 					>
 						📜 Звіт по всій історії списань
 					</button>
+
 				</div>
+				<div className={classes.headerActions} style={{ marginBottom: '15px' }}>
+					<button
+						className={classes.btnPrint}
+						onClick={(e) => {
+							e.stopPropagation();
+							handlePrintUsedMaterials(usedMaterials, stock);
+						}}
+					>
+						🖨️ Друк матеріалів
+					</button>
+					<button
+						className={classes.btnExport}
+						onClick={(e) => {
+							e.stopPropagation();
+							handleExportUsedMaterialsToCSV(usedMaterials, stock);
+						}}
+					>
+						📥 Експорт Excel
+					</button>
+				</div>
+				<button className={classes.btnToggle} onClick={onToggle}>
+					{isVisible ? '▲ Згорнути таблицю Використані матеріали' : '▼ Розгорнути таблицю Використані матеріали'}
+				</button>
+
 			</div>
 
 			{isVisible && (
-				<table className={classes.table}>
+				<table className={`${classes.table} ${classes.usedMaterials}`} >
 					<thead>
 						<tr>
 							<th style={{ width: "35%", textAlign: "left" }}>Товар</th>
@@ -1739,6 +2038,7 @@ const InvoicesPage = ({
 }) => {
 
 	const [visibleTables, setVisibleTables] = useState({
+		notifications: true,
 		orders: true,              // Таблиця "Активні сповіщення"
 		totalTakenProduct: true,   // Таблиця "Загальна кількість взятого товару"
 		remainingInStock: true,    // Таблиця "Залишок на складі"
@@ -1853,30 +2153,36 @@ const InvoicesPage = ({
 	const handleOrderDetails = async (notification) => {
 		const customerId = notification.customerId;
 		const orderId = notification.orderId;
+		// Перевіряємо, чи це повернення (використовуємо тип зі сповіщення)
+		const isReturn = notification.type === 'return';
 
 		console.log("--- ПОЧАТОК ПОШУКУ ЗАМОВЛЕННЯ ---");
+		console.log(`Тип: ${isReturn ? 'ПОВЕРНЕННЯ' : 'ПРОДАЖ'}`);
 		console.log("Шукаємо для клієнта:", customerId, "Замовлення №:", orderId);
 
 		try {
-			const path = `invoices/${customerId}/${orderId}`;
+			// Визначаємо правильний шлях: повернення лежать в invoicesReturn
+			const folder = isReturn ? 'invoicesReturn' : 'invoices';
+			const path = `${folder}/${customerId}/${orderId}`;
+
 			const snapshot = await firebase.database().ref(path).once('value');
 			const orderData = snapshot.val();
 
 			// ЛОГ 1: Весь об'єкт з бази
-			console.log("ДАНІ З FIREBASE (orderData):", orderData);
+			console.log(`ДАНІ З FIREBASE (${folder}):`, orderData);
 
 			if (!orderData) {
 				console.error("Замовлення не знайдено за шляхом:", path);
-				alert(`Замовлення #${orderId} не знайдено.`);
+				alert(`Замовлення #${orderId} (${isReturn ? 'повернення' : 'продаж'}) не знайдено.`);
 				return;
 			}
 
-			// 1. Формуємо список товарів
-			const items = orderData.cart || orderData.items || [];
+			// 1. Формуємо список товарів (у поверненнях зазвичай 'items', у замовленнях 'cart')
+			const items = orderData.items || orderData.cart || [];
 			console.log("СПИСОК ТОВАРІВ (items):", items);
 
 			const itemsText = items.map((item, index) => {
-				const name = item.name || `Товар ID:${item.id}`;
+				const name = item.name || `Товар ID:${item.productId || item.id}`;
 				const itemNote = item.comment ? ` 📝 [Примітка: ${item.comment}]` : '';
 
 				// ЛОГ 2: Перевірка кожного товару на наявність коментаря
@@ -1889,7 +2195,6 @@ const InvoicesPage = ({
 			}).join('\n');
 
 			// 2. Формуємо загальний коментар
-			// Перевіряємо всі можливі варіанти назви поля
 			const rawComment = orderData.orderComment || orderData.comment || orderData.msg || "";
 			console.log("ЗАГАЛЬНИЙ КОМЕНТАР (raw):", rawComment);
 
@@ -1905,7 +2210,8 @@ const InvoicesPage = ({
 			} catch (e) { console.log("Помилка пошуку клієнта в масиві:", e); }
 
 			// 4. Фінальний текст
-			const fullMessage = `📦 Деталі замовлення #${orderId}\n` +
+			const titlePrefix = isReturn ? "ПОВЕРНЕННЯ" : "замовлення";
+			const fullMessage = `📦 Деталі ${titlePrefix} #${orderId}\n` +
 				`👤 Клієнт: ${clientName}\n` +
 				`📅 Дата: ${orderData.date || notification.date}\n` +
 				`✅ Статус: ${orderData.status || 'Виконано'}\n` +
@@ -1916,7 +2222,7 @@ const InvoicesPage = ({
 			console.log("ФІНАЛЬНИЙ ТЕКСТ ПОВІДОМЛЕННЯ:\n", fullMessage);
 
 			const isPrint = window.confirm(
-				"Деталі замовлення отримано. Оберіть дію:\n\n" +
+				"Деталі отримано. Оберіть дію:\n\n" +
 				"✅ OK — Швидкий перегляд (Alert)\n" +
 				"❌ Скасувати — Відкрити вікно для ДРУКУ"
 			);
@@ -1931,7 +2237,7 @@ const InvoicesPage = ({
 				newWindow.document.write(`
             <html>
                 <head>
-                    <title>Замовлення #${orderId}</title>
+                    <title>${isReturn ? 'Повернення' : 'Замовлення'} #${orderId}</title>
                     <style>
                         body { padding: 40px; font-family: 'Segoe UI', sans-serif; background: #f0f2f5; color: #333; }
                         .invoice-card { background: white; padding: 30px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); max-width: 600px; margin: 0 auto; }
@@ -1940,11 +2246,12 @@ const InvoicesPage = ({
                         button { padding: 12px 25px; border: none; border-radius: 8px; cursor: pointer; font-weight: bold; }
                         .print-btn { background: #007bff; color: white; }
                         .close-btn { background: #6c757d; color: white; }
+                        .header-title { margin-top:0; color:${isReturn ? '#dc3545' : '#007bff'}; }
                     </style>
                 </head>
                 <body>
                     <div class="invoice-card">
-                        <h2 style="margin-top:0; color:#007bff;">📄 Детальна накладна</h2>
+                        <h2 class="header-title">📄 Детальна накладна ${isReturn ? '(Повернення)' : ''}</h2>
                         <pre>${fullMessage}</pre>
                         <div class="btn-group">
                             <button class="print-btn" onclick="window.print()">🖨️ Друк</button>
@@ -2077,87 +2384,47 @@ const InvoicesPage = ({
 		}
 	};
 
-	const handlePrintSummary = (summaryData, name) => {
-		// 1. Отримуємо поточну дату та час
-		const now = new Date();
-		const currentFullDate = now.toLocaleString('uk-UA', {
-			day: '2-digit',
-			month: '2-digit',
-			year: 'numeric',
-			hour: '2-digit',
-			minute: '2-digit',
-			second: '2-digit'
+	const handleExportOrderToCSV = (invoices, clientName) => {
+		if (!invoices || invoices.length === 0) return alert("Немає даних для експорту");
+
+		const header = ["ID Замовлення", "Товар", "Кількість", "Одиниці", "Дата та час", "Коментар товару", "Загальний коментар"].join(";");
+
+		const rows = invoices.flatMap(invoice => {
+			const itemsArray = invoice.items ? Object.entries(invoice.items) : [];
+			const orderComment = (invoice.orderComment || invoice.comment || "").replace(/"/g, '""').replace(/;/g, ',');
+
+			return itemsArray.map(([id, item]) => {
+				const itemName = (item.name || "").trim().replace(/"/g, '""');
+				const itemComment = (item.comment || "").replace(/"/g, '""').replace(/;/g, ',');
+
+				// 1. Формуємо дату у форматі: 00:13 ( 02/03/2026 )
+				const excelFormulaDate = (invoice.date || '').replace(', ', ' ( ') + ' )';
+
+				// 2. Збираємо всі колонки в масив
+				const columns = [
+					invoice.idOrderHistory,
+					itemName,
+					item.quantity,
+					item.units || "",
+					excelFormulaDate, // Тепер тут просто текст без "="
+					itemComment,
+					orderComment
+				];
+
+				// 3. Обгортаємо кожне значення в лапки та склеюємо через ;
+				// Це прибере подвійні лапки в кінці, які ви бачили на фото
+				return columns.map(col => `"${col}"`).join(";");
+			});
 		});
 
-		// 2. Формуємо початок місяця (01 число, 00:00:00)
-		const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-		const startOfMonthFormatted = startOfMonth.toLocaleString('uk-UA', {
-			day: '2-digit',
-			month: '2-digit',
-			year: 'numeric',
-			hour: '2-digit',
-			minute: '2-digit',
-			second: '2-digit'
-		}).replace(/\./g, '.'); // Забезпечуємо правильний формат точок
+		const csvContent = "\uFEFF" + [header, ...rows].join("\n");
+		const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+		const link = document.createElement("a");
 
-		const periodString = `${startOfMonthFormatted} — ${currentFullDate}`;
-
-		const tableRowsHtml = summaryData.map((item) => `
-        <tr>
-            <td>${item.name}</td>
-            <td style="text-align: right; font-weight: bold;">${item.totalQuantity} ${item.units}</td>
-        </tr>
-    `).join('');
-
-		const newWindow = window.open("", "_blank", "width=800,height=600");
-
-		if (newWindow) {
-			newWindow.document.write(`
-            <html>
-                <head>
-                    <title>Звіт по товарах: ${name}</title>
-                    <style>
-                        body { font-family: sans-serif; padding: 20px; color: #333; line-height: 1.5; }
-                        h2 { text-align: center; margin-bottom: 5px; }
-                        .period { text-align: center; font-size: 14px; color: #555; margin-bottom: 20px; border-bottom: 1px solid #eee; padding-bottom: 10px; }
-                        table { width: 100%; border-collapse: collapse; margin-top: 10px; }
-                        th, td { border: 1px solid #999; padding: 10px; text-align: left; }
-                        th { background-color: #f2f2f2; text-transform: uppercase; font-size: 12px; }
-                        .info-row { margin-bottom: 10px; font-size: 15px; }
-                        .no-print { text-align: center; margin-top: 30px; }
-                        button { padding: 10px 20px; background: #28a745; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; }
-                        @media print { .no-print { display: none; } }
-                    </style>
-                </head>
-                <body>
-                    <h2>📊 Загальна кількість товарів</h2>
-                    <div class="period"><strong>Період:</strong> ${periodString}</div>
-                    
-                    <div class="info-row"><strong>Клієнт:</strong> ${name || 'Не вказано'}</div>
-                    
-                    <table>
-                        <thead>
-                            <tr>
-                                <th>Назва товару</th>
-                                <th style="text-align: right;">Загальна кількість</th>
-                            </tr>
-                        </thead>
-                        <tbody>${tableRowsHtml}</tbody>
-                    </table>
-
-                    <div style="margin-top: 20px; font-size: 11px; color: #888; text-align: right;">
-                        Документ сформовано: ${currentFullDate}
-                    </div>
-
-                    <div class="no-print">
-                        <button onclick="window.print()">🖨️ Друкувати звіт</button>
-                        <button onclick="window.close()" style="background: #6c757d; margin-left: 10px;">Закрити</button>
-                    </div>
-                </body>
-            </html>
-        `);
-			newWindow.document.close();
-		}
+		const timestamp = new Date().toLocaleString('uk-UA').replace(/:/g, '-');
+		link.href = URL.createObjectURL(blob);
+		link.download = `Orders_${clientName.replace(/\s+/g, '_')}_${timestamp}.csv`;
+		link.click();
 	};
 
 	const handlePrintStock = (stockData) => {
@@ -2231,30 +2498,151 @@ const InvoicesPage = ({
 		link.click();
 	};
 
+	//Допоміжна функція для друку (щоб не дублювати HTML-код)
+
+	const renderPrintWindow = (title, tableRows, date) => {
+		const newWindow = window.open("", "_blank", "width=800,height=600");
+		if (!newWindow) return;
+		newWindow.document.write(`
+        <html>
+            <head>
+                <title>${title}</title>
+                <style>
+                    body { font-family: sans-serif; padding: 20px; }
+                    .header-info { display: flex; justify-content: space-between; border-bottom: 2px solid #333; margin-bottom: 20px; }
+                    table { width: 100%; border-collapse: collapse; }
+                    th, td { border: 1px solid #999; padding: 10px; text-align: left; }
+                    th { background-color: #f2f2f2; }
+                    .footer-date { margin-top: 15px; font-size: 12px; text-align: right; }
+                    @media print { .no-print { display: none; } }
+                </style>
+            </head>
+            <body>
+                <div class="header-info"><h2>${title}</h2><span>${date}</span></div>
+                <table>
+                    <thead><tr><th>Назва товару</th><th style="text-align: right;">Кількість</th></tr></thead>
+                    <tbody>${tableRows}</tbody>
+                </table>
+                <p class="footer-date">Сформовано: ${date}</p>
+                <div class="no-print" style="text-align: center; margin-top: 20px;">
+                    <button onclick="window.print()" style="padding: 10px 20px; background: #fb8c00; color: white; border: none; cursor: pointer;">Друк</button>
+                </div>
+            </body>
+        </html>
+    `);
+		newWindow.document.close();
+	};
+
+	//Функції для "Загальна кількість взятих товарів" (invoicesSummary)
+
+	const handleExportInvoicesSummaryToCSV = (summary) => {
+		// Якщо summary — це вже масив (як видно з лога), Object.values спрацює коректно
+		const dataArray = Object.values(summary || {});
+		if (dataArray.length === 0) return alert("Немає даних для експорту");
+
+		const header = ["Товар", "Кількість", "Одиниці"].join(";");
+		const rows = dataArray.map(s => {
+			const name = s.name ? s.name.toString().replace(/"/g, '""') : "Без назви";
+			// Використовуємо totalQuantity, оскільки саме так називається поле у вашому об'єкті
+			const quantity = s.totalQuantity || 0;
+			const units = s.units || "";
+			return `"${name}";"${quantity}";"${units}"`;
+		});
+
+		const csvContent = "\uFEFF" + [header, ...rows].join("\n");
+		const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+		const link = document.createElement("a");
+		link.setAttribute("href", URL.createObjectURL(blob));
+		link.setAttribute("download", `Zahalna_kilkist_${new Date().toLocaleDateString()}.csv`);
+		link.click();
+	};
+
+	const handlePrintInvoicesSummary = (summary) => {
+		console.log("summary для друку:", summary);
+		const dataArray = Object.values(summary || {});
+
+		if (dataArray.length === 0) {
+			alert("Немає даних для друку");
+			return;
+		}
+
+		const currentDate = new Date().toLocaleString('uk-UA');
+
+		const tableRowsHtml = dataArray.map((s) => `
+        <tr>
+            <td style="border: 1px solid #ccc; padding: 8px;">${s.name || `ID ${s.productId}`}</td>
+            <td style="border: 1px solid #ccc; padding: 8px; text-align: right; font-weight: bold;">
+                ${s.totalQuantity} ${s.units}
+            </td>
+        </tr>
+    `).join('');
+
+		// Виклик вашої допоміжної функції рендеру
+		renderPrintWindow("Загальна кількість взятих товарів", tableRowsHtml, currentDate);
+	};
+
+
 
 	return (
 		<div className={classes.wrapper}>
 			{isAdminUsedMaterials && notifications.length > 0 && (
-				<div className={classes.notificationsBlock}>
-					<div className={classes.notificationsHeader}>
-						<h3>🔔 Підтверджені замовлення</h3>
-						<button className={classes.clearBtn} onClick={() => { if (window.confirm("Очистити всі?")) clearNotifications(isAdminInvoices ? null : selectedUser); }}>❌ Очистити всі</button>
-					</div>
-					<div className={classes.notificationsList}>
-						{notifications.map((n) => (
-							<div key={n.orderId} className={classes.notificationItem}>
-								<div
-									onClick={() => handleOrderDetails(n)}
-									style={{ cursor: 'pointer', flex: 1 }}
-									title="Натисніть, щоб побачити деталі"
-								>
-									<strong>Замовлення #{n.orderId}</strong>
-									<div className={classes.meta}>👤 {n.customerId} ({customers.find(c => c.id === n.customerId)?.name}) | 📅 {n.date}</div>
-								</div>
-								<button className={classes.deleteBtn} onClick={() => { if (window.confirm("Видалити?")) deleteNotification(n); }}>🗑</button>
+				<div className={classes.notificationsBlock} style={{ marginBottom: '20px' }}>
+					<button
+						className={classes.btnToggle}
+						// Використовуємо новий ключ .notifications
+						onClick={() => setVisibleTables(prev => ({ ...prev, notifications: !prev.notifications }))}
+						style={{
+							background: 'linear-gradient(135deg, #e67e22 0%, #d35400 100%)', // Помаранчевий градієнт
+							marginBottom: visibleTables.notifications ? '15px' : '0'
+						}}
+					>
+						<span>
+							{visibleTables.notifications ? '▲ Приховати активні сповіщення' : '▼ Показати активні сповіщення'}
+						</span>
+						<span style={{ fontSize: '0.9em', opacity: 0.9 }}>
+							({notifications.length})
+						</span>
+					</button>
+					{visibleTables.notifications && (
+						<div className={classes.notificationsContent}>
+							<div className={classes.notificationsHeader}>
+								<h3>🔔 Підтверджені замовлення</h3>
+								<button className={classes.clearBtn} onClick={() => { if (window.confirm("Очистити всі?")) clearNotifications(isAdminInvoices ? null : selectedUser); }}>❌ Очистити всі</button>
 							</div>
-						))}
-					</div>
+							<div className={classes.notificationsList}>
+								{notifications.map((n) => {
+									// Визначаємо, чи це повернення
+									const isReturn = n.type === 'return';
+
+									return (
+										<div
+											key={isReturn ? `${n.orderId}_return` : n.orderId}
+											className={`${classes.notificationItem} ${isReturn ? classes.returnType : ''}`}
+										>
+											<div
+												onClick={() => handleOrderDetails(n)}
+												style={{ cursor: 'pointer', flex: 1 }}
+												title="Натисніть, щоб побачити деталі"
+											>
+												<strong>
+													{isReturn ? '↩️ Повернення' : '📦 Замовлення'} #{n.orderId}
+												</strong>
+												<div className={classes.meta}>
+													👤 {n.customerId} ({customers.find(c => String(c.id) === String(n.customerId))?.name || 'Клієнт'}) | 📅 {n.date}
+												</div>
+											</div>
+											<button
+												className={classes.deleteBtn}
+												onClick={() => { if (window.confirm("Видалити сповіщення?")) deleteNotification(n); }}
+											>
+												🗑
+											</button>
+										</div>
+									);
+								})}
+							</div>
+						</div>
+					)}
 				</div>
 			)}
 
@@ -2338,110 +2726,159 @@ const InvoicesPage = ({
 
 
 			<h3 className={classes.sectionTitle}>📑 Замовлення:</h3>
+			<div className={classes.headerActions} style={{ marginBottom: '15px', display: 'flex', gap: '10px' }}>
+				<button
+					className={classes.btnPrint}
+					style={{ padding: '8px 16px', cursor: 'pointer', borderRadius: '4px', border: '1px solid #ccc', background: '#f8f9fa' }}
+					onClick={(e) => {
+						e.stopPropagation();
+						// Знаходимо ім'я клієнта перед друком
+						const selectedCustomerObj = customers.find(c => String(c.id) === String(selectedUser));
+						const finalName = selectedCustomerObj ? selectedCustomerObj.name : "Клієнт";
+						handlePrintOrderTable(invoices, finalName);
+					}}
+				>
+					🖨️ Друк таблиці замовлень
+				</button>
+				<button
+					className={classes.btnExport}
+					style={{ padding: '8px 16px', cursor: 'pointer', borderRadius: '4px', border: '1px solid #ccc', background: '#f8f9fa' }}
+					onClick={(e) => {
+						e.stopPropagation();
+						const selectedCustomerObj = customers.find(c => String(c.id) === String(selectedUser));
+						const finalName = selectedCustomerObj ? selectedCustomerObj.name : "Клієнт";
+						handleExportOrderToCSV(invoices, finalName);
+					}}
+				>
+					📥 Експорт замовлень (CSV)
+				</button>
+			</div>
+			<button
+				className={classes.btnToggle}
+				onClick={() => setVisibleTables(prev => ({ ...prev, orders: !prev.orders }))}
+			>
+				{visibleTables.orders ? '▲ Згорнути список замовлень' : '▼ Розгорнути список замовлень'}
+			</button>
 
 			{/* TABLE: НАКЛАДНІ */}
-			<table
-				className={classes.table}
-				style={{ cursor: 'pointer' }}
-				onClick={(e) => {
-					e.stopPropagation();
-					const selectedCustomerObj = customers.find(c => String(c.id) === String(selectedUser));
-					const finalName = selectedCustomerObj ? selectedCustomerObj.name : "Клієнт";
-					handlePrintOrderTable(invoices, finalName);
-				}}
-			>
-				<thead>
-					<tr>
-						<th style={{ width: "12%" }}>ID</th>
-						<th style={{ width: "48%" }}>Товари</th>
-						<th style={{ width: "20%" }} className={classes.alignRight}>Кі-сть</th>
-						<th style={{ width: "20%" }}>Дата</th>
-					</tr>
-				</thead>
+			{visibleTables.orders && (
+				<table
+					className={classes.table}
+					style={{ cursor: 'pointer' }}
+				>
+					<thead>
+						<tr>
+							<th style={{ width: "12%" }}>ID</th>
+							<th style={{ width: "48%" }}>Товари</th>
+							<th style={{ width: "20%" }} className={classes.alignRight}>Кі-сть</th>
+							<th style={{ width: "20%" }}>Дата</th>
+						</tr>
+					</thead>
 
-				<tbody>
-					{invoices.map((invoice, index) => {
-						const itemsArray = invoice.items ? Object.entries(invoice.items) : [];
-						const orderComment = invoice.orderComment || invoice.comment || "";
+					<tbody>
+						{invoices.map((invoice, index) => {
+							const itemsArray = invoice.items ? Object.entries(invoice.items) : [];
+							const orderComment = invoice.orderComment || invoice.comment || "";
 
-						// Розраховуємо rowspan: кількість товарів + 1 (якщо є загальний коментар)
-						const totalRows = itemsArray.length + (orderComment ? 1 : 0);
+							// Розраховуємо rowspan: кількість товарів + 1 (якщо є загальний коментар)
+							const totalRows = itemsArray.length + (orderComment ? 1 : 0);
 
-						return (
-							<React.Fragment key={`invoice-${index}`}>
-								{/* Рядки товарів */}
-								{itemsArray.map(([id, item], itemIndex) => {
-									const isLastItem = itemIndex === itemsArray.length - 1;
-									const hasNoComment = !orderComment;
-									// Малюємо лінію розділення, якщо це остання позиція в накладній і немає коментаря під нею
-									const isDividerRow = isLastItem && hasNoComment && index !== invoices.length - 1;
+							return (
+								<React.Fragment key={`invoice-${index}`}>
+									{/* Рядки товарів */}
+									{itemsArray.map(([id, item], itemIndex) => {
+										const isLastItem = itemIndex === itemsArray.length - 1;
+										const hasNoComment = !orderComment;
+										// Малюємо лінію розділення, якщо це остання позиція в накладній і немає коментаря під нею
+										const isDividerRow = isLastItem && hasNoComment && index !== invoices.length - 1;
 
-									return (
-										<tr key={`${index}-${id}`} className={isDividerRow ? classes.invoiceDivider : ""}>
-											{itemIndex === 0 && (
-												<td rowSpan={totalRows} style={{ verticalAlign: 'top', paddingTop: '10px' }}>
-													{invoice.idOrderHistory}
-												</td>
-											)}
-											<td>
-												<div style={{ fontWeight: '500' }}>{item.name}</div>
-												{item.comment && (
-													<div style={{ fontSize: '11px', color: '#d35400', fontWeight: 'bold', marginTop: '2px' }}>
-														📝 {item.comment}
-													</div>
+										return (
+											<tr key={`${index}-${id}`} className={isDividerRow ? classes.invoiceDivider : ""}>
+												{itemIndex === 0 && (
+													<td rowSpan={totalRows} style={{ verticalAlign: 'top', paddingTop: '10px' }}>
+														{invoice.idOrderHistory}
+													</td>
 												)}
-											</td>
-											<td className={classes.alignRight}>
-												{item.quantity} {item.units}
-											</td>
-											{itemIndex === 0 && (
-												<td rowSpan={totalRows} style={{ verticalAlign: 'top', paddingTop: '10px' }}>
-													{invoice.date}
+												<td>
+													<div style={{ fontWeight: '500' }}>{item.name}</div>
+													{item.comment && (
+														<div style={{ fontSize: '11px', color: '#d35400', fontWeight: 'bold', marginTop: '2px' }}>
+															📝 {item.comment}
+														</div>
+													)}
 												</td>
-											)}
-										</tr>
-									);
-								})}
+												<td className={classes.alignRight}>
+													{item.quantity} {item.units}
+												</td>
+												{itemIndex === 0 && (
+													<td rowSpan={totalRows} style={{ verticalAlign: 'top', paddingTop: '10px' }}>
+														{invoice.date}
+													</td>
+												)}
+											</tr>
+										);
+									})}
 
-								{/* Рядок загального коментаря (якщо він є) */}
-								{orderComment && (
-									<tr className={index !== invoices.length - 1 ? classes.invoiceDivider : ""}>
-										<td colSpan="2" style={{ backgroundColor: '#fff9db', color: '#856404', fontSize: '12px', padding: '6px 10px' }}>
-											<b>💬 Коментар:</b> {orderComment}
-										</td>
-									</tr>
-								)}
-							</React.Fragment>
-						);
-					})}
-				</tbody>
-			</table>
+									{/* Рядок загального коментаря (якщо він є) */}
+									{orderComment && (
+										<tr className={index !== invoices.length - 1 ? classes.invoiceDivider : ""}>
+											<td colSpan="2" style={{ backgroundColor: '#fff9db', color: '#856404', fontSize: '12px', padding: '6px 10px' }}>
+												<b>💬 Коментар:</b> {orderComment}
+											</td>
+										</tr>
+									)}
+								</React.Fragment>
+							);
+						})}
+					</tbody>
+				</table>
+			)}
 
 			<h3 className={classes.sectionTitle}>📊 Загальна кількість взятих товарів:</h3>
-			<table
-				className={classes.table}
-				style={{ cursor: 'pointer' }}
-				onClick={(e) => {
-					e.stopPropagation();
-					// Знаходимо ім'я для заголовка
-					const selectedCustomerObj = customers.find(c => String(c.id) === String(selectedUser));
-					const finalName = selectedCustomerObj ? selectedCustomerObj.name : "Клієнт";
-
-					handlePrintSummary(invoicesSummary, finalName);
-				}}
+			<div className={classes.headerActions} style={{ marginBottom: '15px' }}>
+				<button
+					className={classes.btnPrint}
+					onClick={(e) => {
+						e.stopPropagation();
+						handlePrintInvoicesSummary(invoicesSummary); // Або ваша функція для друку саме цього звіту
+					}}
+				>
+					🖨️ Друк
+				</button>
+				<button
+					className={classes.btnExport}
+					onClick={(e) => {
+						e.stopPropagation();
+						handleExportInvoicesSummaryToCSV(invoicesSummary);
+					}}
+				>
+					📥 Експорт Excel
+				</button>
+			</div>
+			<button
+				className={classes.btnToggle}
+				onClick={() => setVisibleTables(prev => ({ ...prev, totalTakenProduct: !prev.totalTakenProduct }))}
 			>
-				<thead><tr><th>Товари</th><th className={classes.alignRight}>Кі-сть</th></tr></thead>
-				<tbody>
-					{invoicesSummary.map((item, index) => (
-						<tr key={index}><td>{item.name}</td><td className={classes.alignRight}>{item.totalQuantity} {item.units}</td></tr>
-					))}
-				</tbody>
-			</table>
+				{visibleTables.totalTakenProduct ? '▲ Згорнути загальну кількість товарів' : '▼ Розгорнути загальну кількість товарів'}
+			</button>
+			{visibleTables.totalTakenProduct && (
+				<table
+					className={classes.table}
+					style={{ cursor: 'pointer' }}
+				>
+					<thead><tr><th>Товари</th><th className={classes.alignRight}>Кі-сть</th></tr></thead>
+					<tbody>
+						{invoicesSummary.map((item, index) => (
+							<tr key={index}><td>{item.name}</td><td className={classes.alignRight}>{item.totalQuantity} {item.units}</td></tr>
+						))}
+					</tbody>
+				</table>
+			)}
 
 			{
 				isAdminInvoices && stock && (
 					<>
-						{/* Контейнер заголовка та кнопки */}
+						{/* Контейнер заголовка */}
 						<div style={{
 							display: 'flex',
 							justifyContent: 'space-between',
@@ -2452,19 +2889,25 @@ const InvoicesPage = ({
 							<h3 className={classes.sectionTitle} style={{ margin: 0 }}>
 								📦 Залишки на складі:
 							</h3>
+						</div>
+
+						<div className={classes.headerActions}>
 							<button
 								onClick={(e) => {
 									e.stopPropagation();
-									// Використовуємо ту саму логіку експорту, але для поточного складу
+									handlePrintStock(stock);
+								}}
+								className={classes.btnPrint}
+							>
+								🖨️ Друк
+							</button>
+
+							<button
+								onClick={(e) => {
+									e.stopPropagation();
 									handleExportStockToCSV(stock);
 								}}
-								className={classes.btnHistory}
-								style={{
-									background: '#28a745',
-									height: '32px',
-									fontSize: '12px',
-									padding: '0 12px'
-								}}
+								className={`${classes.btnExport}`}
 							>
 								📥 Експорт Excel
 							</button>
@@ -2475,33 +2918,16 @@ const InvoicesPage = ({
 							onClick={() => toggleTable('remainingInStock')}
 							className={classes.tableHeaderToggle}
 						>
-							<span className={classes.headerTitle}>
-								📦 Залишок на складі {visibleTables.remainingInStock ? '▲' : '▼'}
-							</span>
 
-							<div className={classes.headerActions}>
-								<button
-									onClick={(e) => {
-										e.stopPropagation();
-										handlePrintStock(stock);
-									}}
-									className={classes.btnPrint}
-								>
-									🖨️ Друк
-								</button>
 
-								<button
-									onClick={(e) => {
-										e.stopPropagation();
-										handleExportStockToCSV(stock);
-									}}
-									className={`${classes.btnExport}`}
-								>
-									📥 Експорт Excel
-								</button>
-							</div>
+
 						</h3>
-
+						<button
+							className={classes.btnToggle}
+							onClick={() => setVisibleTables(prev => ({ ...prev, remainingInStock: !prev.remainingInStock }))}
+						>
+							{visibleTables.remainingInStock ? '▲ Приховати залишок на складі' : '▼ Показати залишок на складі'}
+						</button>
 						{visibleTables.remainingInStock && (
 							<table className={classes.table}>
 								<thead>

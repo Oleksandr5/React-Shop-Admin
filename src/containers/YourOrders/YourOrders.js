@@ -136,93 +136,67 @@ class YourOrders extends Component {
 	}
 
 	renderOrders(orders, indexOrderInHistory) {
-
 		const products = this.props.products
 		const productsDeleted = this.props.productsDeleted
 		const customerId = this.props.customerId
 
+		// Отримуємо поточне замовлення
 		let { indexOrders, ordersThis } = this.getThisOrder(orders, customerId)
 
-		let isOrdersThisCart
-
-		if (ordersThis) {
-			let ordersThisCart = Object.keys(ordersThis).filter(order => order === 'cart')[0] ? true : false
-			if (ordersThisCart) {
-				isOrdersThisCart = ordersThis.cart[0] ? true : false
-			}
+		if (!ordersThis) {
+			return <h6 className="text-danger">Запис порожній !!!</h6>
 		}
 
-		//        this.props.updateIsOrdersHistoryThisCart(isOrdersThisCart)
+		// Перевіряємо наявність кошика (cart або items)
+		const thisCart = ordersThis.cart || ordersThis.items
+		const hasItems = thisCart && thisCart.length > 0
 
-		if (isOrdersThisCart) {
-			const thisCart = ordersThis.cart
-
-			if (thisCart) {
-
-				return (
-					thisCart.map(product => {
+		if (hasItems) {
+			return (
+				<React.Fragment>
+					{thisCart.map((product, index) => {
 						const { id } = product
 						const quantityProductYourOrder = product.quantity
 
-						let thisProduct = products.filter(product => {
-							return (
-								product.id === id
-							)
-						})[0]
+						// Пошук товару в основному списку або списку видалених
+						let thisProduct = products.find(p => p.id === id) ||
+							productsDeleted.find(p => p.id === id)
 
 						if (!thisProduct) {
-							thisProduct = productsDeleted.filter(product => {
-								return (
-									product.id === id
-								)
-							})[0]
-							console.log('renderOrders_thisProductDeleted', thisProduct)
+							return <p key={id || index} className="text-muted">Товар №{id} не знайдено</p>
 						}
 
-						const thisOrder = orders.filter(order => {
-							return (
-								order.customerId === customerId
-							)
-						})[0]
-
-						const thisCart = thisOrder.cart.filter(cart => {
-							return (
-								cart.id === id
-							)
-						})[0]
-
-						const productQuantityInCar = thisCart.quantity
-
 						return (
-
 							<form
-								onSubmit={event => this.addProductToCart({ event, productId: thisProduct.id, customerId: this.props.customerId, price: product.price, quantityProductYourOrder, indexOrderInHistory })}
-								key={thisProduct.id}
+								onSubmit={event => this.addProductToCart({
+									event,
+									productId: thisProduct.id,
+									customerId: this.props.customerId,
+									price: product.price,
+									quantityProductYourOrder,
+									indexOrderInHistory
+								})}
+								key={`${thisProduct.id}_${indexOrderInHistory}_${index}`}
 								className={`row w-100 py-3 justify-content-between border-top border-bottom product_cart_history`}
 								id={`product_cart_history_${thisProduct.id}`}
 							>
 								<NavLink to={'/product/' + thisProduct.id} className="col-10 col-md-5 d-flex align-items-center order-1 mb-3 mb-md-0">
-
-									<div className={`mb-3 ${classes.productFoto}`} style={{ backgroundImage: `url(${thisProduct.image})`, backgroundSize: 'cover' }}>
-
-									</div>
-									<p className="ml-3 font-weight text-dark">
-										{thisProduct.name}
-									</p>
+									<div className={`mb-3 ${classes.productFoto}`} style={{ backgroundImage: `url(${thisProduct.image})`, backgroundSize: 'cover' }}></div>
+									<p className="ml-3 font-weight text-dark">{thisProduct.name}</p>
 								</NavLink>
-								<div className="col-12 col-md-6 d-flex justify-content-between align-items-center order-3 order-md-2">
 
+								<div className="col-12 col-md-6 d-flex justify-content-between align-items-center order-3 order-md-2">
 									<div className={`divInputNumber divInputNumberYourOrders_${thisProduct.id}_inHistory_${indexOrderInHistory} mx-right position-relation ${classes.divInputNumberYourOrders}`}>
 										<Input type="number" className="text-center" labelDisplay="d-none" name={`product_${thisProduct.id}_inHistory_${indexOrderInHistory}`} id={`input_product_${thisProduct.id}_inHistory_${indexOrderInHistory}`} data_price={`${product.price}`} defaultValue={product.quantity} readOnly="readOnly" />
 									</div>
-
-									<p className="mb-0" id={`product_price_${thisProduct.id}_inHistory_${indexOrderInHistory}`}><span name={`product_price_inHistory_${indexOrderInHistory}`}>{+(product.price * product.quantity).toFixed(1)}</span> грн</p>
+									<p className="mb-0" id={`product_price_${thisProduct.id}_inHistory_${indexOrderInHistory}`}>
+										<span>{(product.price * product.quantity).toFixed(1)}</span> грн
+									</p>
 								</div>
+
 								<div className="col-1 col-md-1 d-flex justify-content-center align-items-center order-2 order-md-3">
 									<Button
 										type="submit"
-										id={thisProduct.id}
-
 										selfType="success"
 										className="btn btn-success"
 										disabled={!thisProduct.quantity || thisProduct.status === 'deleted'}
@@ -230,57 +204,49 @@ class YourOrders extends Component {
 										<i className="fa fa-shopping-basket" aria-hidden="true"></i>
 									</Button>
 								</div>
+
 								<div className="col order-4">
 									{this.props.authAdmin
-										? !thisProduct.status ? <p className="mb-0 text-danger mt-1 mt-sm-3 rounded p-2" id={`warning_${thisProduct.id}`} >Доступно: <span className="text-primary">{`${thisProduct.quantity} ${thisProduct.units}.`}</span></p> : <p className="mb-0 text-danger mt-1 mt-sm-3 rounded p-2" id={`warning_${thisProduct.id}`} >Товар відсутній</p>
+										? !thisProduct.status
+											? <p className="mb-0 text-danger mt-1 mt-sm-3 rounded p-2">Доступно: <span className="text-primary">{`${thisProduct.quantity} ${thisProduct.units}.`}</span></p>
+											: <p className="mb-0 text-danger mt-1 mt-sm-3 rounded p-2">Товар відсутній</p>
 										: thisProduct.quantity
-											? <p className="mb-0 text-success mt-1 mt-sm-3 rounded p-2" id={`warning_${thisProduct.id}`} >Товар є в наявності</p>
-											: <p className="mb-0 text-danger mt-1 mt-sm-3 rounded p-2" id={`warning_${thisProduct.id}`} >Товару немає в наявності</p>
+											? <p className="mb-0 text-success mt-1 mt-sm-3 rounded p-2">Товар є в наявності</p>
+											: <p className="mb-0 text-danger mt-1 mt-sm-3 rounded p-2">Товару немає в наявності</p>
 									}
 								</div>
-								{/* КОМЕНТАР ДО ТОВАРУ (аналогічно до CustomersCarts) */}
+
+								{/* КОМЕНТАР ДО КОНКРЕТНОГО ТОВАРУ */}
 								{product.comment && (
 									<div className="col-12 order-5 mt-2 px-0">
-										<div className="p-2 rounded" style={{
-											backgroundColor: '#f1faff',
-											border: '1px solid #dee2e6',
-											borderLeft: '4px solid #17a2b8',
-											boxShadow: 'inset 0 1px 2px rgba(0,0,0,0.05)',
-											fontSize: '0.85rem'
-										}}>
-											<div className="d-flex align-items-start">
-												<i className="fas fa-comment-dots mt-1 mr-2 text-info" style={{ opacity: 0.8 }}></i>
-												<div>
-													<span className="text-info font-weight-bold" style={{
-														fontSize: '0.75rem',
-														textTransform: 'uppercase',
-														letterSpacing: '0.5px'
-													}}>
-														Ваш коментар до товару:
-													</span>
-													<p className="mb-0 mt-1 text-dark" style={{
-														fontStyle: 'italic',
-														lineHeight: '1.4',
-														whiteSpace: 'pre-wrap'
-													}}>
-														{product.comment}
-													</p>
-												</div>
-											</div>
+										<div className="p-2 rounded bg-light border-left border-info" style={{ fontSize: '0.85rem' }}>
+											<small className="text-info font-weight-bold text-uppercase">Коментар до товару:</small>
+											<p className="mb-0 font-italic">{product.comment}</p>
 										</div>
 									</div>
 								)}
 							</form>
 						)
-					})
-				)
-			}
+					})}
+
+					{/* --- ВІДОБРАЖЕННЯ ЗАГАЛЬНОГО КОМЕНТАРЯ ЗАМОВЛЕННЯ --- */}
+					{(ordersThis.orderComment || ordersThis.comment) && (
+						<div className="w-100 mt-3 p-3 rounded" style={{ backgroundColor: '#fff4e6', border: '1px solid #ffe8cc' }}>
+							<div className="d-flex align-items-center mb-1">
+								<i className="fas fa-clipboard-list mr-2 text-warning"></i>
+								<span className="font-weight-bold text-dark" style={{ fontSize: '0.9rem' }}>Ваш коментар до замовлення:</span>
+							</div>
+							<p className="mb-0 text-dark" style={{ whiteSpace: 'pre-wrap', lineHeight: '1.5' }}>
+								{ordersThis.orderComment || ordersThis.comment}
+							</p>
+						</div>
+					)}
+				</React.Fragment>
+			)
 		} else {
-			return <h6 className="text-danger">Ви ще не зробили замовлення !!!</h6>
+			return <h6 className="text-danger">Запис порожній !!!</h6>
 		}
-
 	}
-
 	componentDidMount() {
 
 	}
@@ -290,7 +256,13 @@ class YourOrders extends Component {
 		const { hasAccount } = this.props
 		const ordersHistory = this.props.ordersHistory
 
-		const thisOrdersHistory = ordersHistory.filter(order => order.customerId === this.props.customerId)[0] ? ordersHistory.filter(order => order.customerId === this.props.customerId)[0].cartsHistory : null
+		// Отримуємо дані конкретного клієнта
+		const customerHistory = ordersHistory.find(order => order.customerId === this.props.customerId)
+
+		// Масив замовлень
+		const thisOrdersHistory = customerHistory ? customerHistory.cartsHistory : null
+		// Масив повернень (stockHistory)
+		const thisStockHistory = customerHistory ? customerHistory.stockHistory : null
 
 		return (
 			<div className={`wrapper ${classes.YourOrders, classes.Wrapper}`} >
@@ -333,7 +305,7 @@ class YourOrders extends Component {
 													id={'statusUpdate'}
 													onClick={() => this.props.updateStatusYourOrder(this.props.customerId, index)}
 													className={`ml-3 btn btn-success btn_refresh_${index}`}
-												>
+													Lark>
 													<i className="fa fa-refresh" aria-hidden="true"></i>
 												</Button>
 
@@ -343,25 +315,7 @@ class YourOrders extends Component {
 											</div>
 
 											{this.renderOrders([order], index)}
-											{/* ЗАГАЛЬНИЙ КОМЕНТАР ДО ЗАМОВЛЕННЯ */}
-											{(order.orderComment || order.comment) && (
-												<div className="mt-3 p-3 rounded" style={{
-													backgroundColor: '#fffdf5',
-													border: '1px solid #e9ecef',
-													borderLeft: '5px solid #ffc107',
-													boxShadow: '0 2px 4px rgba(0,0,0,0.05)'
-												}}>
-													<div className="d-flex align-items-center mb-2">
-														<i className="fas fa-truck text-warning mr-2"></i>
-														<h6 className="font-weight-bold text-dark mb-0" style={{ fontSize: '0.9rem', textTransform: 'uppercase' }}>
-															Ваш коментар до замовлення:
-														</h6>
-													</div>
-													<p className="mb-0 text-dark" style={{ whiteSpace: 'pre-wrap', fontSize: '1rem', lineHeight: '1.5', color: '#333' }}>
-														{order.orderComment || order.comment}
-													</p>
-												</div>
-											)}
+
 											<div className="d-flex justify-content-end">
 												<p className="mr-3 font-weight-bold">Загальна сума замовлення:&nbsp;
 													<span className="text-primary" id={`totalPrice_inHistory_${index}`}>
@@ -377,13 +331,61 @@ class YourOrders extends Component {
 
 						}
 
+						{/* НОВИЙ БЛОК ДЛЯ ПОВЕРНЕНЬ (Stock History) */}
+						{thisStockHistory && thisStockHistory.length > 0 && (
+							<>
+								<h3 className={"mb-2 mt-5 border-bottom text-center h1Title text-warning"}>Ваші повернення:</h3>
+								{thisStockHistory.map((stock, index) => {
+									return (
+										<div key={Math.random() + stock.date} className={"border border-warning p-3 mb-3"} >
+											<h5 className={`${classes.h5}`}>Дата повернення: &nbsp;<span className={"text-info"}>{stock.date}</span></h5>
+
+											<div className="d-flex align-items-center">
+												<h5 className={`${classes.h5} mb-0`}>
+													Статус: &nbsp;
+													{/* ДОДАНО КЛАС status_order_stock_${index} для зв'язку з Redux Action */}
+													<span className={`text-warning status_order_stock_${index}`}>
+														{stock.status || "Опрацьовується"}
+													</span>
+												</h5>
+
+												{/* КНОПКА ОНОВЛЕННЯ СТАТУСУ ДЛЯ ПОВЕРНЕНЬ */}
+												<Button
+													type="button"
+													id={`statusUpdate_stock_${index}`}
+													// ДОДАНО ТРЕТІЙ ПАРАМЕТР true (це аргумент isStock)
+													onClick={() => this.props.updateStatusYourOrder(this.props.customerId, index, true)}
+													className={`ml-3 btn btn-outline-warning btn-sm btn_refresh_stock_${index}`}
+												>
+													<i className="fa fa-refresh" aria-hidden="true"></i>
+												</Button>
+											</div>
+
+											<div className="mt-3">
+												{/* Використовуємо ту саму функцію рендеру, передаючи об'єкт як замовлення */}
+												{this.renderOrders([{ ...stock, cart: stock.cart || stock.items }], `stock_${index}`)}
+											</div>
+
+											<div className="d-flex justify-content-end mt-2">
+												<p className="mr-3 font-weight-bold">Сума повернення:&nbsp;
+													<span className="text-warning">
+														{this.calculationTotalPriceForCart([{ ...stock, cart: stock.cart || stock.items }])}
+													</span> <span>грн</span>
+												</p>
+											</div>
+										</div>
+									)
+								}).reverse()}
+							</>
+						)}
+
 						<Button
 							type="button"
 							style={{ display: 'none' }}
 							id={'goToTop'}
 							onClick={this.props.topFunction}
 							className={`btn btn-danger ${classes.btnTop}`}
-						>
+							Lark>
 							<i className="fa fa-arrow-up" aria-hidden="true"></i>
 						</Button>
 
@@ -415,8 +417,7 @@ function mapStateToProps(state) {
 function mapDispatchToProps(dispatch) {
 	return {
 		updateIsOrdersHistoryThisCart: isOrdersThisCart => dispatch(updateIsOrdersHistoryThisCart(isOrdersThisCart)),
-		updateStatusYourOrder: (customerId, index) => dispatch(updateStatusYourOrder(customerId, index)),
-		onScroll: () => dispatch(onScroll()),
+		updateStatusYourOrder: (customerId, index, isStock) => dispatch(updateStatusYourOrder(customerId, index, isStock)),
 		topFunction: () => dispatch(topFunction()),
 		addProductToCart: obj => dispatch(addProductToCart(obj))
 	}

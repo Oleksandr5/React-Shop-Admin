@@ -162,7 +162,7 @@
     margin-top: 4px;
 }
 
-/* ================= ЕЛЕМЕНТИ ТА КНОПКИ ================= */
+/* ================= INPUTS & BADGES ================= */
 .usedWrapper {
     display: flex;
     align-items: center;
@@ -182,38 +182,27 @@
     border: 1px solid #bbdefb;
 }
 
-.inputSmall, .inputAgreement {
+.inputSmall, .inputAgreement, .inputComment {
     height: 36px;
     padding: 0 8px;
     border: 1px solid #ccc;
     border-radius: 4px;
     font-size: 14px;
     box-sizing: border-box;
+    transition: border-color 0.2s;
 }
 
 .inputSmall { width: 70px; }
 .inputAgreement { width: 100px; }
+.inputComment { width: 150px; margin-left: 5px; }
 
-/* Виправити: додаємо стилі для коментаря, копіюючи базу з .inputSmall та .inputAgreement */
-.inputComment {
-    height: 36px;            /* Така ж висота, як у інших */
-    padding: 0 8px;          /* Внутрішні відступи */
-    border: 1px solid #ccc;  /* Сіра рамка за замовчуванням */
-    border-radius: 4px;      /* Заокруглення */
-    font-size: 14px;         /* Розмір тексту */
-    box-sizing: border-box;  /* Щоб падінги не роздували ширину */
-    width: 150px;            /* Ширина для коментаря (трохи більше за угоду) */
-    margin-left: 5px;        /* Відступ від попереднього інпута */
-    transition: border-color 0.2s;
-}
-
-/* Виправити: додаємо колір при фокусі, щоб було як у всій системі */
-.inputComment:focus {
-    border-color: #17a2b8;   /* Ваш фірмовий синій/бірюзовий колір */
+.inputSmall:focus, .inputAgreement:focus, .inputComment:focus {
+    border-color: #17a2b8;
     outline: none;
 }
 
-.btnAdd, .btnHistory, .btnUndo, .clearBtn {
+/* ================= КНОПКИ (МАЛІ / ТАБЛИЧНІ) ================= */
+.btnAdd, .btnHistory, .btnUndo, .btnExport, .btnPrint {
     height: 36px;
     padding: 0 15px;
     border: none;
@@ -228,11 +217,33 @@
     color: white !important;
 }
 
-.clearBtn { background-color: #faf8fe !important; border: 2px solid #000000; color: #0b0b0b !important; }
-.clearBtn:hover { background-color: #d2d0d9 !important; }
+/* Новий стиль для clearBtn (Desktop) */
+.clearBtn {
+    height: 36px;
+    padding: 0 15px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    font-weight: 600;
+    font-size: 14px;
+    transition: all 0.2s ease;
+    margin-top: 10px;
+    /* Червоний градієнт */
+    background: linear-gradient(135deg, #ff4b2b 0%, #ff416c 100%) !important;
+    color: white !important;
+    border: none !important;
+    border-radius: 8px !important;
+    box-shadow: 0 2px 4px rgba(255, 65, 108, 0.2);
+}
 
-.btnAdd { background-color: #28a745 !important; }
-.btnAdd:hover { background-color: #218838 !important; box-shadow: 0 4px 10px rgba(0, 0, 0, 0.25); }
+.clearBtn:hover {
+    filter: brightness(1.1);
+    transform: translateY(-1px);
+}
+
+.btnAdd, .btnExport, .btnPrint { background-color: #28a745 !important; }
+.btnAdd:hover, .btnExport:hover, .btnPrint:hover { background-color: #218838 !important; box-shadow: 0 4px 10px rgba(0, 0, 0, 0.25); }
 
 .btnHistory { background-color: #6c757d !important; }
 .btnHistory:hover { background-color: #5a6268 !important; box-shadow: 0 4px 10px rgba(0, 0, 0, 0.25); }
@@ -240,7 +251,96 @@
 .btnUndo { background-color: #da1c0b !important; }
 .btnUndo:hover { background-color: #9d0b08 !important; box-shadow: 0 4px 10px rgba(0, 0, 0, 0.25); }
 
-/* ================= REPORT LAYOUT ================= */
+/* ================= ВЕЛИКІ КНОПКИ ТА ДІЇ (ОНОВЛЕНО) ================= */
+
+/* Універсальна кнопка-перемикач (Синя) */
+.btnToggle {
+    width: 100%;
+    min-height: 50px;
+    padding: 10px 20px;
+    background: linear-gradient(135deg, #3498db 0%, #2980b9 100%);
+    color: white !important;
+    border: none;
+    border-radius: 10px;
+    font-size: 16px;
+    font-weight: 600;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    transition: all 0.2s ease;
+    box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+    margin-bottom: 15px;
+}
+
+.btnToggle:hover {
+    filter: brightness(1.1);
+    box-shadow: 0 6px 12px rgba(0,0,0,0.15);
+}
+
+.btnToggle:active {
+    transform: scale(0.98);
+}
+
+/* Спеціальний помаранчевий для сповіщень */
+.btnNotification {
+    background: linear-gradient(135deg, #f39c12 0%, #e67e22 100%) !important;
+}
+
+/* Контейнер для верхніх кнопок дій */
+.topActions {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 12px;
+    margin-bottom: 25px;
+    padding: 15px;
+    background: #f8f9fa;
+    border-radius: 12px;
+    border: 1px solid #e0e0e0;
+}
+
+/* Базовий стиль actionBtn */
+.actionBtn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 12px 15px;
+    border: none;
+    border-radius: 8px;
+    color: white !important;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    min-height: 48px;
+}
+
+.actionBtn:hover:not(:disabled) {
+    filter: brightness(1.1);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+}
+
+.actionBtn:active:not(:disabled) {
+    transform: translateY(0);
+    filter: brightness(0.9);
+}
+
+.actionBtn:disabled {
+    background-color: #bdc3c7 !important;
+    cursor: not-allowed;
+    opacity: 0.7;
+}
+
+/* Кольорові класи для кнопок */
+.btnGreen { background-color: #27ae60 !important; }
+.btnOrange { background-color: #f39c12 !important; }
+.btnBlue { background-color: #17a2b8 !important; }
+.btnGray { background-color: #95a5a6 !important; }
+
+/* ================= REPORT & MODAL ================= */
 .reportHeaderContainer {
     display: flex;
     justify-content: space-between;
@@ -249,162 +349,30 @@
     gap: 20px;
 }
 
-.topActions {
+.tableHeaderToggle {
+    cursor: pointer;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 10px;
+    padding: 10px;
+    background: #f8f9fa;
+    border-radius: 4px;
+    margin-bottom: 10px;
+}
+
+.headerTitle {
+    font-size: 1.2rem;
+    flex: 1;
+    min-width: 200px;
+}
+
+.headerActions {
     display: flex;
     gap: 10px;
-    margin-bottom: 20px;
-    align-items: center;
 }
 
-/* ================= АДАПТИВНІСТЬ (MOBILE) ================= */
-
-@media (max-width: 768px) {
-    /* Налаштування хедера */
-    .reportHeaderContainer {
-        flex-direction: column;
-        align-items: flex-start;
-        gap: 15px;
-    }
-
-    .topActions {
-        flex-direction: column;
-        width: 100%;
-        gap: 8px;
-    }
-
-    /* Кнопки та інпути на мобільних */
-    .topActions button, .btnAdd, .btnHistory, .btnUndo, .clearBtn {
-        width: 100% !important;
-        height: 45px;
-        margin: 0 !important;
-    }
-
-    .usedWrapper {
-        flex-direction: column;
-        align-items: stretch;
-    }
-
-    .inputSmall, .inputAgreement, .totalBadge {
-        width: 100% !important;
-        height: 42px;
-    }
-
-    .selectWrapper {
-        flex-direction: column;
-        align-items: stretch;
-        gap: 12px;
-    }
-
-    .select {
-        width: 100%;
-        min-width: 0;
-        height: 42px;
-        font-size: 16px;
-    }
-
-    .label {
-        margin-bottom: -8px;
-    }
-
-    /* ПЕРЕТВОРЕННЯ ЗВІТУ В КАРТКИ */
-    .reportTable {
-        display: block;
-        border: none !important;
-    }
-
-    .reportTable thead {
-        display: none;
-    }
-
-    .reportTable tbody {
-        display: block;
-        width: 100%;
-    }
-
-    .reportTable tr {
-        display: grid;
-        grid-template-columns: 1fr 1fr; 
-        gap: 10px;
-        margin-bottom: 25px;
-        padding: 12px;
-        border: 2px solid #17a2b8 !important;
-        border-radius: 12px;
-        background: #fff;
-        box-shadow: 0 4px 10px rgba(0,0,0,0.05);
-    }
-
-    /* Назва товару */
-    .reportTable tr td:first-child {
-        grid-column: span 2;
-        background: #f8f9fa;
-        text-align: center;
-        font-weight: bold;
-        font-size: 16px !important;
-        text-transform: uppercase;
-        margin: -12px -12px 5px -12px;
-        padding: 12px !important;
-        border-radius: 10px 10px 0 0;
-        border-bottom: 2px solid #17a2b8 !important;
-        color: #333;
-        height: auto;
-    }
-
-    /* Комірки показників */
-    .reportTable td {
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        justify-content: center;
-        padding: 8px !important;
-        border: 2px solid #28a745 !important; 
-        border-radius: 8px;
-        height: 65px;
-        background: #fff;
-    }
-
-    .reportTable td::before {
-        content: attr(data-label);
-        font-size: 8px;
-        font-weight: 800;
-        color: #888;
-        margin-bottom: 4px;
-        text-transform: uppercase;
-    }
-
-    /* Комірка "Різниця" */
-    .reportTable tr td:last-child {
-        grid-column: span 2;
-        border: none !important;
-        border-top: 1px dashed #ccc !important;
-        margin-top: 5px;
-        height: auto;
-        flex-direction: row;
-        justify-content: space-between;
-        background: transparent;
-        padding: 15px 5px 5px 5px !important;
-    }
-
-    .reportTable tr td:last-child::before {
-        content: "РІЗНИЦЯ:";
-        font-size: 11px;
-        font-weight: bold;
-        color: #333;
-    }
-
-    .reportTable input {
-        width: 100% !important;
-        height: 30px;
-        text-align: center;
-    }
-
-    .inputComment {
-        width: 100% !important;
-        margin-left: 0;
-        margin-top: 5px;
-    }
-}
-
-/* Базовий контейнер модалки (залишаємо для десктопа і мобілки) */
 .modalContentCustom {
     background: white;
     padding: 25px;
@@ -416,119 +384,295 @@
     box-shadow: 0 15px 35px rgba(0,0,0,0.5);
 }
 
+/* ================= АДАПТИВНІСТЬ (MOBILE) ================= */
+
+/* ================= АДАПТИВНІСТЬ (MOBILE) ================= */
+
 @media (max-width: 768px) {
-    /* Ховаємо шапку таблиці */
-    .invoiceTable thead {
+    /* Налаштування контейнерів та загальних елементів */
+    .reportHeaderContainer, .selectWrapper, .usedWrapper, .tableHeaderToggle, .headerActions {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 15px;
+    }
+
+    .topActions {
+        grid-template-columns: 1fr;
+        gap: 8px;
+    }
+
+    /* Уніфікація кнопок та інпутів */
+    .topActions button, .actionBtn, .btnAdd, .btnHistory, .btnUndo, .clearBtn, .headerActions button, .btnToggle,
+    .inputSmall, .inputAgreement, .inputComment, .totalBadge, .select {
+        width: 100% !important;
+        height: 48px;
+        margin: 0 !important;
+        font-size: 15px;
+        border-radius: 10px !important;
+    }
+
+    .clearBtn {        
+        margin-top: 10px !important;        
+    }
+
+    .label { margin-bottom: -8px; }
+
+    /* ПЕРЕТВОРЕННЯ ТАБЛИЦЬ (ЗВІТ ТА ІНВОЙСИ) В КАРТКИ-КВАДРАТИКИ */
+    .reportTable, .invoiceTable {
+        display: block;
+        border: none !important;
+    }
+
+    .reportTable thead, .invoiceTable thead {
         display: none;
     }
 
-    /* Рядок стає карткою */
-    .invoiceTable tr {
-        display: block;
-        margin-bottom: 25px;
-        background: #ffffff;
-        border: 2px solid #28a745; /* Насичений зелений */
-        border-radius: 15px;
-        /* Ваша зелена тінь */
-        box-shadow: 0 4px 12px hsla(121, 82%, 36%, 0.1); 
-        padding: 15px;
-        overflow: hidden;
+    /* Спільна сітка для рядків-карток */
+    .reportTable tr, .invoiceTable tr {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 10px;
+        margin-top: 10px;
+        margin-bottom: 10px;
+        padding: 12px;
+        background: #fff;
+        border-radius: 12px;
+        box-shadow: 0 4px 10px rgba(0,0,0,0.05);
     }
 
-    /* Комірка стає рядком у картці */
-    .invoiceTable td {
+    /* Спільний стиль для комірок (Квадратики) */
+    .reportTable td, .invoiceTable td {
         display: flex;
-        justify-content: space-between;
+        flex-direction: column; /* Текст під текстом */
         align-items: center;
-        padding: 12px 5px !important;
-        border: none !important;
-        border-bottom: 1px solid #f1f1f1 !important;
-    }
-
-    .invoiceTable td:last-child {
-        border-bottom: none !important;
         justify-content: center;
-        padding-top: 20px !important;
-        background: #f9fffb; /* Легкий зелений фон для зони кнопок */
-        margin: 10px -15px -15px -15px; /* Розтягуємо фон на всю ширину карти */
-        border-radius: 0 0 13px 13px;
+        padding: 10px !important;
+        height: 70px;
+        border: 1px solid #eee !important;
+        border-radius: 8px;
+        background: #fff;
     }
 
-    /* Підписи зліва */
-    .invoiceTable td::before {
+    /* Спільний стиль для підписів (data-label) */
+    .reportTable td::before, .invoiceTable td::before {
         content: attr(data-label);
         font-weight: 700;
-        color: #1e7e34; /* Темно-зелений для тексту */
-        font-size: 14px;
+        font-size: 10px;
         text-transform: uppercase;
-        letter-spacing: 0.5px;
+        color: #888;
+        margin-bottom: 4px;
     }
 
-    /* Особливий стиль для суми */
-    .invoiceTable td[data-label="Сумарно"] {
-        background-color: #f0fdf4 !important;
-        font-weight: 800;
-        color: #155724;
+    /* Назва товару (перша комірка) на всю ширину */
+    .reportTable tr td:first-child, .invoiceTable tr td:first-child {
+        grid-column: span 2;
+        flex-direction: row;
+        justify-content: space-between;
+        background: #f8f9fa;
+        font-weight: bold;
+        border-radius: 10px 10px 0 0;
+        color: #333;
+        height: auto;
+        padding: 12px !important;
+        margin: -12px -12px 5px -12px;
     }
+
+    /* --- УНІКАЛЬНІ СТИЛІ ДЛЯ ЗВІТУ (REPORT) --- */
+    .reportTable tr {
+        border: 2px solid #17a2b8 !important;
+    }
+    
+    .reportTable td input {
+        width: 100% !important;
+        max-width: 80px;
+        height: 34px;
+        text-align: center;
+    }
+
+    /* --- УНІКАЛЬНІ СТИЛІ ДЛЯ ІНВОЙСІВ (INVOICE) --- */
+    .invoiceTable tr {
+        border: 2px solid #28a745 !important;
+    }
+
+    .invoiceTable td::before {
+        color: #28a745; /* Зелені підписи для інвойсів */
+    }
+
+    /* ПЕРЕТВОРЕННЯ usedMaterials В КАРТКУ */
+    .usedMaterials {
+        display: block;
+        border: none !important;
+    }
+
+    .usedMaterials thead {
+        display: none; /* Ховаємо шапку */
+    }
+
+    .usedMaterials tr {
+        display: grid;
+        grid-template-columns: 1fr 1fr; /* Сітка для показників */
+        gap: 12px;
+        margin-bottom: 30px;
+        padding: 15px;
+        background: #fff;
+        border-radius: 15px;
+        border: 2px solid #007bff !important; /* Синя рамка для матеріалів */
+        box-shadow: 0 5px 15px rgba(0, 123, 255, 0.1);
+    }
+
+    /* Назва товару (Товар) - на всю ширину зверху */
+    .usedMaterials tr td:first-child {
+        grid-column: span 2;
+        background: #f0f7ff;
+        color: #0056b3;
+        font-weight: 800;
+        font-size: 18px;
+        text-align: center;
+        padding: 12px !important;
+        margin: -15px -15px 5px -15px;
+        border-radius: 13px 13px 0 0;
+        border-bottom: 2px solid #007bff !important;
+        height: auto;
+    }
+
+    /* Показник "Взято" (друга комірка) */
+    .usedMaterials tr td:nth-child(2) {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        background: #fff;
+        border: 1px solid #e0e0e0 !important;
+        border-radius: 10px;
+        height: 80px;
+    }
+
+    .usedMaterials tr td:nth-child(2)::before {
+        content: "ВЗЯТО:";
+        font-size: 10px;
+        color: #888;
+        font-weight: bold;
+        margin-bottom: 5px;
+    }
+
+    /* Блок управління (третя комірка з інпутами та кнопками) */
+    .usedMaterials tr td:last-child {
+        grid-column: span 2; /* Управління на всю ширину або можна в окрему сітку */
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        padding: 10px 0 0 0 !important;
+        border: none !important;
+        border-top: 1px dashed #ccc !important;
+    }
+
+    /* Стилізація badge (синій блок з числом 10) */
+    .totalBadge {
+        width: 100% !important;
+        background-color: #e7f3ff !important;
+        color: #007bff !important;
+        border: 1px solid #b3d7ff !important;
+        font-weight: 700;
+        font-size: 18px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 8px;
+        height: 45px;
+    }
+
+    /* Інпути всередині картки */
+    .usedMaterials .inputSmall, 
+    .usedMaterials .inputAgreement, 
+    .usedMaterials .inputComment {
+        width: 100% !important;
+        height: 45px;
+        border-radius: 8px !important;
+        border: 1px solid #ced4da !important;
+        text-align: center;
+        font-size: 16px;
+    }
+
+    /* Кнопки */
+    .btnAdd {
+        background-color: #28a745 !important;
+        color: white;
+        font-weight: bold;
+        text-transform: uppercase;
+    }
+
+    .btnUndo {
+        background-color: #dc3545 !important;
+        color: white;
+    }
+/* РЕЖИМ ІСТОРІЇ НА ВЕСЬ ЕКРАН */
+
+/* Контейнер картки (зелена рамка на скріншоті) */
+.historyItemCard {
+    width: 100% !important;
+    margin: 10px 0 !important;
+    padding: 10px !important;
+    box-sizing: border-box;
+    display: block; /* Перемикаємо з flex, якщо було */
 }
 
-.tableHeaderToggle {
-    cursor: pointer;
+/* Дата (верхня плашка) */
+.historyDateRow {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    flex-wrap: wrap; /* Дозволяє кнопкам перестрибувати на новий рядок */
-    gap: 10px;
-    padding: 10px;
+    width: 100%;
+    padding: 8px;
     background: #f8f9fa;
-    border-radius: 4px;
+    border-radius: 8px;
     margin-bottom: 10px;
 }
 
-.headerTitle {
-    font-size: 1.2rem;
-    flex: 1; /* Займає вільний простір зліва */
-    min-width: 200px;
+/* Сітка для "Кількість", "Сумарно", "Угода", "Коментар" */
+.historyGrid {
+    display: grid !important;
+    grid-template-columns: 1fr 1fr !important; /* Два стовпці */
+    gap: 8px !important;
+    width: 100%;
 }
 
-.headerActions {
+/* Кожен окремий квадратик в історії */
+.historyGridItem {
     display: flex;
-    gap: 10px;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 75px;
+    border: 1px solid #eee;
+    border-radius: 10px;
+    background: #fff;
+    padding: 5px;
+    text-align: center;
 }
 
-/* Кнопка експорту (зелена, як ви просили) */
-.btnExport, .btnPrint {
-    background: #28a745 !important;
-    color: white;
-    border: none;
-    height: 32px;
-    font-size: 12px;
-    padding: 0 12px;
-    border-radius: 4px;
-    cursor: pointer;
+/* Спеціальний стиль для "Сумарно" (синій фон, як на скріншоті) */
+.historyGridItem.summary {
+    background: #f0f7ff !important;
+    border-color: #d0e7ff !important;
 }
 
-/* МОБІЛЬНА ВЕРСІЯ (Екрани менше 600px) */
-@media (max-width: 768px) {
-    .tableHeaderToggle {
-        flex-direction: column; /* Заголовок зверху, кнопки знизу */
-        align-items: stretch;  /* Розтягуємо все на всю ширину */
-    }
+/* Блок "Дії" на всю ширину під сіткою */
+.historyActionsRow {
+    grid-column: span 2; /* Розтягуємо на обидва стовпці */
+    display: flex;
+    justify-content: space-around;
+    align-items: center;
+    padding: 10px;
+    margin-top: 5px;
+    border-top: 1px dashed #eee;
+}
 
-    .headerActions {
-        flex-direction: column; /* Кнопки одна під одною */
-        width: 100%;
-    }
-
-    .headerActions button {
-        width: 100%;       /* Кнопки на всю ширину */
-        height: 40px;      /* Трохи збільшимо для зручності натискання пальцем */
-        margin-top: 5px;
-        font-size: 14px;
-    }
-
-    .headerTitle {
-        text-align: center;
-        margin-bottom: 10px;
-    }
+/* Кнопки редагування та видалення */
+.historyActionsRow button {
+    width: 45%;
+    height: 50px;
+    border-radius: 12px;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+}
+    
 }
