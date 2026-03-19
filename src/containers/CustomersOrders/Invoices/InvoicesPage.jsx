@@ -16,6 +16,7 @@ const CrewInventoryReport = ({
 	customers,
 	invoices,
 	invoicesSummary,
+	usedMaterials,
 	isVisible,
 	onToggle
 }) => {
@@ -102,147 +103,15 @@ const CrewInventoryReport = ({
 		return () => remRef.off();
 	}, [mainWorkerId, partnerWorkerId]);
 
-	// --- НОВА ФУНКЦІЯ АРХІВУВАННЯ ЗАЛИШКІВ/ЗВІТУ ---
-	const archiveFullReport = async () => {
-		if (!window.confirm("Створити новий незалежний знімок звіту в архіві?")) return;
-
-		try {
-			const date = new Date();
-			const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
-			const timeStamp = `${String(date.getDate()).padStart(2, '0')}_${String(date.getHours()).padStart(2, '0')}-${String(date.getMinutes()).padStart(2, '0')}`;
-
-			const db = firebase.database();
-
-			const reportData = dynamicProductIds.map(pid => {
-				const product = stock?.find(s => String(s.id) === String(pid));
-
-				// Важливо: переконайтеся, що ці змінні (archiveHistory, realRemaining) 
-				// не undefined на момент виклику
-				const prev = Number(archiveHistory?.[pid] || 0);
-				const taken = Number(combinedData.invoices?.[pid] || 0);
-				const spent = Number(combinedData.used?.[pid] || 0);
-				const calc = prev + taken - spent;
-				const fact = Number(realRemaining?.[pid] || 0);
-
-				return {
-					productId: pid,
-					name: product?.name || `ID ${pid}`,
-					remainingMaterialsHistory: prev, // Було initial
-					added: taken,
-					spent: spent,
-					calculated: calc,
-					remainingMaterials: fact,        // Було actual
-					difference: fact - calc
-				};
-			});
-
-			const getWorkerNameWithId = (id) => {
-				const worker = customers?.find(c => String(c.id) === String(id));
-				return worker ? `${worker.name} (${id})` : `ID ${id}`;
-			};
-
-			const crewNames = partnerWorkerId
-				? `${getWorkerNameWithId(mainWorkerId)} / ${getWorkerNameWithId(partnerWorkerId)}`
-				: getWorkerNameWithId(mainWorkerId);
-
-			await db.ref(`archiveReports/${monthKey}/${timeStamp}`).set({
-				archivedAt: date.toISOString(),
-				crew: crewNames,
-				mainWorkerId: mainWorkerId,
-				reportDetails: reportData
-			});
-
-			alert(`✅ Звіт успішно заархівовано!`);
-		} catch (error) {
-			console.error(error);
-			alert("Помилка при створенні архіву: " + error.message);
+	useEffect(() => {
+		if (usedMaterials) {
+			setCombinedData(prev => ({
+				...prev,
+				used: usedMaterials
+			}));
 		}
-	};
+	}, [usedMaterials]);
 
-	// ВСТАВИТИ В InvoicesPage.jsx всередині CrewInventoryReport
-	const archiveGlobalReport = async () => {
-		// 1. Логуємо вхідні дані, щоб побачити, що зараз є в пам'яті компонента
-		console.log("=== ПЕРЕВІРКА ДАНИХ ПЕРЕД АРХІВАЦІЄЮ ===");
-		console.log("combinedData:", combinedData);
-		console.log("realRemaining:", realRemaining);
-		console.log("archiveHistory:", archiveHistory);
-
-		if (!combinedData || (Object.keys(combinedData.invoices).length === 0 && Object.keys(combinedData.used).length === 0)) {
-			alert("Помилка: Дані для розрахунку ще не завантажені або таблиця порожня.");
-			return;
-		}
-
-		if (!window.confirm("Створити архівний знімок для поточного екіпажу?")) return;
-
-		try {
-			const date = new Date();
-			const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
-			const timeStamp = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}_${String(date.getHours()).padStart(2, '0')}-${String(date.getMinutes()).padStart(2, '0')}`;
-
-			const db = firebase.database();
-			const allReports = {};
-
-			const activeWorkerIds = [String(mainWorkerId)];
-			if (partnerWorkerId) activeWorkerIds.push(String(partnerWorkerId));
-
-			activeWorkerIds.forEach(wId => {
-				const worker = customers[wId];
-				if (!worker) {
-					console.warn(`Працівника з ID ${wId} не знайдено в списку customers`);
-					return;
-				}
-
-				const reportData = (dynamicProductIds || []).map(pid => {
-					const product = stock?.find(s => String(s.id) === String(pid));
-
-					const prev = Number(archiveHistory?.[pid] || 0);
-					const taken = Number(combinedData?.invoices?.[pid] || 0);
-					const spent = Number(combinedData?.used?.[pid] || 0);
-					const fact = Number(realRemaining?.[pid] || 0);
-					const calc = prev + taken - spent;
-
-					return {
-						productId: pid,
-						name: product?.name || `Товар ID ${pid}`,
-						units: product?.units || '',
-						prev,
-						added: taken,
-						spent,
-						calculated: calc,
-						fact,
-						diff: fact - calc
-					};
-				});
-
-				allReports[wId] = {
-					workerName: worker.name,
-					workerEmail: worker.email || '',
-					reportDetails: reportData
-				};
-			});
-
-			// 2. ФІНАЛЬНИЙ ЛОГ перед відправкою в базу
-			console.log("ОБ'ЄКТ ЯКИЙ ЙДЕ В FIREBASE:", {
-				path: `archiveReports/${monthKey}/${timeStamp}`,
-				data: allReports
-			});
-
-			if (Object.keys(allReports).length === 0) {
-				console.error("ОБ'ЄКТ allReports ПУСТИЙ. Запис скасовано.");
-				return;
-			}
-
-			await db.ref(`archiveReports/${monthKey}/${timeStamp}`).set({
-				archivedAt: date.toISOString(),
-				reports: allReports
-			});
-
-			alert(`✅ Архів для ${activeWorkerIds.length} працівників створено! Перевірте консоль.`);
-		} catch (error) {
-			console.error("ПОМИЛКА ПРИ ЗАПИСУ В БАЗУ:", error);
-			alert("Помилка: " + error.message);
-		}
-	};
 
 
 	// Коментар: НОВА ФУНКЦІЯ: Запис введених даних прямо в архів Firebase
@@ -318,7 +187,8 @@ const CrewInventoryReport = ({
 			const spent = Number(combinedData.used[pid] || 0);
 
 			// Рахуємо фінальне значення
-			const calc = prev + taken + backToStock - spent;
+			// Кожне значення перетворюємо на число для надійності
+			const calc = Number(prev) + Number(taken) - Number(backToStock) - Number(spent);
 
 			updates[`/remainingMaterials/${mainWorkerId}/${pid}`] = calc;
 		});
@@ -340,7 +210,8 @@ const CrewInventoryReport = ({
 		const spent = Number(combinedData.used[pid] || 0);
 
 		// Оновлена формула: додаємо backToStock
-		const calc = prev + taken + backToStock - spent;
+		// Кожне значення перетворюємо на число для надійності
+		const calc = Number(prev) + Number(taken) - Number(backToStock) - Number(spent);
 
 		try {
 			// 2. Оновлюємо тільки цей один запис у Firebase
@@ -350,141 +221,6 @@ const CrewInventoryReport = ({
 			console.error("Sync error:", e);
 			alert("Помилка при синхронізації: " + e.message);
 		}
-	};
-
-	const handlePrintReport = () => {
-		const currentDate = new Date().toLocaleString('uk-UA');
-
-		const getWorkerNameWithId = (id) => {
-			if (!id) return null;
-			const worker = customers?.find(c => String(c.id) === String(id));
-			return worker ? `${worker.name} (${id})` : `ID ${id}`;
-		};
-
-		const mainWorkerDisplay = getWorkerNameWithId(mainWorkerId);
-		const partnerWorkerDisplay = getWorkerNameWithId(partnerWorkerId);
-
-		const crewNames = partnerWorkerId
-			? `${mainWorkerDisplay} / ${partnerWorkerDisplay}`
-			: mainWorkerDisplay;
-
-		const tableRowsHtml = dynamicProductIds.map(pid => {
-			const product = stock?.find(s => s.id == pid);
-			const prev = Number(archiveHistory?.[pid] || 0);
-			const taken = Number(combinedData?.invoices?.[pid] || 0);
-			const backToStock = Number(combinedData?.invoiceReturn?.[pid] || 0); // Додано
-			const spent = Number(combinedData?.used?.[pid] || 0);
-
-			// Оновлена формула
-			const calc = prev + taken - backToStock - spent;
-
-			const fact = Number(realRemaining?.[pid] || 0);
-			const diff = calc - fact;
-			// Якщо diff > 0 — це нестача (пишемо число як є або з плюсом)
-			// Якщо diff < 0 — це надлишок (число вже буде з мінусом від JS)
-			const diffText = diff === 0 ? '✓' : (diff > 0 ? `+${diff}` : `${diff}`);
-			const diffStyle = diff === 0 ? 'color: green;' : 'color: red; font-weight: bold;';
-
-			return `
-            <tr>
-                <td>${product?.name || `ID ${pid}`}</td>
-                <td style="text-align: center;">${prev}</td>
-                <td style="text-align: center; color: green;">+${taken}</td>
-                <td style="text-align: center; color: #28a745;">+${backToStock}</td> <td style="text-align: center; color: red;">-${spent}</td>
-                <td style="text-align: center; font-weight: bold;">${calc}</td>
-                <td style="text-align: center;">${fact}</td>
-                <td style="text-align: center; font-weight: bold;">${diffText}</td>
-            </tr>
-        `;
-		}).join('');
-
-		const newWindow = window.open("", "_blank", "width=900,height=700");
-		if (newWindow) {
-			newWindow.document.write(`
-            <html>
-                <head>
-                    <title>Звіт — ${crewNames}</title>
-                    <style>
-                        body { font-family: sans-serif; padding: 20px; color: #333; }
-                        .header { border-bottom: 2px solid #17a2b8; margin-bottom: 20px; padding-bottom: 10px; }
-                        .header-top { display: flex; justify-content: space-between; align-items: baseline; }
-                        .crew-info { font-size: 16px; margin-top: 10px; color: #2c3e50; }
-                        table { width: 100%; border-collapse: collapse; margin-top: 10px; }
-                        th, td { border: 1px solid #ccc; padding: 8px; font-size: 12px; }
-                        th { background-color: #f1f4f9; text-align: center; }
-                        .no-print { display: flex; justify-content: center; gap: 15px; margin-top: 30px; }
-                        button { padding: 10px 25px; border: none; border-radius: 6px; cursor: pointer; font-size: 14px; font-weight: bold; }
-                        .btn-print { background: #17a2b8; color: white; }
-                        .btn-close { background: #6c757d; color: white; }
-                        @media print { .no-print { display: none; } }
-                    </style>
-                </head>
-                <body>
-                    <div class="header">
-                        <div class="header-top">
-                            <h2 style="margin: 0;">📊 Звіт залишків екіпажу</h2>
-                            <span style="font-size: 12px;">Дата: ${currentDate}</span>
-                        </div>
-                        <div class="crew-info"><strong>👷 Екіпаж:</strong> ${crewNames}</div>
-                    </div>
-                    <table>
-                        <thead>
-                            <tr>
-                                <th>Товар</th>
-                                <th>Залишок поч.</th>
-                                <th>Взято</th>
-                                <th>Повернено</th> <th>Списано</th>
-                                <th>Порах. зал.</th>
-                                <th>Факт. зал.</th>
-                                <th>Різниця</th>
-                            </tr>
-                        </thead>
-                        <tbody>${tableRowsHtml}</tbody>
-                    </table>
-                    <div class="no-print">
-                        <button class="btn-print" onclick="window.print()">🖨️ Друкувати звіт</button>
-                        <button class="btn-close" onclick="window.close()">✖ Закрити</button>
-                    </div>
-                </body>
-            </html>
-        `);
-			newWindow.document.close();
-		}
-	};
-
-	//Допоміжна функція для друку (щоб не дублювати HTML-код)
-
-	const renderPrintWindow = (title, tableRows, date) => {
-		const newWindow = window.open("", "_blank", "width=800,height=600");
-		if (!newWindow) return;
-		newWindow.document.write(`
-        <html>
-            <head>
-                <title>${title}</title>
-                <style>
-                    body { font-family: sans-serif; padding: 20px; }
-                    .header-info { display: flex; justify-content: space-between; border-bottom: 2px solid #333; margin-bottom: 20px; }
-                    table { width: 100%; border-collapse: collapse; }
-                    th, td { border: 1px solid #999; padding: 10px; text-align: left; }
-                    th { background-color: #f2f2f2; }
-                    .footer-date { margin-top: 15px; font-size: 12px; text-align: right; }
-                    @media print { .no-print { display: none; } }
-                </style>
-            </head>
-            <body>
-                <div class="header-info"><h2>${title}</h2><span>${date}</span></div>
-                <table>
-                    <thead><tr><th>Назва товару</th><th style="text-align: right;">Кількість</th></tr></thead>
-                    <tbody>${tableRows}</tbody>
-                </table>
-                <p class="footer-date">Сформовано: ${date}</p>
-                <div class="no-print" style="text-align: center; margin-top: 20px;">
-                    <button onclick="window.print()" style="padding: 10px 20px; background: #fb8c00; color: white; border: none; cursor: pointer;">Друк</button>
-                </div>
-            </body>
-        </html>
-    `);
-		newWindow.document.close();
 	};
 
 	//Функції для "Звіт екіпажу" (combinedData)
@@ -520,7 +256,8 @@ const CrewInventoryReport = ({
 			const fact = Number(realRemaining?.[pid] || 0);
 
 			// ЄДИНА ФОРМУЛА: Початок + Взято - Повернено - Списано
-			const calc = prev + taken - backToStock - spent;
+			// Кожне значення перетворюємо на число для надійності
+			const calc = Number(prev) + Number(taken) - Number(backToStock) - Number(spent);
 			const diff = calc - fact;
 
 			if (prev === 0 && taken === 0 && backToStock === 0 && spent === 0 && fact === 0) return '';
@@ -593,7 +330,7 @@ const CrewInventoryReport = ({
 		}
 	};
 
-	const handleExportCombinedDataToCSV = (combinedData, stock, archiveHistory, realRemaining, dynamicProductIds) => {
+	const handleExportCombinedDataToCSV = (combinedData, stock, archiveHistory, realRemaining, dynamicProductIds, userName) => {
 		const header = [
 			"Товар",
 			"Початковий залишок",
@@ -615,7 +352,8 @@ const CrewInventoryReport = ({
 
 			if (prev === 0 && taken === 0 && backToStock === 0 && spent === 0 && fact === 0) return null;
 
-			const calc = prev + taken - backToStock - spent;
+			// Кожне значення перетворюємо на число для надійності
+			const calc = Number(prev) + Number(taken) - Number(backToStock) - Number(spent);
 			const diff = calc - fact;
 			const name = product?.name ? product.name.replace(/"/g, '""') : `ID ${pid}`;
 
@@ -634,8 +372,12 @@ const CrewInventoryReport = ({
 		const csvContent = "\uFEFF" + [header, ...rows].join("\n");
 		const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
 		const link = document.createElement("a");
+		// ФОРМУЄМО НАЗВУ ФАЙЛУ З ІМ'ЯМ
+		const safeName = (userName || "Report").replace(/\s+/g, '_'); // Замінюємо пробіли на підкреслення
+		const dateStr = new Date().toLocaleDateString('uk-UA').replace(/\//g, '.');
 		link.setAttribute("href", URL.createObjectURL(blob));
-		link.setAttribute("download", `Crew_Report_${new Date().toLocaleDateString()}.csv`);
+		// Тепер назва буде: Crew_Report_userName_xx.xx.xxxx.csv
+		link.setAttribute("download", `Crew_Report_${safeName}_${dateStr}.csv`);
 		link.click();
 	};
 
@@ -663,15 +405,6 @@ const CrewInventoryReport = ({
 
 				</div>
 				<div className={classes.topActions}>
-					{/* Створити Глобальний Архів */}
-					<button
-						onClick={archiveGlobalReport}
-						className={classes.actionBtn}
-						style={{ background: '#27ae60' }}
-					>
-						📸 Глобальний Архів
-					</button>
-
 					{/* Записати в архів */}
 					{!hasArchiveInDB && (
 						<button
@@ -694,20 +427,6 @@ const CrewInventoryReport = ({
 						style={{ background: '#17a2b8' }}
 					>
 						🔄 Синхронізувати
-					</button>
-
-					{/* Друк / Ексель */}
-					<button
-						onClick={handlePrintReport}
-						className={classes.actionBtn}
-						disabled={loading}
-						style={{ background: loading ? '#95a5a6' : '#2ecc71' }}
-					>
-						{loading ? (
-							'⏳ Завантаження...'
-						) : (
-							<>📥 Друк / Ексель</>
-						)}
 					</button>
 				</div>
 			</div>
@@ -734,12 +453,25 @@ const CrewInventoryReport = ({
 					className={classes.btnExport}
 					onClick={(e) => {
 						e.stopPropagation();
+
+						// 1. Беремо чисте ім'я основного працівника (без ID в дужках)
+						const mainOnly = mainName.split(' (')[0] || "Report";
+
+						// 2. Беремо чисте ім'я напарника (якщо воно є)
+						const partnerOnly = partnerWorkerId ? partnerName.split(' (')[0] : null;
+
+						// 3. Формуємо назву для файлу
+						const crewNamesForFile = partnerOnly
+							? `${mainOnly}_та_${partnerOnly}`
+							: mainOnly;
+
 						handleExportCombinedDataToCSV(
 							combinedData,
 							stock,
 							archiveHistory,
 							realRemaining,
-							dynamicProductIds
+							dynamicProductIds,
+							crewNamesForFile
 						);
 					}}
 				>
@@ -776,9 +508,10 @@ const CrewInventoryReport = ({
 							const taken = Number(combinedData?.invoices?.[pid] || 0);
 							const backToStock = Number(combinedData?.invoiceReturn?.[pid] || 0); // Додаємо цю змінну
 							const spent = Number(combinedData?.used?.[pid] || 0);
-							const calc = prev + taken + backToStock - spent;
+							// Кожне значення перетворюємо на число для надійності
+							const calc = Number(prev) + Number(taken) - Number(backToStock) - Number(spent);
 							const fact = Number(realRemaining?.[pid] || 0);
-							const diff = fact - calc;
+							const diff = calc - fact;
 
 							return (
 								<tr key={pid}>
@@ -1542,7 +1275,7 @@ const UsedMaterialsTable = ({
 
 	//Функції для "Використані матеріали" (usedMaterials)
 
-	const handleExportUsedMaterialsToCSV = (usedMaterials, stock) => {
+	const handleExportUsedMaterialsToCSV = (usedMaterials, stock, userName) => {
 		const entries = Object.entries(usedMaterials || {}).filter(([_, qty]) => qty > 0);
 
 		if (entries.length === 0) {
@@ -1561,12 +1294,16 @@ const UsedMaterialsTable = ({
 		const csvContent = [header, ...rows].join("\n");
 		const blob = new Blob(["\ufeff", csvContent], { type: 'text/csv;charset=utf-8;' });
 		const link = document.createElement("a");
+		// ФОРМУЄМО НАЗВУ ФАЙЛУ З ІМ'ЯМ
+		const safeName = (userName || "Report").replace(/\s+/g, '_'); // Замінюємо пробіли на підкреслення
+		const dateStr = new Date().toLocaleDateString('uk-UA').replace(/\//g, '.');
 		link.setAttribute("href", URL.createObjectURL(blob));
-		link.setAttribute("download", `Used_Materials_${new Date().toLocaleDateString()}.csv`);
+		// Тепер назва буде: UsedMaterials_userName_xx.xx.xxxx.csv
+		link.setAttribute("download", `UsedMaterials_${safeName}_${dateStr}.csv`);
 		link.click();
 	};
 
-	const handlePrintUsedMaterials = (usedMaterials, stock) => {
+	const handlePrintUsedMaterials = (usedMaterials, stock, userName) => {
 		const currentDate = new Date().toLocaleString('uk-UA');
 
 		// Перетворюємо об'єкт {103: 817, ...} у масив рядків таблиці
@@ -1591,7 +1328,7 @@ const UsedMaterialsTable = ({
 			return;
 		}
 
-		renderPrintWindow("Використані матеріали", tableRowsHtml, currentDate);
+		renderPrintWindow(`Використані матеріали: ${userName}`, tableRowsHtml, currentDate);
 	};
 
 	// --- ВИДАЛЕННЯ --- Тут та сама логіка: видаляємо один вузол, але перераховуємо суми в усіх інших.
@@ -1639,6 +1376,10 @@ const UsedMaterialsTable = ({
 		// Як тільки таблиця з'явилася (mount) після зміни ключа - фокусуємося
 		inputRef.current?.focus();
 	}, []); // Порожній масив означає "виконати один раз при створенні"
+
+	// 1. Знаходимо ім'я клієнта (працівника) за його ID
+	const selectedCustomerObj = customers?.find(c => String(c.id) === String(selectedUser));
+	const finalName = selectedCustomerObj ? selectedCustomerObj.name : "Report";
 
 	return (
 		<div className={classes.usedMaterialsSection} style={{ marginTop: '40px', borderTop: '5px solid #17a2b8', paddingTop: '20px' }}>
@@ -1799,7 +1540,7 @@ const UsedMaterialsTable = ({
 						className={classes.btnPrint}
 						onClick={(e) => {
 							e.stopPropagation();
-							handlePrintUsedMaterials(usedMaterials, stock);
+							handlePrintUsedMaterials(usedMaterials, stock, finalName);
 						}}
 					>
 						🖨️ Друк матеріалів
@@ -1808,7 +1549,7 @@ const UsedMaterialsTable = ({
 						className={classes.btnExport}
 						onClick={(e) => {
 							e.stopPropagation();
-							handleExportUsedMaterialsToCSV(usedMaterials, stock);
+							handleExportUsedMaterialsToCSV(usedMaterials, stock, finalName);
 						}}
 					>
 						📥 Експорт Excel
@@ -2427,7 +2168,7 @@ const InvoicesPage = ({
 		link.click();
 	};
 
-	const handlePrintStock = (stockData) => {
+	const handlePrintStock = (stockData, userName) => {
 		const currentDate = new Date().toLocaleString('uk-UA');
 		const filteredStock = (stockData || []).filter(s => !!s.visibleproduct);
 
@@ -2443,7 +2184,7 @@ const InvoicesPage = ({
 			newWindow.document.write(`
 	<html html >
                 <head>
-                    <title>Залишки на складі</title>
+                    <title>Залишки на складі: ${userName}</title>
                     <style>
                         body { font-family: sans-serif; padding: 20px; }
                         .header-info { display: flex; justify-content: space-between; align-items: baseline; border-bottom: 2px solid #333; margin-bottom: 20px; }
@@ -2456,7 +2197,7 @@ const InvoicesPage = ({
                 </head>
                 <body>
                     <div class="header-info">
-                        <h2>📦 Залишки на складі</h2>
+                        <h2>📦 Залишки на складі: ${userName}</h2>
                         <span>Дата: ${currentDate}</span>
                     </div>
                     <table>
@@ -2474,7 +2215,7 @@ const InvoicesPage = ({
 		}
 	};
 
-	const handleExportStockToCSV = (stockData) => {
+	const handleExportStockToCSV = (stockData, userName) => {
 		if (!stockData || stockData.length === 0) {
 			alert("Немає даних для експорту");
 			return;
@@ -2493,8 +2234,12 @@ const InvoicesPage = ({
 		const url = URL.createObjectURL(blob);
 
 		const link = document.createElement("a");
-		link.setAttribute("href", url);
-		link.setAttribute("download", `Залишки_складу_${new Date().toLocaleDateString()}.csv`);
+		// ФОРМУЄМО НАЗВУ ФАЙЛУ З ІМ'ЯМ
+		const safeName = (userName || "Report").replace(/\s+/g, '_'); // Замінюємо пробіли на підкреслення
+		const dateStr = new Date().toLocaleDateString('uk-UA').replace(/\//g, '.');
+		link.setAttribute("href", URL.createObjectURL(blob));
+		// Тепер назва буде: Stock_userName_xx.xx.xxxx.csv
+		link.setAttribute("download", `Stock_${safeName}_${dateStr}.csv`);
 		link.click();
 	};
 
@@ -2535,7 +2280,7 @@ const InvoicesPage = ({
 
 	//Функції для "Загальна кількість взятих товарів" (invoicesSummary)
 
-	const handleExportInvoicesSummaryToCSV = (summary) => {
+	const handleExportInvoicesSummaryToCSV = (summary, userName) => {
 		// Якщо summary — це вже масив (як видно з лога), Object.values спрацює коректно
 		const dataArray = Object.values(summary || {});
 		if (dataArray.length === 0) return alert("Немає даних для експорту");
@@ -2552,12 +2297,16 @@ const InvoicesPage = ({
 		const csvContent = "\uFEFF" + [header, ...rows].join("\n");
 		const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
 		const link = document.createElement("a");
+		// ФОРМУЄМО НАЗВУ ФАЙЛУ З ІМ'ЯМ
+		const safeName = (userName || "Report").replace(/\s+/g, '_'); // Замінюємо пробіли на підкреслення
+		const dateStr = new Date().toLocaleDateString('uk-UA').replace(/\//g, '.');
 		link.setAttribute("href", URL.createObjectURL(blob));
-		link.setAttribute("download", `Zahalna_kilkist_${new Date().toLocaleDateString()}.csv`);
+		// Тепер назва буде: InvoicesSummary_userName_xx.xx.xxxx.csv
+		link.setAttribute("download", `InvoicesSummary_${safeName}_${dateStr}.csv`);
 		link.click();
 	};
 
-	const handlePrintInvoicesSummary = (summary) => {
+	const handlePrintInvoicesSummary = (summary, userName) => {
 		console.log("summary для друку:", summary);
 		const dataArray = Object.values(summary || {});
 
@@ -2578,10 +2327,11 @@ const InvoicesPage = ({
     `).join('');
 
 		// Виклик вашої допоміжної функції рендеру
-		renderPrintWindow("Загальна кількість взятих товарів", tableRowsHtml, currentDate);
+		renderPrintWindow(`Загальна кількість взятих товарів: ${userName}`, tableRowsHtml, currentDate);
 	};
 
-
+	const selectedCustomerObj = customers.find(c => String(c.id) === String(selectedUser));
+	const finalName = selectedCustomerObj ? selectedCustomerObj.name : "Клієнт";
 
 	return (
 		<div className={classes.wrapper}>
@@ -2725,16 +2475,13 @@ const InvoicesPage = ({
 
 
 
-			<h3 className={classes.sectionTitle}>📑 Замовлення:</h3>
+			<h3 className={classes.sectionTitle}>📑 Замовлення: ${finalName}</h3>
 			<div className={classes.headerActions} style={{ marginBottom: '15px', display: 'flex', gap: '10px' }}>
 				<button
 					className={classes.btnPrint}
 					style={{ padding: '8px 16px', cursor: 'pointer', borderRadius: '4px', border: '1px solid #ccc', background: '#f8f9fa' }}
 					onClick={(e) => {
 						e.stopPropagation();
-						// Знаходимо ім'я клієнта перед друком
-						const selectedCustomerObj = customers.find(c => String(c.id) === String(selectedUser));
-						const finalName = selectedCustomerObj ? selectedCustomerObj.name : "Клієнт";
 						handlePrintOrderTable(invoices, finalName);
 					}}
 				>
@@ -2745,8 +2492,6 @@ const InvoicesPage = ({
 					style={{ padding: '8px 16px', cursor: 'pointer', borderRadius: '4px', border: '1px solid #ccc', background: '#f8f9fa' }}
 					onClick={(e) => {
 						e.stopPropagation();
-						const selectedCustomerObj = customers.find(c => String(c.id) === String(selectedUser));
-						const finalName = selectedCustomerObj ? selectedCustomerObj.name : "Клієнт";
 						handleExportOrderToCSV(invoices, finalName);
 					}}
 				>
@@ -2834,13 +2579,13 @@ const InvoicesPage = ({
 				</table>
 			)}
 
-			<h3 className={classes.sectionTitle}>📊 Загальна кількість взятих товарів:</h3>
+			<h3 className={classes.sectionTitle}>📊 Загальна кількість взятих товарів: ${finalName}</h3>
 			<div className={classes.headerActions} style={{ marginBottom: '15px' }}>
 				<button
 					className={classes.btnPrint}
 					onClick={(e) => {
 						e.stopPropagation();
-						handlePrintInvoicesSummary(invoicesSummary); // Або ваша функція для друку саме цього звіту
+						handlePrintInvoicesSummary(invoicesSummary, finalName); // Або ваша функція для друку саме цього звіту
 					}}
 				>
 					🖨️ Друк
@@ -2849,7 +2594,7 @@ const InvoicesPage = ({
 					className={classes.btnExport}
 					onClick={(e) => {
 						e.stopPropagation();
-						handleExportInvoicesSummaryToCSV(invoicesSummary);
+						handleExportInvoicesSummaryToCSV(invoicesSummary, finalName);
 					}}
 				>
 					📥 Експорт Excel
@@ -2895,7 +2640,7 @@ const InvoicesPage = ({
 							<button
 								onClick={(e) => {
 									e.stopPropagation();
-									handlePrintStock(stock);
+									handlePrintStock(stock, finalName);
 								}}
 								className={classes.btnPrint}
 							>
@@ -2905,7 +2650,7 @@ const InvoicesPage = ({
 							<button
 								onClick={(e) => {
 									e.stopPropagation();
-									handleExportStockToCSV(stock);
+									handleExportStockToCSV(stock, finalName);
 								}}
 								className={`${classes.btnExport}`}
 							>
