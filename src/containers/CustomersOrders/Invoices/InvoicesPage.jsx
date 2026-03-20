@@ -447,7 +447,7 @@ const CrewInventoryReport = ({
 						);
 					}}
 				>
-					🖨️ Друк звіту
+					🖨️ Друк звіту екіпажу ${crewNames}
 				</button>
 				<button
 					className={classes.btnExport}
@@ -475,11 +475,11 @@ const CrewInventoryReport = ({
 						);
 					}}
 				>
-					📥 Експорт Excel
+					📥 Експорт Excel (CSV) Звіту екіпажу ${crewNames}
 				</button>
 			</div>
 			<button className={classes.btnToggle} onClick={onToggle}>
-				{isVisible ? '▲ Згорнути таблицю звіту екіпажу' : '▼ Розгорнути таблицю звіт екіпажу'}
+				{isVisible ? `▲ Згорнути таблицю звіту екіпажу ${crewNames}` : `▼ Розгорнути таблицю звіт екіпажу ${crewNames}`}
 			</button>
 			{isVisible && (
 				<table className={`${classes.table} ${classes.reportTable}`}>
@@ -1384,7 +1384,7 @@ const UsedMaterialsTable = ({
 	return (
 		<div className={classes.usedMaterialsSection} style={{ marginTop: '40px', borderTop: '5px solid #17a2b8', paddingTop: '20px' }}>
 			<div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-				<h3 className={classes.sectionTitle}>🛠 Використані матеріали</h3>
+				<h3 className={classes.sectionTitle}>🛠 Використані матеріали {finalName}</h3>
 
 				{/* Кнопка видима тільки якщо адмін має повний доступ */}
 				{isAdminFullAccess && (
@@ -1516,7 +1516,7 @@ const UsedMaterialsTable = ({
 						width: '100%'
 					}}
 				>
-					📋 Звіт по всіх угодах (Excel/Друк)
+					📋 Звіт по всіх угодах ${finalName}
 				</button>
 				<div style={{ marginBottom: '15px', display: 'flex', justifyContent: 'flex-end' }}>
 					<button
@@ -1531,7 +1531,7 @@ const UsedMaterialsTable = ({
 							gap: '8px'
 						}}
 					>
-						📜 Звіт по всій історії списань
+						📜 Звіт по всій історії списань ${finalName}
 					</button>
 
 				</div>
@@ -1543,7 +1543,7 @@ const UsedMaterialsTable = ({
 							handlePrintUsedMaterials(usedMaterials, stock, finalName);
 						}}
 					>
-						🖨️ Друк матеріалів
+						🖨️ Друк Використані матеріали ${finalName}
 					</button>
 					<button
 						className={classes.btnExport}
@@ -1552,11 +1552,11 @@ const UsedMaterialsTable = ({
 							handleExportUsedMaterialsToCSV(usedMaterials, stock, finalName);
 						}}
 					>
-						📥 Експорт Excel
+						📥 Експорт Excel (CSV) Використані матеріали ${finalName}
 					</button>
 				</div>
 				<button className={classes.btnToggle} onClick={onToggle}>
-					{isVisible ? '▲ Згорнути таблицю Використані матеріали' : '▼ Розгорнути таблицю Використані матеріали'}
+					{isVisible ? `▲ Згорнути таблицю Використані матеріали ${finalName}` : `▼ Розгорнути таблицю Використані матеріали ${finalName}`}
 				</button>
 
 			</div>
@@ -2168,7 +2168,7 @@ const InvoicesPage = ({
 		link.click();
 	};
 
-	const handlePrintStock = (stockData, userName) => {
+	const handlePrintStock = (stockData) => {
 		const currentDate = new Date().toLocaleString('uk-UA');
 		const filteredStock = (stockData || []).filter(s => !!s.visibleproduct);
 
@@ -2184,7 +2184,7 @@ const InvoicesPage = ({
 			newWindow.document.write(`
 	<html html >
                 <head>
-                    <title>Залишки на складі: ${userName}</title>
+                    <title>Залишки на складі:</title>
                     <style>
                         body { font-family: sans-serif; padding: 20px; }
                         .header-info { display: flex; justify-content: space-between; align-items: baseline; border-bottom: 2px solid #333; margin-bottom: 20px; }
@@ -2197,7 +2197,7 @@ const InvoicesPage = ({
                 </head>
                 <body>
                     <div class="header-info">
-                        <h2>📦 Залишки на складі: ${userName}</h2>
+                        <h2>📦 Залишки на складі:</h2>
                         <span>Дата: ${currentDate}</span>
                     </div>
                     <table>
@@ -2215,7 +2215,7 @@ const InvoicesPage = ({
 		}
 	};
 
-	const handleExportStockToCSV = (stockData, userName) => {
+	const handleExportStockToCSV = (stockData) => {
 		if (!stockData || stockData.length === 0) {
 			alert("Немає даних для експорту");
 			return;
@@ -2234,12 +2234,10 @@ const InvoicesPage = ({
 		const url = URL.createObjectURL(blob);
 
 		const link = document.createElement("a");
-		// ФОРМУЄМО НАЗВУ ФАЙЛУ З ІМ'ЯМ
-		const safeName = (userName || "Report").replace(/\s+/g, '_'); // Замінюємо пробіли на підкреслення
 		const dateStr = new Date().toLocaleDateString('uk-UA').replace(/\//g, '.');
 		link.setAttribute("href", URL.createObjectURL(blob));
-		// Тепер назва буде: Stock_userName_xx.xx.xxxx.csv
-		link.setAttribute("download", `Stock_${safeName}_${dateStr}.csv`);
+		// Тепер назва буде: Stock_xx.xx.xxxx.csv
+		link.setAttribute("download", `Stock_${dateStr}.csv`);
 		link.click();
 	};
 
@@ -2332,6 +2330,21 @@ const InvoicesPage = ({
 
 	const selectedCustomerObj = customers.find(c => String(c.id) === String(selectedUser));
 	const finalName = selectedCustomerObj ? selectedCustomerObj.name : "Клієнт";
+
+	// const allInvoices = useMemo(() => {
+	// 	// Перетворюємо об'єкти в масиви, якщо вони приходять з Firebase як об'єкти
+	// 	const normalInvoices = Array.isArray(invoices) ? invoices : Object.values(invoices || {});
+	// 	const returnInvoices = Array.isArray(invoicesReturn) ? invoicesReturn : Object.values(invoicesReturn || {});
+
+	// 	// Додаємо тип для ідентифікації та об'єднуємо
+	// 	const combined = [
+	// 		...normalInvoices.map(inv => ({ ...inv, type: 'normal' })),
+	// 		...returnInvoices.map(inv => ({ ...inv, type: 'return' }))
+	// 	];
+
+	// 	// Сортуємо за датою (якщо потрібно)
+	// 	return combined.sort((a, b) => new Date(b.date) - new Date(a.date));
+	// }, [invoices, invoicesReturn]);
 
 	return (
 		<div className={classes.wrapper}>
@@ -2485,7 +2498,7 @@ const InvoicesPage = ({
 						handlePrintOrderTable(invoices, finalName);
 					}}
 				>
-					🖨️ Друк таблиці замовлень
+					🖨️ Друк таблиці замовлень ${finalName}
 				</button>
 				<button
 					className={classes.btnExport}
@@ -2495,14 +2508,14 @@ const InvoicesPage = ({
 						handleExportOrderToCSV(invoices, finalName);
 					}}
 				>
-					📥 Експорт замовлень (CSV)
+					📥 Експорт замовлень Excel (CSV) ${finalName}
 				</button>
 			</div>
 			<button
 				className={classes.btnToggle}
 				onClick={() => setVisibleTables(prev => ({ ...prev, orders: !prev.orders }))}
 			>
-				{visibleTables.orders ? '▲ Згорнути список замовлень' : '▼ Розгорнути список замовлень'}
+				{visibleTables.orders ? `▲ Згорнути список замовлень ${finalName}` : `▼ Розгорнути список замовлень ${finalName}`}
 			</button>
 
 			{/* TABLE: НАКЛАДНІ */}
@@ -2588,7 +2601,7 @@ const InvoicesPage = ({
 						handlePrintInvoicesSummary(invoicesSummary, finalName); // Або ваша функція для друку саме цього звіту
 					}}
 				>
-					🖨️ Друк
+					🖨️ Друк Загальну к-ть товарів ${finalName}
 				</button>
 				<button
 					className={classes.btnExport}
@@ -2597,14 +2610,14 @@ const InvoicesPage = ({
 						handleExportInvoicesSummaryToCSV(invoicesSummary, finalName);
 					}}
 				>
-					📥 Експорт Excel
+					📥 Експорт Excel (CSV) Загальну к-ть товарів ${finalName}
 				</button>
 			</div>
 			<button
 				className={classes.btnToggle}
 				onClick={() => setVisibleTables(prev => ({ ...prev, totalTakenProduct: !prev.totalTakenProduct }))}
 			>
-				{visibleTables.totalTakenProduct ? '▲ Згорнути загальну кількість товарів' : '▼ Розгорнути загальну кількість товарів'}
+				{visibleTables.totalTakenProduct ? `▲ Згорнути загальну кількість товарів ${finalName}` : `▼ Розгорнути загальну кількість товарів ${finalName}`}
 			</button>
 			{visibleTables.totalTakenProduct && (
 				<table
@@ -2640,21 +2653,21 @@ const InvoicesPage = ({
 							<button
 								onClick={(e) => {
 									e.stopPropagation();
-									handlePrintStock(stock, finalName);
+									handlePrintStock(stock);
 								}}
 								className={classes.btnPrint}
 							>
-								🖨️ Друк
+								🖨️ Друк Склад
 							</button>
 
 							<button
 								onClick={(e) => {
 									e.stopPropagation();
-									handleExportStockToCSV(stock, finalName);
+									handleExportStockToCSV(stock);
 								}}
 								className={`${classes.btnExport}`}
 							>
-								📥 Експорт Excel
+								📥 Експорт Excel (CSV) Склад
 							</button>
 						</div>
 

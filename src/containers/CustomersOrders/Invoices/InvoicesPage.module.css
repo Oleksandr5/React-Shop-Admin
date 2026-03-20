@@ -405,8 +405,10 @@
     .topActions button, .actionBtn, .btnAdd, .btnHistory, .btnUndo, .clearBtn, .headerActions button, .btnToggle,
     .inputSmall, .inputAgreement, .inputComment, .totalBadge, .select {
         width: 100% !important;
-        height: 48px;
+        height: 60px;
         margin: 0 !important;
+        margin-top: 5px !important;
+        margin-bottom: 5px !important;
         font-size: 15px;
         border-radius: 10px !important;
     }
