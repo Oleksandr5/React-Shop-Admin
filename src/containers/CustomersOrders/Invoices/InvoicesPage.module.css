@@ -678,3 +678,67 @@
 }
     
 }
+
+/* ================= TABLE (Base) ================= */
+
+.tableFullWidth {
+    composes: table; /* Наслідуємо базові стилі */
+    width: 100% !important;
+    table-layout: fixed !important; /* Жорстка сітка */
+    border-collapse: collapse;
+    margin-bottom: 20px;
+}
+
+/* Внутрішня сітка */
+.tableFullWidth th,
+.tableFullWidth td {
+    border: 1px solid #e0e0e0 !important;
+    padding: 12px 10px;
+    word-break: break-word;
+    vertical-align: top; /* Щоб ID та Дата були зверху при великій кількості товарів */
+}
+
+/* Пропорції колонок — додаємо min-width для надійності */
+.colId { 
+    width: 80px; 
+    min-width: 80px; 
+}
+
+.colItems { 
+    width: auto; /* Займає весь вільний простір */
+}
+
+.colQty { 
+    width: 100px; 
+    min-width: 100px; 
+}
+
+.colDate { 
+    width: 140px; 
+    min-width: 140px; 
+}
+
+/* Стиль для рядка повернення */
+.returnRow {
+    background-color: #fffaf9 !important;
+}
+
+/* Клас для розділення замовлень (жирна лінія) */
+.invoiceDivider td {
+    border-bottom: 2px solid #333 !important;
+}
+
+/* Контейнер для десктопа */
+@media (min-width: 769px) {
+    .tableContainer {
+        width: 100%;
+        padding: 0;
+        box-sizing: border-box;
+        overflow-x: auto; /* На випадок занадто вузького екрана */
+    }
+}
+
+/* Додатково: вирівнювання для кількості */
+.alignRight {
+    text-align: right;
+}

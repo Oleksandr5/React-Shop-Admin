@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useMemo, useRef } from 'react'
 import { connect, useDispatch } from 'react-redux'
-import { fetchInvoices, fetchInvoicesSummary, fetchOrderNotifications, deleteNotification, clearNotifications, fetchUsedMaterials, addUsedMaterial, fetchUsedMaterialsHistory, archiveAllDataMonthly, updateUsedMaterialLocal } from '../../../redux/actions/invoices'; // шлях до ваших екшенів інвойсів
+import { fetchInvoices, fetchInvoicesReturn, fetchInvoicesSummary, fetchOrderNotifications, deleteNotification, clearNotifications, fetchUsedMaterials, addUsedMaterial, fetchUsedMaterialsHistory, archiveAllDataMonthly, updateUsedMaterialLocal } from '../../../redux/actions/invoices'; // шлях до ваших екшенів інвойсів
 
 import classes from './InvoicesPage.module.css';
 import firebase from 'firebase';
@@ -15,6 +15,7 @@ const CrewInventoryReport = ({
 	dynamicProductIds,
 	customers,
 	invoices,
+	invoicesReturn = [],
 	invoicesSummary,
 	usedMaterials,
 	isVisible,
@@ -22,7 +23,7 @@ const CrewInventoryReport = ({
 }) => {
 	const [combinedData, setCombinedData] = useState({
 		invoices: {},
-		invoiceReturn: {}, // Додайте це для ініціалізації
+		invoicesReturn: {},
 		used: {}
 	});
 	const [realRemaining, setRealRemaining] = useState({});
@@ -52,87 +53,174 @@ const CrewInventoryReport = ({
 		return {};
 	};
 
+	// ДОДАТИ ЦЕЙ БЛОК:
+	const reportRows = useMemo(() => {
+		return (dynamicProductIds || []).map(pid => {
+			const product = stock?.find(s => String(s.id) === String(pid));
+
+			// Збираємо чисті числа
+			const prev = Number(archiveHistory[pid] || 0);
+			const taken = Number(combinedData.invoices[pid] || 0);
+			const back = Number(combinedData.invoicesReturn[pid] || 0);
+			const spent = Number(combinedData.used?.[pid] || 0); // Використовуємо вже завантажені дані
+			const fact = Number(realRemaining[pid] || 0);
+
+			// Формула: Початок + Взято - Повернення - Списання
+			const calc = prev + taken - back - spent;
+			const diff = calc - fact;
+
+			return {
+				pid,
+				name: product?.name || `ID ${pid}`,
+				prev, taken, back, spent, calc, fact, diff,
+				isEmpty: prev === 0 && taken === 0 && back === 0 && spent === 0 && fact === 0
+			};
+		}).filter(row => !row.isEmpty); // Показуємо лише те, де є рух товарів
+	}, [dynamicProductIds, archiveHistory, combinedData, usedMaterials, realRemaining, stock]);
+
 	useEffect(() => {
-		const fetchData = async () => {
-			if (!mainWorkerId) return;
-			setLoading(true);
-			const db = firebase.database();
-			const ids = [mainWorkerId, partnerWorkerId].filter(id => !!id);
+		if (!mainWorkerId) return;
 
-			try {
-				const invoicesAcc = {};
-				const usedAcc = {};
-				const invoiceReturnAcc = {};
+		const db = firebase.database();
+		const ids = [mainWorkerId, partnerWorkerId].filter(id => !!id);
+		setLoading(true);
 
-				await Promise.all(ids.map(async (id) => {
-					const invSnap = await db.ref(`invoicesSummary/${id}`).once('value');
-					const usedSnap = await db.ref(`usedMaterials/${id}`).once('value');
+		// Сховище для накопичення (майстер + напарник)
+		const workerData = {};
 
-					const stockSnap = await db.ref(`invoiceReturn/${id}`).once('value');
+		const syncState = () => {
+			const finalInvoices = {};
+			const finalUsed = {};
+			const finalReturns = {};
 
-					const invData = invSnap.val() || {};
-					Object.values(invData).forEach(item => {
-						invoicesAcc[item.productId] = (invoicesAcc[item.productId] || 0) + Number(item.totalQuantity || 0);
-					});
+			Object.values(workerData).forEach(data => {
+				Object.entries(data.invoices || {}).forEach(([pid, qty]) => {
+					finalInvoices[pid] = (finalInvoices[pid] || 0) + qty;
+				});
+				Object.entries(data.used || {}).forEach(([pid, qty]) => {
+					finalUsed[pid] = (finalUsed[pid] || 0) + qty;
+				});
+				Object.entries(data.returns || {}).forEach(([pid, qty]) => {
+					finalReturns[pid] = (finalReturns[pid] || 0) + qty;
+				});
+			});
 
-					const usedData = usedSnap.val() || {};
-					Object.entries(usedData).forEach(([pid, qty]) => {
-						usedAcc[pid] = (usedAcc[pid] || 0) + Number(qty || 0);
-					});
-
-					// Обробка ПОВЕРНЕНЬ (invoiceReturn)
-					const stockData = stockSnap.val() || {};
-					Object.entries(stockData).forEach(([pid, qty]) => {
-						invoiceReturnAcc[pid] = (invoiceReturnAcc[pid] || 0) + Number(qty || 0);
-					});
-				}));
-
-				const histData = await fetchArchiveData(mainWorkerId);
-				setCombinedData({ invoices: invoicesAcc, used: usedAcc, invoiceReturn: invoiceReturnAcc });
-				setArchiveHistory(histData);
-			} catch (err) {
-				console.error("Error:", err);
-			} finally {
-				setLoading(false);
-			}
+			setCombinedData({
+				invoices: finalInvoices,
+				used: finalUsed,
+				invoicesReturn: finalReturns
+			});
 		};
 
-		fetchData();
-		const remRef = firebase.database().ref(`remainingMaterials/${mainWorkerId}`);
-		remRef.on('value', snap => setRealRemaining(snap.val() || {}));
-		return () => remRef.off();
+		const listeners = [];
+
+		// 1. Початкове завантаження (щоб вимкнути setLoading)
+		const initialLoads = ids.flatMap(id => [
+			db.ref(`invoicesSummary/${id}`).once('value'),
+			db.ref(`usedMaterials/${id}`).once('value'),
+			db.ref(`invoicesReturn/${id}`).once('value')
+		]);
+
+		Promise.all(initialLoads).finally(() => setLoading(false));
+
+		// 2. Слухачі для кожної гілки кожного працівника
+		ids.forEach(id => {
+			workerData[id] = { invoices: {}, used: {}, returns: {} };
+
+			// ВЗЯТО
+			const invRef = db.ref(`invoicesSummary/${id}`);
+			invRef.on('value', (snap) => {
+				const data = snap.val() || {};
+				const temp = {};
+				Object.values(data).forEach(item => {
+					temp[item.productId] = (temp[item.productId] || 0) + Number(item.totalQuantity || 0);
+				});
+				workerData[id].invoices = temp;
+				syncState();
+			});
+			listeners.push(invRef);
+
+			// СПИСАНО
+			const usedRef = db.ref(`usedMaterials/${id}`);
+			usedRef.on('value', (snap) => {
+				const data = snap.val() || {};
+				const temp = {};
+				Object.entries(data).forEach(([pid, qty]) => {
+					temp[pid] = Number(qty || 0);
+				});
+				workerData[id].used = temp;
+				syncState();
+			});
+			listeners.push(usedRef);
+
+			// ПОВЕРНЕННЯ
+			const returnRef = db.ref(`invoicesReturn/${id}`);
+			returnRef.on('value', (snap) => {
+				const data = snap.val() || {};
+				const temp = {};
+				Object.values(data).forEach(order => {
+					if (order.items) {
+						order.items.forEach(item => {
+							if (item.productId) {
+								temp[item.productId] = (temp[item.productId] || 0) + Number(item.quantity || 0);
+							}
+						});
+					}
+				});
+				workerData[id].returns = temp;
+				syncState();
+			});
+			listeners.push(returnRef);
+		});
+
+		// 3. СЛУХАЧ ФАКТИЧНИХ ЗАЛИШКІВ (те, чого не вистачало)
+		const remRef = db.ref(`remainingMaterials/${mainWorkerId}`);
+		remRef.on('value', (snapshot) => {
+			setRealRemaining(snapshot.val() || {});
+		});
+		listeners.push(remRef);
+
+		// 4. Архів
+		fetchArchiveData(mainWorkerId).then(setArchiveHistory);
+
+		return () => {
+			listeners.forEach(ref => ref.off('value'));
+		};
 	}, [mainWorkerId, partnerWorkerId]);
 
-	useEffect(() => {
-		if (usedMaterials) {
-			setCombinedData(prev => ({
-				...prev,
-				used: usedMaterials
-			}));
-		}
-	}, [usedMaterials]);
+	const getLastArchiveKeys = async (db) => {
+		const arcSnap = await db.ref('archive').orderByKey().limitToLast(1).once('value');
+		if (!arcSnap.exists()) return null;
 
+		const months = arcSnap.val();
+		const monthKey = Object.keys(months)[0];
+		const times = months[monthKey];
+		const lastTimeKey = Object.keys(times).sort().reverse()[0];
 
+		return { monthKey, lastTimeKey };
+	};
 
-	// Коментар: НОВА ФУНКЦІЯ: Запис введених даних прямо в архів Firebase
+	// Запис введених даних прямо в архів Firebase
 	const saveToArchiveDB = async () => {
+		if (!mainWorkerId) {
+			alert("Помилка: ID працівника не знайдено");
+			return;
+		}
 		if (!window.confirm("Записати ці дані в останній існуючий архів?")) return;
 
 		const db = firebase.database();
 		try {
-			// 1. Знаходимо останній місяць і останній час
-			const arcSnap = await db.ref('archive').orderByKey().limitToLast(1).once('value');
-			if (arcSnap.exists()) {
-				const months = arcSnap.val();
-				const monthKey = Object.keys(months)[0];
-				const times = months[monthKey];
-				const lastTimeKey = Object.keys(times).sort().reverse()[0];
+			// Використовуємо нашу нову функцію
+			const keys = await getLastArchiveKeys(db);
 
-				// 2. Дописуємо дані прямо в цей існуючий архів
-				await db.ref(`archive/${monthKey}/${lastTimeKey}/remainingMaterialsHistory/${mainWorkerId}`).set(archiveHistory);
+			if (keys) {
+				const { monthKey, lastTimeKey } = keys;
+
+				await db.ref(`archive/${monthKey}/${lastTimeKey}/remainingMaterialsHistory/${mainWorkerId}`)
+					.set(archiveHistory);
 
 				setHasArchiveInDB(true);
-				alert("✅ Дані додано до існуючого архіву: " + lastTimeKey);
+				alert(`✅ Всі дані додано до архіву: ${lastTimeKey}`);
 			} else {
 				alert("Архівів ще не існує. Спершу створіть загальний архів місяця.");
 			}
@@ -142,27 +230,35 @@ const CrewInventoryReport = ({
 	};
 
 	const saveRowToArchiveDB = async (productId, name, currentValue) => {
+		if (!mainWorkerId) {
+			alert("Помилка: ID працівника не знайдено");
+			return;
+		}
+
+		const val = Number(currentValue);
+		if (isNaN(val)) {
+			alert("Помилка: введено не число");
+			return;
+		}
+
+		const db = firebase.database();
 		try {
-			const db = firebase.database();
+			// Використовуємо ту саму функцію
+			const keys = await getLastArchiveKeys(db);
 
-			// 1. Спочатку знайдемо останній архів (як у першій функції)
-			const arcSnap = await db.ref('archive').orderByKey().limitToLast(1).once('value');
+			if (keys) {
+				const { monthKey, lastTimeKey } = keys;
 
-			if (arcSnap.exists()) {
-				const months = arcSnap.val();
-				const monthKey = Object.keys(months)[0];
-				const times = months[monthKey];
-				const lastTimeKey = Object.keys(times).sort().reverse()[0];
-
-				// 2. Записуємо в ТОЧНО ТАКИЙ ЖЕ шлях:
-				// archive / monthKey / lastTimeKey / remainingMaterialsHistory / workerId / productId
+				// Записуємо конкретний рядок
 				await db.ref(`archive/${monthKey}/${lastTimeKey}/remainingMaterialsHistory/${mainWorkerId}/${productId}`)
-					.set(Number(currentValue));
+					.set(val);
 
-				// Оновлюємо локальний стан, щоб кнопка зникла
+				// Оновлюємо локальний стан
+				setArchiveHistory(prev => ({ ...prev, [productId]: val }));
 				setLocalArchivedRows(prev => ({ ...prev, [productId]: true }));
-				setEditingRow(null); // Закриваємо режим редагування (кнопка зникне)
-				alert(`Дані по "${name}" додано в існуючий архів.`);
+				setEditingRow(null);
+
+				alert(`Дані по "${name}" додано в архів.`);
 			} else {
 				alert("Помилка: Не знайдено жодного створеного архіву.");
 			}
@@ -178,102 +274,53 @@ const CrewInventoryReport = ({
 
 	const handleSync = async () => {
 		const updates = {};
-
-		dynamicProductIds.forEach(pid => {
-			// Збираємо всі складові
-			const prev = Number(archiveHistory[pid] || 0);
-			const taken = Number(combinedData.invoices[pid] || 0);
-			const backToStock = Number(combinedData.invoiceReturn[pid] || 0); // Додаємо повернення
-			const spent = Number(combinedData.used[pid] || 0);
-
-			// Рахуємо фінальне значення
-			// Кожне значення перетворюємо на число для надійності
-			const calc = Number(prev) + Number(taken) - Number(backToStock) - Number(spent);
-
-			updates[`/remainingMaterials/${mainWorkerId}/${pid}`] = calc;
+		// Тепер просто беремо готові дані з нашого useMemo
+		reportRows.forEach(row => {
+			updates[`/remainingMaterials/${mainWorkerId}/${row.pid}`] = row.calc;
 		});
 
 		try {
 			await firebase.database().ref().update(updates);
-			alert("✅ Всі товари синхронізовано з порахованим залишком!");
+			alert("✅ Синхронізовано!");
 		} catch (e) {
-			console.error("Bulk sync error:", e);
-			alert("Помилка при масовій синхронізації: " + e.message);
+			alert("Помилка: " + e.message);
 		}
 	};
 
 	const handleSyncRow = async (pid) => {
-		// 1. Рахуємо значення "Система" з урахуванням повернень
-		const prev = Number(archiveHistory[pid] || 0);
-		const taken = Number(combinedData.invoices[pid] || 0);
-		const backToStock = Number(combinedData.invoiceReturn[pid] || 0); // Додаємо повернення
-		const spent = Number(combinedData.used[pid] || 0);
-
-		// Оновлена формула: додаємо backToStock
-		// Кожне значення перетворюємо на число для надійності
-		const calc = Number(prev) + Number(taken) - Number(backToStock) - Number(spent);
+		const row = reportRows.find(r => r.pid === pid);
+		if (!row) return;
 
 		try {
-			// 2. Оновлюємо тільки цей один запис у Firebase
-			await firebase.database().ref(`remainingMaterials/${mainWorkerId}/${pid}`).set(calc);
-			alert(`✅ Товар ID ${pid} синхронізовано! (Новий залишок: ${calc})`);
+			await firebase.database().ref(`remainingMaterials/${mainWorkerId}/${pid}`).set(row.calc);
+			alert(`✅ Товар ${row.name} синхронізовано!`);
 		} catch (e) {
-			console.error("Sync error:", e);
-			alert("Помилка при синхронізації: " + e.message);
+			alert("Помилка: " + e.message);
 		}
 	};
 
 	//Функції для "Звіт екіпажу" (combinedData)
 
-	const handlePrintCombinedData = (
-		combinedData,
-		stock,
-		archiveHistory,
-		realRemaining,
-		dynamicProductIds,
-		customers,
-		mainWorkerId,
-		partnerWorkerId
-	) => {
+	const handlePrintCombinedData = (reportRows, crewNames) => {
 		const currentDate = new Date().toLocaleString('uk-UA');
 
-		const getWorkerNameWithId = (id) => {
-			if (!id) return null;
-			const worker = customers?.find(c => String(c.id) === String(id));
-			return worker ? `${worker.name} (${id})` : `ID ${id}`;
-		};
+		const tableRowsHtml = reportRows.map(row => {
+			// Пропускаємо порожні рядки (де немає руху і залишків)
+			if (row.prev === 0 && row.taken === 0 && row.back === 0 && row.spent === 0 && row.calc === 0) return '';
 
-		const crewNames = partnerWorkerId
-			? `${getWorkerNameWithId(mainWorkerId)} / ${getWorkerNameWithId(partnerWorkerId)}`
-			: getWorkerNameWithId(mainWorkerId) || "Не вказано";
-
-		const tableRowsHtml = (dynamicProductIds || []).map(pid => {
-			const product = stock?.find(s => String(s.id) === String(pid));
-			const prev = Number(archiveHistory?.[pid] || 0);
-			const taken = Number(combinedData?.invoices?.[pid] || 0);
-			const backToStock = Number(combinedData?.invoiceReturn?.[pid] || 0);
-			const spent = Number(combinedData?.used?.[pid] || 0);
-			const fact = Number(realRemaining?.[pid] || 0);
-
-			// ЄДИНА ФОРМУЛА: Початок + Взято - Повернено - Списано
-			// Кожне значення перетворюємо на число для надійності
-			const calc = Number(prev) + Number(taken) - Number(backToStock) - Number(spent);
-			const diff = calc - fact;
-
-			if (prev === 0 && taken === 0 && backToStock === 0 && spent === 0 && fact === 0) return '';
-
-			const diffText = diff === 0 ? '✓' : (diff > 0 ? `+${diff}` : `${diff}`);
-			const diffStyle = diff === 0 ? 'color: green;' : 'color: red; font-weight: bold;';
+			// Логіка відображення різниці (як у таблиці)
+			const diffText = row.diff === 0 ? '✓' : (row.diff > 0 ? `-${row.diff}` : `+${Math.abs(row.diff)}`);
+			const diffStyle = row.diff === 0 ? 'color: green;' : 'color: red; font-weight: bold;';
 
 			return `
         <tr>
-            <td>${product?.name || `ID ${pid}`}</td>
-            <td style="text-align: center;">${prev}</td>
-            <td style="text-align: center; color: green;">+${taken}</td>
-            <td style="text-align: center; color: #28a745;">-${backToStock}</td>
-            <td style="text-align: center; color: red;">-${spent}</td>
-            <td style="text-align: center; font-weight: bold; background: #f9f9f9;">${calc}</td>
-            <td style="text-align: center;">${fact}</td>
+            <td>${row.name}</td>
+            <td style="text-align: center;">${row.prev}</td>
+            <td style="text-align: center; color: green;">${row.taken}</td>
+            <td style="text-align: center; color: #28a745;">${row.back}</td>
+            <td style="text-align: center; color: red;">${row.spent}</td>
+            <td style="text-align: center; font-weight: bold; background: #f9f9f9;">${row.calc}</td>
+            <td style="text-align: center;">${realRemaining[row.pid] || 0}</td>
             <td style="text-align: center; ${diffStyle}">${diffText}</td>
         </tr>`;
 		}).join('');
@@ -330,7 +377,7 @@ const CrewInventoryReport = ({
 		}
 	};
 
-	const handleExportCombinedDataToCSV = (combinedData, stock, archiveHistory, realRemaining, dynamicProductIds, userName) => {
+	const handleExportCombinedDataToCSV = (reportRows, fileName) => {
 		const header = [
 			"Товар",
 			"Початковий залишок",
@@ -342,42 +389,32 @@ const CrewInventoryReport = ({
 			"Різниця"
 		].join(";");
 
-		const rows = dynamicProductIds.map(pid => {
-			const product = stock?.find(s => String(s.id) === String(pid));
-			const prev = Number(archiveHistory?.[pid] || 0);
-			const taken = Number(combinedData?.invoices?.[pid] || 0);
-			const backToStock = Number(combinedData?.invoiceReturn?.[pid] || 0);
-			const spent = Number(combinedData?.used?.[pid] || 0);
-			const fact = Number(realRemaining?.[pid] || 0);
+		const rows = reportRows.map(row => {
+			if (row.prev === 0 && row.taken === 0 && row.back === 0 && row.spent === 0 && row.calc === 0) return null;
 
-			if (prev === 0 && taken === 0 && backToStock === 0 && spent === 0 && fact === 0) return null;
-
-			// Кожне значення перетворюємо на число для надійності
-			const calc = Number(prev) + Number(taken) - Number(backToStock) - Number(spent);
-			const diff = calc - fact;
-			const name = product?.name ? product.name.replace(/"/g, '""') : `ID ${pid}`;
+			const fact = Number(realRemaining[row.pid] || 0);
+			const diffText = row.diff === 0 ? "OK" : (row.diff > 0 ? `-${row.diff}` : `+${Math.abs(row.diff)}`);
+			const safeName = row.name ? row.name.replace(/"/g, '""') : `ID ${row.pid}`;
 
 			return [
-				`"${name}"`,
-				prev,
-				taken,
-				backToStock,
-				spent,
-				calc,
+				`"${safeName}"`,
+				row.prev,
+				row.taken,
+				row.back,
+				row.spent,
+				row.calc,
 				fact,
-				diff === 0 ? "OK" : (diff > 0 ? `+${diff}` : diff)
+				`"${diffText}"`
 			].join(";");
 		}).filter(row => row !== null);
 
 		const csvContent = "\uFEFF" + [header, ...rows].join("\n");
 		const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
 		const link = document.createElement("a");
-		// ФОРМУЄМО НАЗВУ ФАЙЛУ З ІМ'ЯМ
-		const safeName = (userName || "Report").replace(/\s+/g, '_'); // Замінюємо пробіли на підкреслення
 		const dateStr = new Date().toLocaleDateString('uk-UA').replace(/\//g, '.');
+
 		link.setAttribute("href", URL.createObjectURL(blob));
-		// Тепер назва буде: Crew_Report_userName_xx.xx.xxxx.csv
-		link.setAttribute("download", `Crew_Report_${safeName}_${dateStr}.csv`);
+		link.setAttribute("download", `Crew_Report_${fileName}_${dateStr}.csv`);
 		link.click();
 	};
 
@@ -435,47 +472,28 @@ const CrewInventoryReport = ({
 					className={classes.btnPrint}
 					onClick={(e) => {
 						e.stopPropagation();
-						handlePrintCombinedData(
-							combinedData,
-							stock,
-							archiveHistory,
-							realRemaining,
-							dynamicProductIds,
-							customers,
-							mainWorkerId,
-							partnerWorkerId
-						);
+						// Передаємо лише готові рядки та назву екіпажу
+						handlePrintCombinedData(reportRows, crewNames);
 					}}
 				>
-					🖨️ Друк звіту екіпажу ${crewNames}
+					🖨️ Друк звіту екіпажу {crewNames}
 				</button>
+
 				<button
 					className={classes.btnExport}
 					onClick={(e) => {
 						e.stopPropagation();
 
-						// 1. Беремо чисте ім'я основного працівника (без ID в дужках)
+						// Формуємо чисте ім'я для файлу
 						const mainOnly = mainName.split(' (')[0] || "Report";
-
-						// 2. Беремо чисте ім'я напарника (якщо воно є)
 						const partnerOnly = partnerWorkerId ? partnerName.split(' (')[0] : null;
+						const crewNamesForFile = partnerOnly ? `${mainOnly}_та_${partnerOnly}` : mainOnly;
 
-						// 3. Формуємо назву для файлу
-						const crewNamesForFile = partnerOnly
-							? `${mainOnly}_та_${partnerOnly}`
-							: mainOnly;
-
-						handleExportCombinedDataToCSV(
-							combinedData,
-							stock,
-							archiveHistory,
-							realRemaining,
-							dynamicProductIds,
-							crewNamesForFile
-						);
+						// Викликаємо експорт
+						handleExportCombinedDataToCSV(reportRows, crewNamesForFile);
 					}}
 				>
-					📥 Експорт Excel (CSV) Звіту екіпажу ${crewNames}
+					📥 Експорт Excel (CSV) Звіту екіпажу {crewNames}
 				</button>
 			</div>
 			<button className={classes.btnToggle} onClick={onToggle}>
@@ -496,27 +514,16 @@ const CrewInventoryReport = ({
 						</tr>
 					</thead>
 					<tbody>
-						{dynamicProductIds.map(pid => {
-							const product = stock?.find(s => s.id == pid);
-
-							const productId = pid;
-							const name = product?.name || `ID ${pid}`;
-							const isRowArchived = localArchivedRows?.[pid]; // перевірка зі стану
-							const valueInRedux = archiveHistory?.[pid] || 0; // поточне значення залишку
-
-							const prev = Number(archiveHistory?.[pid] || 0);
-							const taken = Number(combinedData?.invoices?.[pid] || 0);
-							const backToStock = Number(combinedData?.invoiceReturn?.[pid] || 0); // Додаємо цю змінну
-							const spent = Number(combinedData?.used?.[pid] || 0);
-							// Кожне значення перетворюємо на число для надійності
-							const calc = Number(prev) + Number(taken) - Number(backToStock) - Number(spent);
-							const fact = Number(realRemaining?.[pid] || 0);
-							const diff = calc - fact;
+						{/* Ми використовуємо reportRows, де всі обчислення (calc, diff, spent) вже готові */}
+						{reportRows.map(row => {
+							// pid — це id товару, беремо його з об'єкта row
+							const pid = row.pid;
+							const isRowArchived = localArchivedRows?.[pid];
 
 							return (
 								<tr key={pid}>
 									<td data-label="Товар" style={{ fontSize: '12px' }}>
-										{product?.name || `ID ${pid}`}
+										{row.name}
 									</td>
 
 									<td data-label="Залишок на початок місяця" style={{ textAlign: 'center' }}>
@@ -525,26 +532,20 @@ const CrewInventoryReport = ({
 												<input
 													type="number"
 													value={archiveHistory[pid] || ''}
-													// 1. При фокусі встановлюємо, що цей рядок зараз редагується
 													onFocus={() => setEditingRow(pid)}
 													onChange={(e) => handleArchiveInputChange(pid, e.target.value)}
-
 													style={{
 														width: '50px',
 														border: editingRow === pid ? '1px solid #f39c12' : '1px solid #ccc',
 														outline: 'none'
 													}}
 												/>
-
-												{/* 2. Кнопка з'являється ТІЛЬКИ якщо:
-               - ми клікнули в цей інпут (editingRow === pid)
-               - і цей рядок ще не був успішно збережений (!localArchivedRows[pid])
-            */}
-												{(editingRow === pid && !localArchivedRows[pid]) && (
+												{/* Кнопка збереження окремого рядка */}
+												{(editingRow === pid && !isRowArchived) && (
 													<button
 														onClick={() => {
-															if (window.confirm(`Заархівувати поточне значення (${archiveHistory[pid] || 0}) для "${name}"?`)) {
-																saveRowToArchiveDB(pid, name, archiveHistory[pid] || 0);
+															if (window.confirm(`Заархівувати поточне значення (${archiveHistory[pid] || 0}) для "${row.name}"?`)) {
+																saveRowToArchiveDB(pid, row.name, archiveHistory[pid] || 0);
 															}
 														}}
 														title="Зберегти лише цей рядок в архів"
@@ -554,9 +555,9 @@ const CrewInventoryReport = ({
 															border: 'none',
 															borderRadius: '4px',
 															padding: '4px 8px',
+															marginLeft: '5px',
 															cursor: 'pointer',
 															fontSize: '12px',
-															marginLeft: '5px',
 															verticalAlign: 'middle'
 														}}
 													>
@@ -566,42 +567,65 @@ const CrewInventoryReport = ({
 											</div>
 										) : (
 											<span onClick={() => setHasArchiveInDB(false)} style={{ cursor: 'pointer' }}>
-												{prev}
+												{row.prev}
 											</span>
 										)}
 									</td>
+
 									<td data-label="Взято" style={{ textAlign: 'center', color: 'green' }}>
-										+{taken}
+										{row.taken}
 									</td>
 
 									<td data-label="Повернено" style={{ textAlign: 'center', color: '#28a745' }}>
-										+{backToStock}
+										{row.back}
 									</td>
 
 									<td data-label="Списано" style={{ textAlign: 'center', color: 'red' }}>
-										-{spent}
+										{row.spent}
 									</td>
 
 									<td data-label="Порахований залишок" style={{ textAlign: 'center', fontWeight: 'bold' }}>
-										{calc}
+										{row.calc}
 									</td>
 
 									<td data-label="Фактичний залишок" style={{ textAlign: 'center' }}>
 										<input
 											type="number"
-											value={realRemaining[pid] || ''}
-											onChange={async (e) => {
+											// Використовуємо локальний стан realRemaining для відображення
+											value={realRemaining[pid] !== undefined ? realRemaining[pid] : ''}
+
+											onChange={(e) => {
 												const val = e.target.value;
-												await firebase.database().ref(`remainingMaterials/${mainWorkerId}/${pid}`).set(Number(val));
+												// Оновлюємо тільки локально в React, щоб інпут не блокувався
+												setRealRemaining(prev => ({
+													...prev,
+													[pid]: val === '' ? '' : Number(val)
+												}));
 											}}
-											style={{ width: '50px', border: '1px solid #17a2b8' }}
+
+											onBlur={async (e) => {
+												const val = e.target.value;
+												if (val !== '') {
+													// Тільки тут робимо важкий запис у Firebase
+													await firebase.database()
+														.ref(`remainingMaterials/${mainWorkerId}/${pid}`)
+														.set(Number(val));
+													console.log(`Збережено для ${pid}: ${val}`);
+												}
+											}}
+											style={{
+												width: '50px',
+												border: '1px solid #17a2b8',
+												textAlign: 'center',
+												borderRadius: '4px'
+											}}
 										/>
 									</td>
 
-									<td data-label="Різниця" style={{ textAlign: 'center', fontWeight: 'bold', color: diff > 0 ? 'red' : 'green' }}>
-										{diff === 0 ? '✓' : (
+									<td data-label="Різниця" style={{ textAlign: 'center', fontWeight: 'bold', color: row.diff > 0 ? 'red' : 'green' }}>
+										{row.diff === 0 ? '✓' : (
 											<div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '5px' }}>
-												<span>{diff > 0 ? `-${diff}` : `+${Math.abs(diff)}`}</span>
+												<span>{row.diff > 0 ? `-${row.diff}` : `+${Math.abs(row.diff)}`}</span>
 												<button
 													onClick={() => {
 														if (window.confirm("Синхронізувати лише цей рядок?")) {
@@ -823,41 +847,6 @@ const UsedMaterialsTable = ({
 			console.error("Помилка додавання:", err);
 		}
 	};
-
-	// const handleHistory = async (productId) => {
-	// 	try {
-	// 		const hist = await fetchUsedMaterialsHistory(selectedUser, productId);
-	// 		const productInfo = fullMaterialsList.find(s => Number(s.productId) === Number(productId));
-	// 		const productName = productInfo?.name || `Товар #${productId}`;
-	// 		const units = productInfo?.units || '';
-
-	// 		if (!hist || hist.length === 0) {
-	// 			alert(`Історія для "${productName}" порожня.`);
-	// 			return;
-	// 		}
-
-	// 		const sortedLogs = [...hist].sort((a, b) => a.createdAt - b.createdAt);
-	// 		let runningTotal = 0;
-
-	// 		const historyLines = sortedLogs.map(log => {
-	// 			const val = Number(log.value || 0);
-	// 			runningTotal += val;
-	// 			const date = log.createdAt ? new Date(log.createdAt).toLocaleString("uk-UA") : "---";
-	// 			return `${date} — Списано: ${val} ${units} (Сумарно: ${runningTotal}) ${log.agreement ? `[Угода: ${log.agreement}]` : ''}`;
-	// 		});
-
-	// 		const historyText = historyLines.reverse().join('\n');
-	// 		const fullMessage = `📜 Історія списань для: ${productName}\n📊 Всього списано: ${runningTotal} ${units}\n\n${historyText}`;
-
-	// 		if (fullMessage.length > 1000) {
-	// 			const newWindow = window.open("", "_blank", "width=700,height=500");
-	// 			if (newWindow) {
-	// 				newWindow.document.write(`<html><head><title>Історія</title></head><body style="padding:20px; font-family:monospace; background:#f4f4f4;"><pre>${fullMessage}</pre></body></html>`);
-	// 				newWindow.document.close();
-	// 			} else { alert(fullMessage); }
-	// 		} else { alert(fullMessage); }
-	// 	} catch (err) { alert("Не вдалося завантажити історію."); }
-	// };
 
 	const handleHistory = async (productId) => {
 		try {
@@ -1773,7 +1762,7 @@ const UsedMaterialsTable = ({
 };
 
 const InvoicesPage = ({
-	hasAccount, customerName, customerId, invoices, invoicesSummary, fetchInvoices, fetchInvoicesSummary,
+	hasAccount, customerName, customerId, invoices, invoicesReturn = [], invoicesSummary, fetchInvoices, fetchInvoicesReturn, fetchInvoicesSummary,
 	customers, notifications, fetchOrderNotifications, deleteNotification, clearNotifications,
 	usedMaterials, fetchUsedMaterials, addUsedMaterial, archiveAllDataMonthly, stock
 }) => {
@@ -1874,6 +1863,7 @@ const InvoicesPage = ({
 	useEffect(() => {
 		if (hasAccount && selectedUser) {
 			fetchInvoices(selectedUser);
+			fetchInvoicesReturn(selectedUser);
 			fetchInvoicesSummary(selectedUser);
 			fetchOrderNotifications(selectedUser);
 		}
@@ -2331,20 +2321,37 @@ const InvoicesPage = ({
 	const selectedCustomerObj = customers.find(c => String(c.id) === String(selectedUser));
 	const finalName = selectedCustomerObj ? selectedCustomerObj.name : "Клієнт";
 
-	// const allInvoices = useMemo(() => {
-	// 	// Перетворюємо об'єкти в масиви, якщо вони приходять з Firebase як об'єкти
-	// 	const normalInvoices = Array.isArray(invoices) ? invoices : Object.values(invoices || {});
-	// 	const returnInvoices = Array.isArray(invoicesReturn) ? invoicesReturn : Object.values(invoicesReturn || {});
+	const allInvoices = useMemo(() => {
+		// Виносимо парсер, щоб не створювати його в циклі сортування
+		const getTimestamp = (dateStr) => {
+			if (!dateStr || typeof dateStr !== 'string') return 0;
+			// Регулярний вираз, який розуміє і "/" і "." як роздільники дати
+			const parts = dateStr.match(/(\d{2}):(\d{2}), (\d{2})[./](\d{2})[./](\d{4})/);
+			if (!parts) return 0;
 
-	// 	// Додаємо тип для ідентифікації та об'єднуємо
-	// 	const combined = [
-	// 		...normalInvoices.map(inv => ({ ...inv, type: 'normal' })),
-	// 		...returnInvoices.map(inv => ({ ...inv, type: 'return' }))
-	// 	];
+			const [, hh, mm, dd, month, yyyy] = parts;
+			// Місяці в JS Date починаються з 0 (січень = 0)
+			return new Date(yyyy, month - 1, dd, hh, mm).getTime();
+		};
 
-	// 	// Сортуємо за датою (якщо потрібно)
-	// 	return combined.sort((a, b) => new Date(b.date) - new Date(a.date));
-	// }, [invoices, invoicesReturn]);
+		const normal = (Array.isArray(invoices) ? invoices : []).map(inv => ({
+			...inv,
+			type: 'normal',
+			computedId: String(inv.customerId || selectedUser)
+		}));
+
+		const returns = (Array.isArray(invoicesReturn) ? invoicesReturn : []).map(inv => ({
+			...inv,
+			type: 'return',
+			computedId: String(inv.customerId || selectedUser)
+		}));
+
+		return [...normal, ...returns].sort((a, b) => {
+			const timeA = getTimestamp(a.date);
+			const timeB = getTimestamp(b.date);
+			return timeB - timeA; // Нові замовлення будуть першими
+		});
+	}, [invoices, invoicesReturn, selectedUser]);
 
 	return (
 		<div className={classes.wrapper}>
@@ -2421,7 +2428,7 @@ const InvoicesPage = ({
 						>
 							<option value="">--Choose customer--</option>
 							{customers.filter(c => (c.id === 7 || c.id > 127) && c.name !== "Шановний клієнт").map(c => (
-								<option key={c.id} value={c.id}>{c.name} ({c.email})</option>
+								<option key={c.id} value={c.id}>{c.name} (id = {c.id}) ({c.email})</option>
 							))}
 						</select>
 					</div>
@@ -2464,7 +2471,7 @@ const InvoicesPage = ({
 								{customers
 									.filter(c => String(c.id) !== String(selectedUser) && (c.id === 7 || c.id > 127))
 									.map(c => (
-										<option key={c.id} value={c.id}>{c.name}</option>
+										<option key={c.id} value={c.id}>{c.name} (id = {c.id}) ({c.email})</option>
 									))
 								}
 							</select>
@@ -2477,6 +2484,7 @@ const InvoicesPage = ({
 								dynamicProductIds={dynamicProductIds}
 								customers={customers}
 								invoices={invoices}
+								invoicesReturn={invoicesReturn}
 								invoicesSummary={invoicesSummary}
 								isVisible={visibleTables.crewReport}
 								onToggle={() => toggleTable('crewReport')}
@@ -2532,62 +2540,98 @@ const InvoicesPage = ({
 							<th style={{ width: "20%" }}>Дата</th>
 						</tr>
 					</thead>
-
 					<tbody>
-						{invoices.map((invoice, index) => {
-							const itemsArray = invoice.items ? Object.entries(invoice.items) : [];
-							const orderComment = invoice.orderComment || invoice.comment || "";
-
-							// Розраховуємо rowspan: кількість товарів + 1 (якщо є загальний коментар)
-							const totalRows = itemsArray.length + (orderComment ? 1 : 0);
-
-							return (
-								<React.Fragment key={`invoice-${index}`}>
-									{/* Рядки товарів */}
-									{itemsArray.map(([id, item], itemIndex) => {
-										const isLastItem = itemIndex === itemsArray.length - 1;
-										const hasNoComment = !orderComment;
-										// Малюємо лінію розділення, якщо це остання позиція в накладній і немає коментаря під нею
-										const isDividerRow = isLastItem && hasNoComment && index !== invoices.length - 1;
-
-										return (
-											<tr key={`${index}-${id}`} className={isDividerRow ? classes.invoiceDivider : ""}>
-												{itemIndex === 0 && (
-													<td rowSpan={totalRows} style={{ verticalAlign: 'top', paddingTop: '10px' }}>
-														{invoice.idOrderHistory}
-													</td>
-												)}
-												<td>
-													<div style={{ fontWeight: '500' }}>{item.name}</div>
-													{item.comment && (
-														<div style={{ fontSize: '11px', color: '#d35400', fontWeight: 'bold', marginTop: '2px' }}>
-															📝 {item.comment}
-														</div>
-													)}
-												</td>
-												<td className={classes.alignRight}>
-													{item.quantity} {item.units}
-												</td>
-												{itemIndex === 0 && (
-													<td rowSpan={totalRows} style={{ verticalAlign: 'top', paddingTop: '10px' }}>
-														{invoice.date}
-													</td>
-												)}
-											</tr>
-										);
-									})}
-
-									{/* Рядок загального коментаря (якщо він є) */}
-									{orderComment && (
-										<tr className={index !== invoices.length - 1 ? classes.invoiceDivider : ""}>
-											<td colSpan="2" style={{ backgroundColor: '#fff9db', color: '#856404', fontSize: '12px', padding: '6px 10px' }}>
-												<b>💬 Коментар:</b> {orderComment}
-											</td>
-										</tr>
-									)}
-								</React.Fragment>
+						{(() => {
+							const filtered = allInvoices.filter(inv =>
+								String(inv.customerId || inv.computedId) === String(selectedUser)
 							);
-						})}
+
+							if (filtered.length === 0) {
+								return (
+									<tr>
+										<td colSpan="4" style={{ textAlign: 'center', padding: '40px' }}>
+											Замовлень не знайдено
+										</td>
+									</tr>
+								);
+							}
+
+							return filtered.map((invoice, index) => {
+								const isReturn = invoice.type === 'return';
+								const itemsArray = Array.isArray(invoice.items)
+									? invoice.items
+									: (invoice.items ? Object.values(invoice.items) : []);
+
+								const orderComment = invoice.orderComment || invoice.comment || "";
+								const rowCount = itemsArray.length; // Кількість рядків з товарами
+
+								return (
+									<React.Fragment key={`${invoice.idOrderHistory}-${index}`}>
+										{itemsArray.map((item, itemIndex) => {
+											const isFirstItem = itemIndex === 0;
+											const isLastItem = itemIndex === itemsArray.length - 1;
+											const hasNoComment = !orderComment;
+											// Лінія розділення внизу останнього товару, якщо немає коментаря
+											const isDividerRow = isLastItem && hasNoComment && index !== filtered.length - 1;
+
+											return (
+												<tr
+													key={`${index}-${itemIndex}`}
+													className={`${isDividerRow ? classes.invoiceDivider : ""} ${isReturn ? classes.returnRow : ""}`}
+												>
+													{/* ID виводимо тільки для першого рядка замовлення */}
+													{isFirstItem && (
+														<td
+															rowSpan={rowCount}
+															style={{ fontWeight: 'bold', verticalAlign: 'top' }}
+														>
+															{isReturn && <span style={{ color: 'red' }}>↩ </span>}
+															{invoice.idOrderHistory}
+														</td>
+													)}
+
+													{/* Товар (завжди) */}
+													<td>
+														<div style={{ fontWeight: '500' }}>{item.name}</div>
+														{item.comment && (
+															<div style={{ fontSize: '11px', color: '#d35400', fontWeight: 'bold', marginTop: '2px' }}>
+																📝 {item.comment}
+															</div>
+														)}
+													</td>
+
+													{/* Кількість (завжди) */}
+													<td className={classes.alignRight}>
+														<span style={{ color: isReturn ? 'red' : 'inherit' }}>
+															{isReturn ? `-${item.quantity}` : item.quantity}
+														</span> {item.units}
+													</td>
+
+													{/* Дата виводимо тільки для першого рядка замовлення */}
+													{isFirstItem && (
+														<td
+															rowSpan={rowCount}
+															style={{ fontSize: '12px', verticalAlign: 'top' }}
+														>
+															{invoice.date}
+														</td>
+													)}
+												</tr>
+											);
+										})}
+
+										{/* Рядок загального коментаря на всю ширину */}
+										{orderComment && (
+											<tr className={`${index !== filtered.length - 1 ? classes.invoiceDivider : ""} ${isReturn ? classes.returnRow : ""}`}>
+												<td colSpan="4" style={{ backgroundColor: '#fff9db', color: '#856404', fontSize: '12px', padding: '6px 10px' }}>
+													<b>💬 Коментар:</b> {orderComment}
+												</td>
+											</tr>
+										)}
+									</React.Fragment>
+								);
+							});
+						})()}
 					</tbody>
 				</table>
 			)}
@@ -2738,6 +2782,7 @@ const mapStateToProps = state => ({
 	customerId: state.inform.customerId,
 	customers: state.inform.customers,
 	invoices: state.invoices.invoices,
+	invoicesReturn: state.invoices.invoicesReturn,
 	invoicesSummary: state.invoices.summary,
 	stock: state.products.products,
 	notifications: state.invoices.notifications,
@@ -2745,6 +2790,6 @@ const mapStateToProps = state => ({
 });
 
 export default connect(mapStateToProps, {
-	fetchInvoices, fetchInvoicesSummary, fetchOrderNotifications, deleteNotification, clearNotifications,
+	fetchInvoices, fetchInvoicesReturn, fetchInvoicesSummary, fetchOrderNotifications, deleteNotification, clearNotifications,
 	fetchUsedMaterials, addUsedMaterial, fetchUsedMaterialsHistory, archiveAllDataMonthly
 })(InvoicesPage);

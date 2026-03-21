@@ -1,10 +1,11 @@
 import {
-	UPDATE_INVOICES, UPDATE_INVOICES_SUMMARY, SET_NOTIFICATIONS,
+	UPDATE_INVOICES, UPDATE_INVOICES_RETURN, UPDATE_INVOICES_SUMMARY, SET_NOTIFICATIONS,
 	SET_USED_MATERIALS, ARCHIVE_DATA_SUCCESS, UPDATE_USED_MATERIAL_SUCCESS
 } from "../actions/invoices"; // шлях під твій проект
 
 const initialState = {
 	invoices: [],
+	invoicesReturn: [],
 	summary: [],
 	notifications: [],
 	usedMaterials: {},
@@ -13,11 +14,18 @@ const initialState = {
 };
 
 export default function invoicesReducer(state = initialState, action) {
+	console.log("REDUCER RECEIVE ACTION:", action.type); // ДОДАЙТЕ ЦЕ
 	switch (action.type) {
 		case UPDATE_INVOICES:
 			return {
 				...state,
 				invoices: action.payload
+			};
+
+		case UPDATE_INVOICES_RETURN:
+			return {
+				...state,
+				invoicesReturn: action.payload
 			};
 
 		case UPDATE_INVOICES_SUMMARY:
