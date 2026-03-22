@@ -2399,19 +2399,41 @@ const InvoicesPage = ({
 	}, [invoices, invoicesReturn, selectedUser]);
 
 	const combinedSummary = useMemo(() => {
-		// Створюємо карту повернень для швидкого пошуку { productId: quantity }
-		const returnsMap = (invoicesSummaryReturn || []).reduce((acc, item) => {
-			acc[item.productId] = item.totalQuantity;
+		// 1. Збираємо всі унікальні productId з обох масивів
+		const allProductIds = Array.from(new Set([
+			...(invoicesSummary || []).map(i => i.productId),
+			...(invoicesSummaryReturn || []).map(i => i.productId)
+		]));
+
+		// 2. Створюємо карти для швидкого доступу
+		const takenMap = (invoicesSummary || []).reduce((acc, item) => {
+			acc[item.productId] = item;
 			return acc;
 		}, {});
 
-		// Об'єднуємо з основним списком
-		return invoicesSummary.map(item => {
-			const returned = returnsMap[item.productId] || 0;
+		const returnsMap = (invoicesSummaryReturn || []).reduce((acc, item) => {
+			acc[item.productId] = item;
+			return acc;
+		}, {});
+
+		// 3. Будуємо підсумковий масив на основі всіх знайдених ID
+		return allProductIds.map(pid => {
+			const takenItem = takenMap[pid];
+			const returnedItem = returnsMap[pid];
+
+			// Беремо назву та одиниці виміру з того масиву, де вони є
+			const name = takenItem?.name || returnedItem?.name || 'Невідомий товар';
+			const units = takenItem?.units || returnedItem?.units || '';
+			const totalQuantity = takenItem?.totalQuantity || 0;
+			const returned = returnedItem?.totalQuantity || 0;
+
 			return {
-				...item,
+				productId: pid,
+				name: name,
+				units: units,
+				totalQuantity: totalQuantity,
 				returned: returned,
-				remains: item.totalQuantity - returned
+				remains: totalQuantity - returned
 			};
 		});
 	}, [invoicesSummary, invoicesSummaryReturn]);
