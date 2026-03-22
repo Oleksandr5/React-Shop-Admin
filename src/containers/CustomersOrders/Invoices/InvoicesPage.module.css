@@ -217,6 +217,37 @@
     color: white !important;
 }
 
+/* src\containers\CustomersOrders\Invoices\InvoicesPage.module.css */
+
+.btnArchive {
+    background-color: #e74c3c !important; /* Червоний */
+    border: 2px solid #c0392b !important;
+    color: white !important;
+    width: 100% !important; /* Для мобільної версії, як і інші кнопки */
+    height: 60px;
+    margin-top: 5px !important;
+    margin-bottom: 20px !important;
+    border-radius: 10px !important;
+    font-size: 15px;
+    font-weight: 600;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: 0.2s;
+    box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+}
+
+.btnArchive:hover {
+    background-color: #c0392b !important;
+    box-shadow: 0 6px 12px rgba(0, 0, 0, 0.2);
+    filter: brightness(1.1);
+}
+
+.btnArchive:active {
+    transform: scale(0.98);
+}
+
 /* Новий стиль для clearBtn (Desktop) */
 .clearBtn {
     height: 36px;
@@ -242,8 +273,22 @@
     transform: translateY(-1px);
 }
 
-.btnAdd, .btnExport, .btnPrint { background-color: #28a745 !important; }
-.btnAdd:hover, .btnExport:hover, .btnPrint:hover { background-color: #218838 !important; box-shadow: 0 4px 10px rgba(0, 0, 0, 0.25); }
+.btnAdd { 
+    background-color: 
+    #28a745 !important; 
+}
+.btnAdd:hover{ 
+    background-color: #218838 !important;
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.25);
+}
+
+.btnExport, .btnPrint { 
+    background-color: #4b7bec !important; 
+}
+.btnExport:hover, .btnPrint:hover { 
+    background-color: #3867d6 !important; 
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.25); 
+}
 
 .btnHistory { background-color: #6c757d !important; }
 .btnHistory:hover { background-color: #5a6268 !important; box-shadow: 0 4px 10px rgba(0, 0, 0, 0.25); }
@@ -258,8 +303,8 @@
     width: 100%;
     min-height: 50px;
     padding: 10px 20px;
-    background: linear-gradient(135deg, #3498db 0%, #2980b9 100%);
-    color: white !important;
+    background: linear-gradient(135deg, #e67e22 0%, #d35400 100%); 
+    color: white;
     border: none;
     border-radius: 10px;
     font-size: 16px;
@@ -280,6 +325,20 @@
 
 .btnToggle:active {
     transform: scale(0.98);
+}
+
+.arrowRed {
+    color: #ff4d4d !important;
+    text-shadow: 1px 1px 0px #fff, -1px -1px 0px #fff, 1px -1px 0px #fff, -1px 1px 0px #fff;
+    margin-right: 8px;
+    font-size: 1.2em;
+}
+
+.arrowGreen {
+    color: #2ecc71 !important;
+    text-shadow: 1px 1px 0px #fff, -1px -1px 0px #fff, 1px -1px 0px #fff, -1px 1px 0px #fff;
+    margin-right: 8px;
+    font-size: 1.2em;
 }
 
 /* Спеціальний помаранчевий для сповіщень */
@@ -384,11 +443,27 @@
     box-shadow: 0 15px 35px rgba(0,0,0,0.5);
 }
 
+.actionsCell {
+    padding: 10px;
+    text-align: center;
+    vertical-align: middle; /* Вирівнювання по вертикалі в таблиці */
+}
+
 /* ================= АДАПТИВНІСТЬ (MOBILE) ================= */
 
 /* ================= АДАПТИВНІСТЬ (MOBILE) ================= */
 
 @media (max-width: 768px) {
+
+    .actionsCell {
+        /* Встановіть висоту, яка відповідає іншим вашим блокам */
+        height: 110px !important; 
+    }
+    
+    .actionsCell > div {
+        height: 100%;
+        align-items: center; /* Центруємо іконки вертикально всередині div */
+    }
     /* Налаштування контейнерів та загальних елементів */
     .reportHeaderContainer, .selectWrapper, .usedWrapper, .tableHeaderToggle, .headerActions {
         flex-direction: column;
@@ -408,7 +483,7 @@
         height: 60px;
         margin: 0 !important;
         margin-top: 5px !important;
-        margin-bottom: 5px !important;
+        margin-bottom: 15px !important;
         font-size: 15px;
         border-radius: 10px !important;
     }
@@ -728,8 +803,11 @@
     border-bottom: 2px solid #333 !important;
 }
 
+
+
 /* Контейнер для десктопа */
 @media (min-width: 769px) {
+    
     .tableContainer {
         width: 100%;
         padding: 0;

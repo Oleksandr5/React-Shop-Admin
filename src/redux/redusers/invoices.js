@@ -1,12 +1,19 @@
 import {
-	UPDATE_INVOICES, UPDATE_INVOICES_RETURN, UPDATE_INVOICES_SUMMARY, SET_NOTIFICATIONS,
-	SET_USED_MATERIALS, ARCHIVE_DATA_SUCCESS, UPDATE_USED_MATERIAL_SUCCESS
-} from "../actions/invoices"; // шлях під твій проект
+	UPDATE_INVOICES,
+	UPDATE_INVOICES_RETURN,
+	UPDATE_INVOICES_SUMMARY,
+	UPDATE_INVOICES_SUMMARY_RETURN,
+	SET_NOTIFICATIONS,
+	SET_USED_MATERIALS,
+	ARCHIVE_DATA_SUCCESS,
+	UPDATE_USED_MATERIAL_SUCCESS
+} from "../actions/actionTypes";
 
 const initialState = {
 	invoices: [],
 	invoicesReturn: [],
 	summary: [],
+	summaryReturn: [],
 	notifications: [],
 	usedMaterials: {},
 	lastArchived: null,
@@ -32,6 +39,12 @@ export default function invoicesReducer(state = initialState, action) {
 			return {
 				...state,
 				summary: action.payload
+			};
+
+		case UPDATE_INVOICES_SUMMARY_RETURN:
+			return {
+				...state,
+				summaryReturn: action.payload
 			};
 
 		case SET_NOTIFICATIONS:

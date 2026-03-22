@@ -1,13 +1,15 @@
 import firebase from "firebase";
 
-// 1️⃣ Константи дій
-export const UPDATE_INVOICES = "UPDATE_INVOICES";
-export const UPDATE_INVOICES_RETURN = "UPDATE_INVOICES_RETURN";
-export const UPDATE_INVOICES_SUMMARY = "UPDATE_INVOICES_SUMMARY";
-export const SET_NOTIFICATIONS = "SET_NOTIFICATIONS";
-export const SET_USED_MATERIALS = "SET_USED_MATERIALS";
-export const ARCHIVE_DATA_SUCCESS = "ARCHIVE_DATA_SUCCESS";
-export const UPDATE_USED_MATERIAL_SUCCESS = "UPDATE_USED_MATERIAL_SUCCESS";
+import {
+	UPDATE_INVOICES,
+	UPDATE_INVOICES_RETURN,
+	UPDATE_INVOICES_SUMMARY,
+	UPDATE_INVOICES_SUMMARY_RETURN,
+	SET_NOTIFICATIONS,
+	SET_USED_MATERIALS,
+	ARCHIVE_DATA_SUCCESS,
+	UPDATE_USED_MATERIAL_SUCCESS
+} from "./actionTypes";
 
 // 2️⃣ Функції-екшени
 export function fetchInvoices(customerId) {
@@ -79,6 +81,24 @@ export function fetchInvoicesSummary(customerId) {
 	};
 }
 
+export function fetchInvoicesSummaryReturn(customerId) {
+	return async (dispatch) => {
+		try {
+			const snapshot = await firebase.database().ref(`invoicesSummaryReturn/${customerId}`).once("value");
+			const data = snapshot.val();
+			dispatch({
+				type: UPDATE_INVOICES_SUMMARY_RETURN,
+				payload: data ? Object.keys(data).map(key => ({
+					...data[key],
+					productId: data[key].productId || Number(key)
+				})) : []
+			});
+		} catch (error) {
+			console.log("Error fetching invoices summary return:", error);
+		}
+	};
+}
+
 export function fetchOrderNotifications() {
 	return async (dispatch) => {
 		try {
@@ -114,12 +134,17 @@ export function deleteNotification(order) {
 	return async dispatch => {
 		if (!order?.customerId || !order?.orderId) return;
 
+		// Формуємо правильний ID для Firebase
+		// Якщо тип 'return', додаємо приписку '_return', інакше залишаємо просто число
+		const firebaseId = order.type === 'return'
+			? `${order.orderId}_return`
+			: order.orderId;
+
 		await firebase
 			.database()
-			.ref(`orderNotifications/${order.customerId}/${order.orderId}`)
+			.ref(`orderNotifications/${order.customerId}/${firebaseId}`)
 			.remove();
 
-		// після видалення оновлюємо notifications
 		dispatch(fetchOrderNotifications());
 	};
 }

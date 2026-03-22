@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useMemo, useRef } from 'react'
 import { connect, useDispatch } from 'react-redux'
-import { fetchInvoices, fetchInvoicesReturn, fetchInvoicesSummary, fetchOrderNotifications, deleteNotification, clearNotifications, fetchUsedMaterials, addUsedMaterial, fetchUsedMaterialsHistory, archiveAllDataMonthly, updateUsedMaterialLocal } from '../../../redux/actions/invoices'; // шлях до ваших екшенів інвойсів
+import { fetchInvoices, fetchInvoicesReturn, fetchInvoicesSummary, fetchInvoicesSummaryReturn, fetchOrderNotifications, deleteNotification, clearNotifications, fetchUsedMaterials, addUsedMaterial, fetchUsedMaterialsHistory, archiveAllDataMonthly, updateUsedMaterialLocal } from '../../../redux/actions/invoices'; // шлях до ваших екшенів інвойсів
 
 import classes from './InvoicesPage.module.css';
 import firebase from 'firebase';
@@ -19,7 +19,10 @@ const CrewInventoryReport = ({
 	invoicesSummary,
 	usedMaterials,
 	isVisible,
-	onToggle
+	onToggle,
+	isAdminFullAccess,
+	isAdminInvoices,
+	isAdminUsedMaterials
 }) => {
 	const [combinedData, setCombinedData] = useState({
 		invoices: {},
@@ -454,17 +457,21 @@ const CrewInventoryReport = ({
 					)}
 
 					{/* Синхронізувати */}
-					<button
-						onClick={() => {
-							if (window.confirm("Ви впевнені, що хочете синхронізувати всі дані?")) {
-								handleSync();
-							}
-						}}
-						className={classes.actionBtn}
-						style={{ background: '#17a2b8' }}
-					>
-						🔄 Синхронізувати
-					</button>
+					{
+						isAdminFullAccess && (
+							<button
+								onClick={() => {
+									if (window.confirm("Ви впевнені, що хочете синхронізувати всі дані?")) {
+										handleSync();
+									}
+								}}
+								className={classes.actionBtn}
+								style={{ background: '#17a2b8' }}
+							>
+								🔄 Синхронізувати
+							</button>
+						)
+					}
 				</div>
 			</div>
 			<div className={classes.headerActions} style={{ marginBottom: '15px' }}>
@@ -497,8 +504,23 @@ const CrewInventoryReport = ({
 				</button>
 			</div>
 			<button className={classes.btnToggle} onClick={onToggle}>
-				{isVisible ? `▲ Згорнути таблицю звіту екіпажу ${crewNames}` : `▼ Розгорнути таблицю звіт екіпажу ${crewNames}`}
+				<span style={{ display: 'flex', alignItems: 'center' }}>
+					{isVisible ? (
+						<>
+							{/* Змінено тут: classes.arrowRed замість "arrowRed" */}
+							<span className={classes.arrowRed}>▲</span>
+							<span>Згорнути таблицю звіту екіпажу {crewNames}</span>
+						</>
+					) : (
+						<>
+							{/* Змінено тут: classes.arrowGreen замість "arrowGreen" */}
+							<span className={classes.arrowGreen}>▼</span>
+							<span>Розгорнути таблицю звіт екіпажу {crewNames}</span>
+						</>
+					)}
+				</span>
 			</button>
+
 			{isVisible && (
 				<table className={`${classes.table} ${classes.reportTable}`}>
 					<thead>
@@ -529,44 +551,56 @@ const CrewInventoryReport = ({
 									<td data-label="Залишок на початок місяця" style={{ textAlign: 'center' }}>
 										{!hasArchiveInDB ? (
 											<div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-												<input
-													type="number"
-													value={archiveHistory[pid] || ''}
-													onFocus={() => setEditingRow(pid)}
-													onChange={(e) => handleArchiveInputChange(pid, e.target.value)}
-													style={{
-														width: '50px',
-														border: editingRow === pid ? '1px solid #f39c12' : '1px solid #ccc',
-														outline: 'none'
-													}}
-												/>
-												{/* Кнопка збереження окремого рядка */}
-												{(editingRow === pid && !isRowArchived) && (
-													<button
-														onClick={() => {
-															if (window.confirm(`Заархівувати поточне значення (${archiveHistory[pid] || 0}) для "${row.name}"?`)) {
-																saveRowToArchiveDB(pid, row.name, archiveHistory[pid] || 0);
-															}
-														}}
-														title="Зберегти лише цей рядок в архів"
-														style={{
-															background: '#f39c12',
-															color: '#fff',
-															border: 'none',
-															borderRadius: '4px',
-															padding: '4px 8px',
-															marginLeft: '5px',
-															cursor: 'pointer',
-															fontSize: '12px',
-															verticalAlign: 'middle'
-														}}
-													>
-														💾
-													</button>
+												{isAdminFullAccess ? (
+													<>
+														<input
+															type="number"
+															value={archiveHistory[pid] || ''}
+															onFocus={() => setEditingRow(pid)}
+															onChange={(e) => handleArchiveInputChange(pid, e.target.value)}
+															style={{
+																width: '50px',
+																border: editingRow === pid ? '1px solid #f39c12' : '1px solid #ccc',
+																outline: 'none'
+															}}
+														/>
+														{/* Кнопка збереження окремого рядка */}
+														{(editingRow === pid && !isRowArchived) && (
+															<button
+																onClick={() => {
+																	if (window.confirm(`Заархівувати поточне значення (${archiveHistory[pid] || 0}) для "${row.name}"?`)) {
+																		saveRowToArchiveDB(pid, row.name, archiveHistory[pid] || 0);
+																		setEditingRow(null); // Додав скидання фокусу після збереження
+																	}
+																}}
+																title="Зберегти лише цей рядок в архів"
+																style={{
+																	background: '#f39c12',
+																	color: '#fff',
+																	border: 'none',
+																	borderRadius: '4px',
+																	padding: '4px 8px',
+																	marginLeft: '5px',
+																	cursor: 'pointer',
+																	fontSize: '12px',
+																	verticalAlign: 'middle'
+																}}
+															>
+																💾
+															</button>
+														)}
+													</>
+												) : (
+													/* Якщо не адмін і архіву немає — просто виводимо значення без інпуту */
+													<span>{archiveHistory[pid] || ''}</span>
 												)}
 											</div>
 										) : (
-											<span onClick={() => setHasArchiveInDB(false)} style={{ cursor: 'pointer' }}>
+											/* Якщо дані в БД є — показуємо span. Клік працює тільки для адміна */
+											<span
+												onClick={() => isAdminFullAccess && setHasArchiveInDB(false)}
+												style={{ cursor: isAdminFullAccess ? 'pointer' : 'default' }}
+											>
 												{row.prev}
 											</span>
 										)}
@@ -626,24 +660,29 @@ const CrewInventoryReport = ({
 										{row.diff === 0 ? '✓' : (
 											<div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '5px' }}>
 												<span>{row.diff > 0 ? `-${row.diff}` : `+${Math.abs(row.diff)}`}</span>
-												<button
-													onClick={() => {
-														if (window.confirm("Синхронізувати лише цей рядок?")) {
-															handleSyncRow(pid);
-														}
-													}}
-													title="Синхронізувати лише цей рядок"
-													style={{
-														padding: '2px 5px',
-														fontSize: '10px',
-														cursor: 'pointer',
-														background: '#e9ecef',
-														border: '1px solid #ced4da',
-														borderRadius: '3px'
-													}}
-												>
-													🔄
-												</button>
+												{
+													isAdminFullAccess && (
+
+														<button
+															onClick={() => {
+																if (window.confirm("Синхронізувати лише цей рядок?")) {
+																	handleSyncRow(pid);
+																}
+															}}
+															title="Синхронізувати лише цей рядок"
+															style={{
+																padding: '2px 5px',
+																fontSize: '10px',
+																cursor: 'pointer',
+																background: '#e9ecef',
+																border: '1px solid #ced4da',
+																borderRadius: '3px'
+															}}
+														>
+															🔄
+														</button>
+													)
+												}
 											</div>
 										)}
 									</td>
@@ -674,6 +713,8 @@ const UsedMaterialsTable = ({
 	addUsedMaterial,
 	fetchUsedMaterialsHistory,
 	isAdminFullAccess,
+	isAdminInvoices,
+	isAdminUsedMaterials,
 	dynamicProductIds, // ЗМІНА: тепер отримуємо це як пропс від батька
 	setDynamicProductIds,
 	isVisible,
@@ -1507,7 +1548,7 @@ const UsedMaterialsTable = ({
 				>
 					📋 Звіт по всіх угодах ${finalName}
 				</button>
-				<div style={{ marginBottom: '15px', display: 'flex', justifyContent: 'flex-end' }}>
+				<div style={{ display: 'flex', justifyContent: 'flex-end' }}>
 					<button
 						onClick={handlePrintFullHistoryReport}
 						className={classes.btnHistory}
@@ -1545,7 +1586,19 @@ const UsedMaterialsTable = ({
 					</button>
 				</div>
 				<button className={classes.btnToggle} onClick={onToggle}>
-					{isVisible ? `▲ Згорнути таблицю Використані матеріали ${finalName}` : `▼ Розгорнути таблицю Використані матеріали ${finalName}`}
+					<span style={{ display: 'flex', alignItems: 'center' }}>
+						{isVisible ? (
+							<>
+								<span className={classes.arrowRed}>▲</span>
+								<span>Згорнути таблицю Використані матеріали {finalName}</span>
+							</>
+						) : (
+							<>
+								<span className={classes.arrowGreen}>▼</span>
+								<span>Розгорнути таблицю Використані матеріали {finalName}</span>
+							</>
+						)}
+					</span>
 				</button>
 
 			</div>
@@ -1560,48 +1613,51 @@ const UsedMaterialsTable = ({
 						</tr>
 					</thead>
 					<tbody>
-						{fullMaterialsList.map((item) => {
-							const { productId, name, totalQuantity, units } = item;
-							const valueInRedux = usedMaterials?.[productId] ?? 0;
+						{fullMaterialsList
+							.slice() // створюємо копію масиву, щоб не мутувати оригінал
+							.sort((a, b) => a.name.localeCompare(b.name)) // сортування за алфавітом
+							.map((item) => {
+								const { productId, name, totalQuantity, units } = item;
+								const valueInRedux = usedMaterials?.[productId] ?? 0;
 
-							return (
-								<tr key={productId}>
-									<td style={{ verticalAlign: "middle" }}>{name}</td>
-									<td style={{ textAlign: "center", fontWeight: "bold", color: "#555" }}>
-										{totalQuantity} {units}
-									</td>
-									<td style={{ verticalAlign: "middle" }}>
-										<div className={classes.usedWrapper} style={{ justifyContent: "center" }}>
-											<span className={classes.totalBadge}>{valueInRedux}</span>
-											<input
-												type="number"
-												value={inputValues[productId] ?? ""}
-												onChange={e => setInputValues(prev => ({ ...prev, [productId]: e.target.value }))}
-												className={classes.inputSmall}
-												placeholder="К-сть"
-											/>
-											<input
-												type="text"
-												placeholder={commonAgreement || "Угода №"}
-												value={agreementValues[productId] ?? ""}
-												onChange={e => setAgreementValues(prev => ({ ...prev, [productId]: e.target.value }))}
-												className={classes.inputAgreement}
-											/>
-											<input
-												type="text"
-												placeholder="Коментар..."
-												value={commentValues[productId] ?? ""}
-												onChange={e => setCommentValues(prev => ({ ...prev, [productId]: e.target.value }))}
-												className={classes.inputComment} // Додайте цей клас у CSS (наприклад, width: 120px)											
-											/>
-											<button className={classes.btnAdd} onClick={() => handleAddMaterial(productId)}>Додати</button>
-											<button className={classes.btnUndo} onClick={() => handleUndo(productId)}><span className="undoIcon">↩</span></button>
-											<button className={classes.btnHistory} onClick={() => handleHistory(productId)}>📜</button>
-										</div>
-									</td>
-								</tr>
-							);
-						})}
+								return (
+									<tr key={productId}>
+										<td style={{ verticalAlign: "middle" }}>{name} ({productId})</td>
+										<td style={{ textAlign: "center", fontWeight: "bold", color: "#555" }}>
+											{totalQuantity} {units}
+										</td>
+										<td style={{ verticalAlign: "middle" }}>
+											<div className={classes.usedWrapper} style={{ justifyContent: "center" }}>
+												<span className={classes.totalBadge}>{valueInRedux}</span>
+												<input
+													type="number"
+													value={inputValues[productId] ?? ""}
+													onChange={e => setInputValues(prev => ({ ...prev, [productId]: e.target.value }))}
+													className={classes.inputSmall}
+													placeholder="К-сть"
+												/>
+												<input
+													type="text"
+													placeholder={commonAgreement || "Угода №"}
+													value={agreementValues[productId] ?? ""}
+													onChange={e => setAgreementValues(prev => ({ ...prev, [productId]: e.target.value }))}
+													className={classes.inputAgreement}
+												/>
+												<input
+													type="text"
+													placeholder="Коментар..."
+													value={commentValues[productId] ?? ""}
+													onChange={e => setCommentValues(prev => ({ ...prev, [productId]: e.target.value }))}
+													className={classes.inputComment} // Додайте цей клас у CSS (наприклад, width: 120px)											
+												/>
+												<button className={classes.btnAdd} onClick={() => handleAddMaterial(productId)}>Додати</button>
+												<button className={classes.btnUndo} onClick={() => handleUndo(productId)}><span className="undoIcon">↩</span></button>
+												<button className={classes.btnHistory} onClick={() => handleHistory(productId)}>📜</button>
+											</div>
+										</td>
+									</tr>
+								);
+							})}
 					</tbody>
 				</table>
 			)}
@@ -1706,7 +1762,7 @@ const UsedMaterialsTable = ({
 												)}
 											</td>
 
-											<td data-label="Дії" style={{ padding: '10px', textAlign: 'center' }}>
+											<td data-label="Дії" className={classes.actionsCell}>
 												{editingEntryId === log.id ? (
 													<div style={{ display: 'flex', gap: '8px', justifyContent: 'center' }}>
 														<button
@@ -1762,7 +1818,7 @@ const UsedMaterialsTable = ({
 };
 
 const InvoicesPage = ({
-	hasAccount, customerName, customerId, invoices, invoicesReturn = [], invoicesSummary, fetchInvoices, fetchInvoicesReturn, fetchInvoicesSummary,
+	hasAccount, customerName, customerId, invoices, invoicesReturn = [], invoicesSummary, invoicesSummaryReturn, fetchInvoices, fetchInvoicesReturn, fetchInvoicesSummary, fetchInvoicesSummaryReturn,
 	customers, notifications, fetchOrderNotifications, deleteNotification, clearNotifications,
 	usedMaterials, fetchUsedMaterials, addUsedMaterial, archiveAllDataMonthly, stock
 }) => {
@@ -1865,6 +1921,7 @@ const InvoicesPage = ({
 			fetchInvoices(selectedUser);
 			fetchInvoicesReturn(selectedUser);
 			fetchInvoicesSummary(selectedUser);
+			fetchInvoicesSummaryReturn(selectedUser);
 			fetchOrderNotifications(selectedUser);
 		}
 	}, [selectedUser, hasAccount]);
@@ -2001,50 +2058,52 @@ const InvoicesPage = ({
 		}
 	};
 
-	const handlePrintOrderTable = (invoices, name) => {
+	const handlePrintOrderTable = (filteredInvoices, name) => {
 		const now = new Date();
-		const currentFullDate = now.toLocaleString('uk-UA', {
-			day: '2-digit', month: '2-digit', year: 'numeric',
-			hour: '2-digit', minute: '2-digit', second: '2-digit'
-		});
+		const currentFullDate = now.toLocaleString('uk-UA');
 
-		const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-		const startOfMonthFormatted = startOfMonth.toLocaleString('uk-UA', {
-			day: '2-digit', month: '2-digit', year: 'numeric'
-		});
-
-		const periodString = `${startOfMonthFormatted} — ${currentFullDate}`;
-
-		// 2. Формуємо рядки таблиці
-		const tableRowsHtml = invoices.map((invoice) => {
-			const itemsArray = invoice.items ? Object.entries(invoice.items) : [];
+		// Формуємо рядки таблиці
+		const tableRowsHtml = filteredInvoices.map((invoice) => {
+			const isReturn = invoice.type === 'return';
+			// Оскільки в JSON items — це масив, використовуємо його напряму
+			const itemsArray = Array.isArray(invoice.items) ? invoice.items : [];
 			const orderComment = invoice.orderComment || invoice.comment || "";
 
 			// Розраховуємо rowspan: кількість товарів + 1 (якщо є загальний коментар)
 			const totalRows = itemsArray.length + (orderComment ? 1 : 0);
 
-			const itemsHtml = itemsArray.map(([id, item], itemIndex) => {
-				// Примітка до товару (📝)
+			const itemsHtml = itemsArray.map((item, itemIndex) => {
 				const itemNote = item.comment
 					? `<div style="color: #d35400; font-size: 11px; margin-top: 2px; font-weight: bold;">📝 ${item.comment}</div>`
 					: '';
 
+				// Якщо тип 'return', додаємо мінус до кількості
+				const displayQuantity = isReturn ? `-${item.quantity}` : item.quantity;
+				const quantityStyle = isReturn ? 'color: red; font-weight: bold;' : '';
+
 				return `
-                <tr>
-                    ${itemIndex === 0 ? `<td rowspan="${totalRows}">${invoice.idOrderHistory}</td>` : ''}
-                    <td>
-                        <div>${item.name}</div>
+                <tr style="${isReturn ? 'background-color: #fff5f5;' : ''}">
+                    ${itemIndex === 0 ? `
+                        <td rowspan="${totalRows}" style="vertical-align: top; font-weight: bold; border: 1px solid #999;">
+                            ${isReturn ? '<span style="color: red;">↩ </span>' : ''}${invoice.idOrderHistory}
+                        </td>` : ''}
+                    <td style="border: 1px solid #999;">
+                        <div style="font-weight: 500;">${item.name}</div>
                         ${itemNote}
                     </td>
-                    <td style="text-align: right;">${item.quantity} ${item.units}</td>
-                    ${itemIndex === 0 ? `<td rowspan="${totalRows}">${invoice.date}</td>` : ''}
+                    <td style="text-align: right; border: 1px solid #999; ${quantityStyle}">
+                        ${displayQuantity} ${item.units}
+                    </td>
+                    ${itemIndex === 0 ? `
+                        <td rowspan="${totalRows}" style="vertical-align: top; font-size: 12px; border: 1px solid #999;">
+                            ${invoice.date}
+                        </td>` : ''}
                 </tr>
             `;
 			}).join('');
 
-			// Рядок загального коментаря (💬)
 			const commentRowHtml = orderComment
-				? `<tr>
+				? `<tr style="${isReturn ? 'background-color: #fff5f5;' : ''}">
                 <td colspan="2" style="background-color: #fff9db; color: #856404; font-size: 12px; padding: 5px 8px; border: 1px solid #999;">
                     <b>💬 Коментар:</b> ${orderComment}
                 </td>
@@ -2055,59 +2114,33 @@ const InvoicesPage = ({
 		}).join('');
 
 		const newWindow = window.open("", "_blank", "width=900,height=800");
-
 		if (newWindow) {
 			newWindow.document.write(`
             <html>
                 <head>
-                    <title>Друк замовлень: ${name}</title>
+                    <title>Друк: ${name}</title>
                     <style>
-                        body { font-family: sans-serif; padding: 20px; color: #333; }
-                        h2 { text-align: center; margin-bottom: 5px; }
-                        .period { text-align: center; font-size: 13px; color: #666; margin-bottom: 20px; border-bottom: 1px solid #ddd; padding-bottom: 10px; }
-                        
-                        /* ВАШІ ОРИГІНАЛЬНІ СТИЛІ ТАБЛИЦІ */
-                        table { width: 100%; border-collapse: collapse; margin-top: 10px; }
-                        th, td { border: 1px solid #999; padding: 8px; text-align: left; font-size: 13px; }
+                        body { font-family: sans-serif; padding: 20px; }
+                        table { width: 100%; border-collapse: collapse; }
+                        th, td { border: 1px solid #999; padding: 8px; text-align: left; }
                         th { background-color: #f2f2f2; }
-                        
-                        .customer-info { margin-bottom: 10px; font-size: 15px; }
-                        .no-print { text-align: center; margin-top: 30px; }
-                        button { padding: 10px 20px; cursor: pointer; background: #007bff; color: white; border: none; border-radius: 4px; font-weight: bold; }
-                        
-                        @media print { 
-                            .no-print { display: none; } 
-                            /* Щоб колір коментаря друкувався */
-                            tr td { -webkit-print-color-adjust: exact; }
-                        }
+                        @media print { tr td { -webkit-print-color-adjust: exact; } }
                     </style>
                 </head>
                 <body>
-                    <h2>📑 Звіт по замовленням</h2>
-                    <div class="period"><strong>Період:</strong> ${periodString}</div>
-                    
-                    <div class="customer-info"><strong>Клієнт:</strong> ${name || 'Не вказано'}</div>
-                    
+                    <h2>📑 Звіт по замовленням та поверненням</h2>
+                    <p>Клієнт: <b>${name}</b></p>
                     <table>
                         <thead>
                             <tr>
-                                <th>ID Замовлення</th>
-                                <th>Назва товару</th>
+                                <th>ID</th>
+                                <th>Товар</th>
                                 <th style="text-align: right;">Кількість</th>
-                                <th>Дата замовлення</th>
+                                <th>Дата</th>
                             </tr>
                         </thead>
                         <tbody>${tableRowsHtml}</tbody>
                     </table>
-
-                    <div style="margin-top: 20px; font-size: 11px; color: #888; text-align: right;">
-                        Дата друку: ${currentFullDate}
-                    </div>
-
-                    <div class="no-print">
-                        <button onclick="window.print()">🖨️ Друкувати звіт</button>
-                        <button onclick="window.close()" style="background: #6c757d; margin-left: 10px;">Закрити</button>
-                    </div>
                 </body>
             </html>
         `);
@@ -2115,46 +2148,37 @@ const InvoicesPage = ({
 		}
 	};
 
-	const handleExportOrderToCSV = (invoices, clientName) => {
-		if (!invoices || invoices.length === 0) return alert("Немає даних для експорту");
+	const handleExportOrderToCSV = (filteredInvoices, clientName) => {
+		if (!filteredInvoices || filteredInvoices.length === 0) return alert("Немає даних");
 
-		const header = ["ID Замовлення", "Товар", "Кількість", "Одиниці", "Дата та час", "Коментар товару", "Загальний коментар"].join(";");
+		const header = ["ID", "Тип", "Товар", "Кількість", "Одиниці", "Дата", "Коментар"].join(";");
 
-		const rows = invoices.flatMap(invoice => {
-			const itemsArray = invoice.items ? Object.entries(invoice.items) : [];
-			const orderComment = (invoice.orderComment || invoice.comment || "").replace(/"/g, '""').replace(/;/g, ',');
+		const rows = filteredInvoices.flatMap(invoice => {
+			const isReturn = invoice.type === 'return';
+			const itemsArray = Array.isArray(invoice.items) ? invoice.items : [];
+			const orderComment = (invoice.orderComment || invoice.comment || "").replace(/;/g, ',');
 
-			return itemsArray.map(([id, item]) => {
-				const itemName = (item.name || "").trim().replace(/"/g, '""');
-				const itemComment = (item.comment || "").replace(/"/g, '""').replace(/;/g, ',');
+			return itemsArray.map(item => {
+				const quantity = isReturn ? `-${item.quantity}` : item.quantity;
+				const typeLabel = isReturn ? "Повернення" : "Замовлення";
 
-				// 1. Формуємо дату у форматі: 00:13 ( 02/03/2026 )
-				const excelFormulaDate = (invoice.date || '').replace(', ', ' ( ') + ' )';
-
-				// 2. Збираємо всі колонки в масив
-				const columns = [
+				return [
 					invoice.idOrderHistory,
-					itemName,
-					item.quantity,
-					item.units || "",
-					excelFormulaDate, // Тепер тут просто текст без "="
-					itemComment,
-					orderComment
-				];
-
-				// 3. Обгортаємо кожне значення в лапки та склеюємо через ;
-				// Це прибере подвійні лапки в кінці, які ви бачили на фото
-				return columns.map(col => `"${col}"`).join(";");
+					typeLabel,
+					`"${item.name}"`,
+					quantity,
+					`"${item.units}"`,
+					`"${invoice.date}"`,
+					`"${item.comment || orderComment}"`
+				].join(";");
 			});
 		});
 
 		const csvContent = "\uFEFF" + [header, ...rows].join("\n");
 		const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
 		const link = document.createElement("a");
-
-		const timestamp = new Date().toLocaleString('uk-UA').replace(/:/g, '-');
 		link.href = URL.createObjectURL(blob);
-		link.download = `Orders_${clientName.replace(/\s+/g, '_')}_${timestamp}.csv`;
+		link.download = `Orders_${clientName}_${new Date().toLocaleDateString()}.csv`;
 		link.click();
 	};
 
@@ -2268,54 +2292,75 @@ const InvoicesPage = ({
 
 	//Функції для "Загальна кількість взятих товарів" (invoicesSummary)
 
-	const handleExportInvoicesSummaryToCSV = (summary, userName) => {
-		// Якщо summary — це вже масив (як видно з лога), Object.values спрацює коректно
-		const dataArray = Object.values(summary || {});
-		if (dataArray.length === 0) return alert("Немає даних для експорту");
+	const handleExportInvoicesSummaryToCSV = (combinedSummary, userName) => {
+		if (!combinedSummary || combinedSummary.length === 0) {
+			return alert("Немає даних для експорту");
+		}
 
-		const header = ["Товар", "Кількість", "Одиниці"].join(";");
-		const rows = dataArray.map(s => {
-			const name = s.name ? s.name.toString().replace(/"/g, '""') : "Без назви";
-			// Використовуємо totalQuantity, оскільки саме так називається поле у вашому об'єкті
-			const quantity = s.totalQuantity || 0;
-			const units = s.units || "";
-			return `"${name}";"${quantity}";"${units}"`;
+		// Оновлений заголовок CSV
+		const header = ["Товар", "Взято", "Повернуто", "Залишок", "Одиниці"].join(";");
+
+		const rows = combinedSummary.map(item => {
+			const name = item.name ? item.name.toString().replace(/"/g, '""') : "Без назви";
+			const taken = item.totalQuantity || 0;
+			const returned = item.returned || 0;
+			const remains = item.remains || 0;
+			const units = item.units || "";
+
+			return `"${name}";"${taken}";"${returned}";"${remains}";"${units}"`;
 		});
 
 		const csvContent = "\uFEFF" + [header, ...rows].join("\n");
 		const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
 		const link = document.createElement("a");
-		// ФОРМУЄМО НАЗВУ ФАЙЛУ З ІМ'ЯМ
-		const safeName = (userName || "Report").replace(/\s+/g, '_'); // Замінюємо пробіли на підкреслення
+
+		const safeName = (userName || "Report").replace(/\s+/g, '_');
 		const dateStr = new Date().toLocaleDateString('uk-UA').replace(/\//g, '.');
+
 		link.setAttribute("href", URL.createObjectURL(blob));
-		// Тепер назва буде: InvoicesSummary_userName_xx.xx.xxxx.csv
-		link.setAttribute("download", `InvoicesSummary_${safeName}_${dateStr}.csv`);
+		link.setAttribute("download", `Summary_Report_${safeName}_${dateStr}.csv`);
 		link.click();
 	};
 
-	const handlePrintInvoicesSummary = (summary, userName) => {
-		console.log("summary для друку:", summary);
-		const dataArray = Object.values(summary || {});
-
-		if (dataArray.length === 0) {
+	const handlePrintInvoicesSummary = (combinedSummary, userName) => {
+		if (!combinedSummary || combinedSummary.length === 0) {
 			alert("Немає даних для друку");
 			return;
 		}
 
 		const currentDate = new Date().toLocaleString('uk-UA');
 
-		const tableRowsHtml = dataArray.map((s) => `
+		// Формуємо шапку таблиці
+		const tableHeaderHtml = `
+        <thead>
+            <tr>
+                <th style="border: 1px solid #ccc; padding: 8px; text-align: left;">Товари</th>
+                <th style="border: 1px solid #ccc; padding: 8px; text-align: right;">Взято</th>
+                <th style="border: 1px solid #ccc; padding: 8px; text-align: right;">Поверн.</th>
+                <th style="border: 1px solid #ccc; padding: 8px; text-align: right;">Залишок</th>
+            </tr>
+        </thead>
+    `;
+
+		// Формуємо рядки
+		const tableRowsHtml = combinedSummary.map((item) => `
         <tr>
-            <td style="border: 1px solid #ccc; padding: 8px;">${s.name || `ID ${s.productId}`}</td>
-            <td style="border: 1px solid #ccc; padding: 8px; text-align: right; font-weight: bold;">
-                ${s.totalQuantity} ${s.units}
+            <td style="border: 1px solid #ccc; padding: 8px;">${item.name || `ID ${item.productId}`}</td>
+            <td style="border: 1px solid #ccc; padding: 8px; text-align: right;">
+                ${item.totalQuantity} ${item.units}
+            </td>
+            <td style="border: 1px solid #ccc; padding: 8px; text-align: right; color: #e74c3c;">
+                ${item.returned > 0 ? `-${item.returned}` : '0'} ${item.units}
+            </td>
+            <td style="border: 1px solid #ccc; padding: 8px; text-align: right; font-weight: bold; color: #27ae60;">
+                ${item.remains} ${item.units}
             </td>
         </tr>
     `).join('');
 
-		// Виклик вашої допоміжної функції рендеру
-		renderPrintWindow(`Загальна кількість взятих товарів: ${userName}`, tableRowsHtml, currentDate);
+		const fullTableHtml = `<table style="width: 100%; border-collapse: collapse;">${tableHeaderHtml}<tbody>${tableRowsHtml}</tbody></table>`;
+
+		renderPrintWindow(`Звіт по товарах: ${userName}`, fullTableHtml, currentDate);
 	};
 
 	const selectedCustomerObj = customers.find(c => String(c.id) === String(selectedUser));
@@ -2353,30 +2398,56 @@ const InvoicesPage = ({
 		});
 	}, [invoices, invoicesReturn, selectedUser]);
 
+	const combinedSummary = useMemo(() => {
+		// Створюємо карту повернень для швидкого пошуку { productId: quantity }
+		const returnsMap = (invoicesSummaryReturn || []).reduce((acc, item) => {
+			acc[item.productId] = item.totalQuantity;
+			return acc;
+		}, {});
+
+		// Об'єднуємо з основним списком
+		return invoicesSummary.map(item => {
+			const returned = returnsMap[item.productId] || 0;
+			return {
+				...item,
+				returned: returned,
+				remains: item.totalQuantity - returned
+			};
+		});
+	}, [invoicesSummary, invoicesSummaryReturn]);
+
 	return (
 		<div className={classes.wrapper}>
 			{isAdminUsedMaterials && notifications.length > 0 && (
 				<div className={classes.notificationsBlock} style={{ marginBottom: '20px' }}>
 					<button
 						className={classes.btnToggle}
-						// Використовуємо новий ключ .notifications
 						onClick={() => setVisibleTables(prev => ({ ...prev, notifications: !prev.notifications }))}
 						style={{
-							background: 'linear-gradient(135deg, #e67e22 0%, #d35400 100%)', // Помаранчевий градієнт
 							marginBottom: visibleTables.notifications ? '15px' : '0'
 						}}
 					>
-						<span>
-							{visibleTables.notifications ? '▲ Приховати активні сповіщення' : '▼ Показати активні сповіщення'}
+						<span style={{ display: 'flex', alignItems: 'center' }}>
+							{visibleTables.notifications ? (
+								<>
+									<span className={classes.arrowRed}>▲</span>
+									<span>Приховати активні сповіщення</span>
+								</>
+							) : (
+								<>
+									<span className={classes.arrowGreen}>▼</span>
+									<span>Показати активні сповіщення</span>
+								</>
+							)}
 						</span>
-						<span style={{ fontSize: '0.9em', opacity: 0.9 }}>
+						<span style={{ fontSize: '0.9em', opacity: 0.9, marginLeft: 'auto' }}>
 							({notifications.length})
 						</span>
 					</button>
 					{visibleTables.notifications && (
 						<div className={classes.notificationsContent}>
 							<div className={classes.notificationsHeader}>
-								<h3>🔔 Підтверджені замовлення</h3>
+								<h3>🔔 Підтверджені замовлення / повернення</h3>
 								<button className={classes.clearBtn} onClick={() => { if (window.confirm("Очистити всі?")) clearNotifications(isAdminInvoices ? null : selectedUser); }}>❌ Очистити всі</button>
 							</div>
 							<div className={classes.notificationsList}>
@@ -2449,6 +2520,8 @@ const InvoicesPage = ({
 						stock={stock}
 						fetchUsedMaterialsHistory={fetchUsedMaterialsHistory}
 						isAdminFullAccess={isAdminFullAccess}
+						isAdminInvoices={isAdminInvoices}
+						isAdminUsedMaterials={isAdminUsedMaterials}
 						dynamicProductIds={dynamicProductIds}
 						setDynamicProductIds={setDynamicProductIds}
 						isVisible={visibleTables.usedMaterials}
@@ -2456,7 +2529,7 @@ const InvoicesPage = ({
 					/>
 
 					{/* Перевірка повного доступу для відображення звіту екіпажу */}
-					{isAdminFullAccess && selectedUser && (
+					{isAdminUsedMaterials && selectedUser && (
 						<div style={{ marginTop: '30px', padding: '20px', border: '2px solid #17a2b8', borderRadius: '12px', background: '#f8f9fa' }}>
 							<label className={classes.label} style={{ color: '#17a2b8', fontWeight: 'bold' }}>
 								🤝 Напарник для звіту екіпажу:
@@ -2488,6 +2561,9 @@ const InvoicesPage = ({
 								invoicesSummary={invoicesSummary}
 								isVisible={visibleTables.crewReport}
 								onToggle={() => toggleTable('crewReport')}
+								isAdminFullAccess={isAdminFullAccess}
+								isAdminInvoices={isAdminInvoices}
+								isAdminUsedMaterials={isAdminUsedMaterials}
 							/>
 						</div>
 					)}
@@ -2496,34 +2572,55 @@ const InvoicesPage = ({
 
 
 
-			<h3 className={classes.sectionTitle}>📑 Замовлення: ${finalName}</h3>
+			<h3 className={classes.sectionTitle}>📑 Замовлення / Повернення: ${finalName}</h3>
 			<div className={classes.headerActions} style={{ marginBottom: '15px', display: 'flex', gap: '10px' }}>
 				<button
 					className={classes.btnPrint}
 					style={{ padding: '8px 16px', cursor: 'pointer', borderRadius: '4px', border: '1px solid #ccc', background: '#f8f9fa' }}
 					onClick={(e) => {
 						e.stopPropagation();
-						handlePrintOrderTable(invoices, finalName);
+						// Фільтруємо allInvoices, щоб залишити тільки замовлення обраного користувача
+						const filteredData = allInvoices.filter(inv =>
+							String(inv.customerId || inv.computedId) === String(selectedUser)
+						);
+						handlePrintOrderTable(filteredData, finalName);
 					}}
 				>
-					🖨️ Друк таблиці замовлень ${finalName}
+					🖨️ Друк таблиці замовлень / повернень ${finalName}
 				</button>
+
 				<button
 					className={classes.btnExport}
 					style={{ padding: '8px 16px', cursor: 'pointer', borderRadius: '4px', border: '1px solid #ccc', background: '#f8f9fa' }}
 					onClick={(e) => {
 						e.stopPropagation();
-						handleExportOrderToCSV(invoices, finalName);
+						// Аналогічно фільтруємо перед експортом
+						const filteredData = allInvoices.filter(inv =>
+							String(inv.customerId || inv.computedId) === String(selectedUser)
+						);
+						handleExportOrderToCSV(filteredData, finalName);
 					}}
 				>
-					📥 Експорт замовлень Excel (CSV) ${finalName}
+					📥 Експорт Excel таблиці замовлень / повернень (CSV) ${finalName}
 				</button>
 			</div>
 			<button
 				className={classes.btnToggle}
 				onClick={() => setVisibleTables(prev => ({ ...prev, orders: !prev.orders }))}
 			>
-				{visibleTables.orders ? `▲ Згорнути список замовлень ${finalName}` : `▼ Розгорнути список замовлень ${finalName}`}
+				<span style={{ display: 'flex', alignItems: 'center' }}>
+					{visibleTables.orders ? (
+						<>
+							<span className={classes.arrowRed}>▲</span>
+							<span>Згорнути список замовлень / повернень {finalName}</span>
+						</>
+					) : (
+						<>
+							<span className={classes.arrowGreen}>▼</span>
+							<span>Розгорнути список замовлень / повернень {finalName}</span>
+						</>
+					)}
+				</span>
 			</button>
 
 			{/* TABLE: НАКЛАДНІ */}
@@ -2636,42 +2733,72 @@ const InvoicesPage = ({
 				</table>
 			)}
 
-			<h3 className={classes.sectionTitle}>📊 Загальна кількість взятих товарів: ${finalName}</h3>
+			<h3 className={classes.sectionTitle}>📊 Загальна кількість взятих матеріалів: ${finalName}</h3>
 			<div className={classes.headerActions} style={{ marginBottom: '15px' }}>
 				<button
 					className={classes.btnPrint}
 					onClick={(e) => {
 						e.stopPropagation();
-						handlePrintInvoicesSummary(invoicesSummary, finalName); // Або ваша функція для друку саме цього звіту
+						handlePrintInvoicesSummary(combinedSummary, finalName); // Або ваша функція для друку саме цього звіту
 					}}
 				>
-					🖨️ Друк Загальну к-ть товарів ${finalName}
+					🖨️ Друк Загальну к-ть матеріалів ${finalName}
 				</button>
 				<button
 					className={classes.btnExport}
 					onClick={(e) => {
 						e.stopPropagation();
-						handleExportInvoicesSummaryToCSV(invoicesSummary, finalName);
+						handleExportInvoicesSummaryToCSV(combinedSummary, finalName);
 					}}
 				>
-					📥 Експорт Excel (CSV) Загальну к-ть товарів ${finalName}
+					📥 Експорт Excel (CSV) Загальну к-ть матеріалів ${finalName}
 				</button>
 			</div>
 			<button
 				className={classes.btnToggle}
 				onClick={() => setVisibleTables(prev => ({ ...prev, totalTakenProduct: !prev.totalTakenProduct }))}
 			>
-				{visibleTables.totalTakenProduct ? `▲ Згорнути загальну кількість товарів ${finalName}` : `▼ Розгорнути загальну кількість товарів ${finalName}`}
+				<span style={{ display: 'flex', alignItems: 'center' }}>
+					{visibleTables.totalTakenProduct ? (
+						<>
+							<span className={classes.arrowRed}>▲</span>
+							<span>Згорнути загальну кількість використаних матеріалів {finalName}</span>
+						</>
+					) : (
+						<>
+							<span className={classes.arrowGreen}>▼</span>
+							<span>Розгорнути загальну кількість використаних матеріалів {finalName}</span>
+						</>
+					)}
+				</span>
 			</button>
 			{visibleTables.totalTakenProduct && (
 				<table
 					className={classes.table}
 					style={{ cursor: 'pointer' }}
 				>
-					<thead><tr><th>Товари</th><th className={classes.alignRight}>Кі-сть</th></tr></thead>
+					<thead>
+						<tr>
+							<th>Товари</th>
+							<th className={classes.alignRight}>Взято</th>
+							<th className={classes.alignRight}>Поверн.</th>
+							<th className={classes.alignRight}>Залишок</th>
+						</tr>
+					</thead>
 					<tbody>
-						{invoicesSummary.map((item, index) => (
-							<tr key={index}><td>{item.name}</td><td className={classes.alignRight}>{item.totalQuantity} {item.units}</td></tr>
+						{combinedSummary.map((item, index) => (
+							<tr key={item.productId || index}>
+								<td>{item.name}</td>
+								<td className={classes.alignRight}>
+									{item.totalQuantity} {item.units}
+								</td>
+								<td className={classes.alignRight} style={{ color: '#e74c3c' }}>
+									{item.returned > 0 ? `-${item.returned} ${item.units}` : `0 ${item.units}`}
+								</td>
+								<td className={classes.alignRight} style={{ fontWeight: 'bold', color: '#27ae60' }}>
+									{item.remains} {item.units}
+								</td>
+							</tr>
 						))}
 					</tbody>
 				</table>
@@ -2728,7 +2855,19 @@ const InvoicesPage = ({
 							className={classes.btnToggle}
 							onClick={() => setVisibleTables(prev => ({ ...prev, remainingInStock: !prev.remainingInStock }))}
 						>
-							{visibleTables.remainingInStock ? '▲ Приховати залишок на складі' : '▼ Показати залишок на складі'}
+							<span style={{ display: 'flex', alignItems: 'center' }}>
+								{visibleTables.remainingInStock ? (
+									<>
+										<span className={classes.arrowRed}>▲</span>
+										<span>Приховати залишок на складі</span>
+									</>
+								) : (
+									<>
+										<span className={classes.arrowGreen}>▼</span>
+										<span>Показати залишок на складі</span>
+									</>
+								)}
+							</span>
 						</button>
 						{visibleTables.remainingInStock && (
 							<table className={classes.table}>
@@ -2766,7 +2905,7 @@ const InvoicesPage = ({
 
 			{
 				isAdminFullAccess && (
-					<button className={classes.btnAdd} style={{ backgroundColor: '#f39c12', width: 'auto', marginBottom: '20px', borderColor: '#e67e22' }}
+					<button className={classes.btnArchive} style={{ backgroundColor: '#e74c3c', width: 'auto', marginBottom: '20px', borderColor: '#c0392b' }}
 						onClick={() => { if (window.confirm("Створити архів?")) archiveAllDataMonthly(); }}>
 						📦 Створити архів за поточний місяць
 					</button>
@@ -2784,12 +2923,13 @@ const mapStateToProps = state => ({
 	invoices: state.invoices.invoices,
 	invoicesReturn: state.invoices.invoicesReturn,
 	invoicesSummary: state.invoices.summary,
+	invoicesSummaryReturn: state.invoices.summaryReturn,
 	stock: state.products.products,
 	notifications: state.invoices.notifications,
 	usedMaterials: state.invoices.usedMaterials
 });
 
 export default connect(mapStateToProps, {
-	fetchInvoices, fetchInvoicesReturn, fetchInvoicesSummary, fetchOrderNotifications, deleteNotification, clearNotifications,
+	fetchInvoices, fetchInvoicesReturn, fetchInvoicesSummary, fetchInvoicesSummaryReturn, fetchOrderNotifications, deleteNotification, clearNotifications,
 	fetchUsedMaterials, addUsedMaterial, fetchUsedMaterialsHistory, archiveAllDataMonthly
 })(InvoicesPage);
