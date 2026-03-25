@@ -33,8 +33,10 @@ const CrewInventoryReport = ({
 	const [archiveHistory, setArchiveHistory] = useState({});
 	const [hasArchiveInDB, setHasArchiveInDB] = useState(false); // Коментар: Чи існують дані в архіві БД
 	const [loading, setLoading] = useState(false);
-	const [localArchivedRows, setLocalArchivedRows] = useState({});
 	const [editingRow, setEditingRow] = useState(null); // ID рядка, який зараз натиснув користувач
+	const [remainingMaterialsStart, setRemainingMaterialsStart] = useState({});
+	const [hasRemainingMaterialsStartInDB, setHasRemainingMaterialsStartInDB] = useState(false);
+	const [localRemainingMaterialsStartRows, setLocalRemainingMaterialsStartRows] = useState({});
 
 	// Коментар: Функція для пошуку останнього запису в архіві
 	const fetchArchiveData = async (workerId) => {
@@ -62,7 +64,7 @@ const CrewInventoryReport = ({
 			const product = stock?.find(s => String(s.id) === String(pid));
 
 			// Збираємо чисті числа
-			const prev = Number(archiveHistory[pid] || 0);
+			const prev = Number(remainingMaterialsStart[pid] || 0);
 			const taken = Number(combinedData.invoices[pid] || 0);
 			const back = Number(combinedData.invoicesReturn[pid] || 0);
 			const spent = Number(combinedData.used?.[pid] || 0); // Використовуємо вже завантажені дані
@@ -79,7 +81,7 @@ const CrewInventoryReport = ({
 				isEmpty: prev === 0 && taken === 0 && back === 0 && spent === 0 && fact === 0
 			};
 		}).filter(row => !row.isEmpty); // Показуємо лише те, де є рух товарів
-	}, [dynamicProductIds, archiveHistory, combinedData, usedMaterials, realRemaining, stock]);
+	}, [dynamicProductIds, remainingMaterialsStart, combinedData, usedMaterials, realRemaining, stock]);
 
 	useEffect(() => {
 		if (!mainWorkerId) return;
@@ -183,8 +185,16 @@ const CrewInventoryReport = ({
 		});
 		listeners.push(remRef);
 
-		// 4. Архів
-		fetchArchiveData(mainWorkerId).then(setArchiveHistory);
+		// 4. СЛУХАЧ ПОЧАТКОВИХ ЗАЛИШКІВ (Start) - Замість старого архіву
+		const startRef = db.ref(`remainingMaterialsStart/${mainWorkerId}`);
+		startRef.on('value', (snapshot) => {
+			const data = snapshot.val() || {};
+			// Оновлюємо новий стан для початкових залишків
+			setRemainingMaterialsStart(data);
+			// Перевіряємо, чи є взагалі дані в цій гілці
+			setHasRemainingMaterialsStartInDB(Object.keys(data).length > 0);
+		});
+		listeners.push(startRef);
 
 		return () => {
 			listeners.forEach(ref => ref.off('value'));
@@ -232,47 +242,37 @@ const CrewInventoryReport = ({
 		}
 	};
 
-	const saveRowToArchiveDB = async (productId, name, currentValue) => {
+	// 1. Оновлення локального стану при вводі в інпут
+	const handleRemainingMaterialsStartInputChange = (pid, value) => {
+		setRemainingMaterialsStart(prev => ({
+			...prev,
+			[pid]: value === '' ? 0 : Number(value)
+		}));
+	};
+
+	// 2. Збереження одного рядка в Firebase (гілка remainingMaterialsStart)
+	const saveRowToRemainingMaterialsStart = async (productId, name, currentValue) => {
 		if (!mainWorkerId) {
 			alert("Помилка: ID працівника не знайдено");
 			return;
 		}
 
 		const val = Number(currentValue);
-		if (isNaN(val)) {
-			alert("Помилка: введено не число");
-			return;
-		}
-
 		const db = firebase.database();
+
 		try {
-			// Використовуємо ту саму функцію
-			const keys = await getLastArchiveKeys(db);
+			// Прямий запис у нову гілку
+			await db.ref(`remainingMaterialsStart/${mainWorkerId}/${productId}`).set(val);
 
-			if (keys) {
-				const { monthKey, lastTimeKey } = keys;
+			// Оновлюємо локальні позначки
+			setLocalRemainingMaterialsStartRows(prev => ({ ...prev, [productId]: true }));
+			setEditingRow(null);
 
-				// Записуємо конкретний рядок
-				await db.ref(`archive/${monthKey}/${lastTimeKey}/remainingMaterialsHistory/${mainWorkerId}/${productId}`)
-					.set(val);
-
-				// Оновлюємо локальний стан
-				setArchiveHistory(prev => ({ ...prev, [productId]: val }));
-				setLocalArchivedRows(prev => ({ ...prev, [productId]: true }));
-				setEditingRow(null);
-
-				alert(`Дані по "${name}" додано в архів.`);
-			} else {
-				alert("Помилка: Не знайдено жодного створеного архіву.");
-			}
+			alert(`Значення для "${name}" збережено як початковий залишок.`);
 		} catch (err) {
 			console.error(err);
-			alert("Помилка збереження рядка.");
+			alert("Помилка збереження.");
 		}
-	};
-
-	const handleArchiveInputChange = (pid, value) => {
-		setArchiveHistory(prev => ({ ...prev, [pid]: Number(value) }));
 	};
 
 	const handleSync = async () => {
@@ -282,9 +282,14 @@ const CrewInventoryReport = ({
 			updates[`/remainingMaterials/${mainWorkerId}/${row.pid}`] = row.calc;
 		});
 
+		if (Object.keys(updates).length === 0) {
+			alert("Немає даних для синхронізації");
+			return;
+		}
+
 		try {
 			await firebase.database().ref().update(updates);
-			alert("✅ Синхронізовано!");
+			alert("✅ Весь звіт синхронізовано з фактичними залишками!");
 		} catch (e) {
 			alert("Помилка: " + e.message);
 		}
@@ -526,7 +531,7 @@ const CrewInventoryReport = ({
 					<thead>
 						<tr style={{ fontSize: '11px', backgroundColor: '#f1f4f9' }}>
 							<th>Товар</th>
-							<th>Залишок на початок місяця {!hasArchiveInDB && "(Введіть дані)"}</th>
+							<th>Залишок на початок місяця {!hasRemainingMaterialsStartInDB && "(Введіть дані)"}</th>
 							<th>Взято</th>
 							<th>Повернено</th>
 							<th>Списано</th>
@@ -540,7 +545,8 @@ const CrewInventoryReport = ({
 						{reportRows.map(row => {
 							// pid — це id товару, беремо його з об'єкта row
 							const pid = row.pid;
-							const isRowArchived = localArchivedRows?.[pid];
+							// Перевіряємо, чи цей конкретний рядок був щойно збережений локально
+							const isRowStarted = localRemainingMaterialsStartRows?.[pid];
 
 							return (
 								<tr key={pid}>
@@ -549,61 +555,82 @@ const CrewInventoryReport = ({
 									</td>
 
 									<td data-label="Залишок на початок місяця" style={{ textAlign: 'center' }}>
-										{!hasArchiveInDB ? (
-											<div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-												{isAdminFullAccess ? (
-													<>
-														<input
-															type="number"
-															value={archiveHistory[pid] || ''}
-															onFocus={() => setEditingRow(pid)}
-															onChange={(e) => handleArchiveInputChange(pid, e.target.value)}
-															style={{
-																width: '50px',
-																border: editingRow === pid ? '1px solid #f39c12' : '1px solid #ccc',
-																outline: 'none'
+										<div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+											{(!hasRemainingMaterialsStartInDB || editingRow === pid) ? (
+												<>
+													<input
+														type="number"
+														// Показуємо пусте поле, якщо там 0, щоб не стирати його вручну
+														value={remainingMaterialsStart[pid] || ''}
+														onChange={(e) => handleRemainingMaterialsStartInputChange(pid, e.target.value)}
+														autoFocus={editingRow === pid}
+														inputMode="decimal"
+														onFocus={(e) => {
+															setEditingRow(pid);
+															if (Number(e.target.value) === 0) {
+																handleRemainingMaterialsStartInputChange(pid, '');
+															}
+														}}
+														// ✅ Цей блок відповідає за приховування інпуту при кліку в інше місце
+														onBlur={(e) => {
+															// Затримка 200мс потрібна, щоб встиг спрацювати onClick на кнопці "Зберегти"
+															setTimeout(() => {
+																setEditingRow(null);
+																// Якщо поле залишилося порожнім, повертаємо 0
+																if (remainingMaterialsStart[pid] === '') {
+																	handleRemainingMaterialsStartInputChange(pid, 0);
+																}
+															}, 200);
+														}}
+														style={{
+															width: '50px',
+															border: editingRow === pid ? '1px solid #f39c12' : 'none',
+															outline: 'none',
+															background: 'transparent',
+															textAlign: 'center',
+															fontSize: 'inherit',
+															padding: '2px'
+														}}
+													/>
+
+													{(editingRow === pid && !isRowStarted) && (
+														<button
+															onClick={() => {
+																const currentVal = remainingMaterialsStart[pid] || 0;
+																if (window.confirm(`Зберегти ${currentVal} для "${row.name}"?`)) {
+																	saveRowToRemainingMaterialsStart(pid, row.name, currentVal);
+																	setEditingRow(null);
+																}
 															}}
-														/>
-														{/* Кнопка збереження окремого рядка */}
-														{(editingRow === pid && !isRowArchived) && (
-															<button
-																onClick={() => {
-																	if (window.confirm(`Заархівувати поточне значення (${archiveHistory[pid] || 0}) для "${row.name}"?`)) {
-																		saveRowToArchiveDB(pid, row.name, archiveHistory[pid] || 0);
-																		setEditingRow(null); // Додав скидання фокусу після збереження
-																	}
-																}}
-																title="Зберегти лише цей рядок в архів"
-																style={{
-																	background: '#f39c12',
-																	color: '#fff',
-																	border: 'none',
-																	borderRadius: '4px',
-																	padding: '4px 8px',
-																	marginLeft: '5px',
-																	cursor: 'pointer',
-																	fontSize: '12px',
-																	verticalAlign: 'middle'
-																}}
-															>
-																💾
-															</button>
-														)}
-													</>
-												) : (
-													/* Якщо не адмін і архіву немає — просто виводимо значення без інпуту */
-													<span>{archiveHistory[pid] || ''}</span>
-												)}
-											</div>
-										) : (
-											/* Якщо дані в БД є — показуємо span. Клік працює тільки для адміна */
-											<span
-												onClick={() => isAdminFullAccess && setHasArchiveInDB(false)}
-												style={{ cursor: isAdminFullAccess ? 'pointer' : 'default' }}
-											>
-												{row.prev}
-											</span>
-										)}
+															style={{
+																background: '#f39c12',
+																color: '#fff',
+																border: 'none',
+																borderRadius: '4px',
+																padding: '4px 8px',
+																marginLeft: '5px',
+																cursor: 'pointer',
+																lineHeight: '1'
+															}}
+														>
+															💾
+														</button>
+													)}
+												</>
+											) : (
+												<span
+													onClick={() => isAdminFullAccess && setEditingRow(pid)}
+													style={{
+														cursor: isAdminFullAccess ? 'pointer' : 'default',
+														display: 'inline-block',
+														minWidth: '40px',
+														padding: '2px'
+													}}
+												>
+													{remainingMaterialsStart[pid] || 0}
+												</span>
+											)}
+										</div>
 									</td>
 
 									<td data-label="Взято" style={{ textAlign: 'center', color: 'green' }}>

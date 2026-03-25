@@ -333,23 +333,23 @@ export const archiveAllDataMonthly = () => {
 	return async (dispatch, getState) => {
 		try {
 			const date = new Date();
-
-			// Формуємо основний ключ місяця: "2026-03"
 			const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
-
-			// Додаємо точний час для унікальності запису: "02_14-30" (день_години-хвилини)
 			const timeStamp = `${String(date.getDate()).padStart(2, '0')}_${String(date.getHours()).padStart(2, '0')}-${String(date.getMinutes()).padStart(2, '0')}`;
 
 			const db = firebase.database();
-
-			// Отримуємо поточний стан продуктів (складу) з Redux
 			const currentStock = getState().products.products;
 
+			// 1. Додаємо нові шляхи для збору даних
 			const paths = {
 				invoices: "invoices",
+				invoicesReturn: "invoicesReturn", // Додано
 				invoicesSummary: "invoicesSummary",
+				invoicesSummaryReturn: "invoicesSummaryReturn", // Додано
 				usedMaterials: "usedMaterials",
-				usedMaterialsHistory: "usedMaterialsHistory"
+				usedMaterialsHistory: "usedMaterialsHistory",
+				orderNotifications: "orderNotifications", // Додано
+				remainingMaterials: "remainingMaterials", // Додано
+				remainingMaterialsStart: "remainingMaterialsStart" // Додано
 			};
 
 			const archiveData = {};
@@ -360,19 +360,27 @@ export const archiveAllDataMonthly = () => {
 				archiveData[key] = snapshot.val();
 			}));
 
-			// Записуємо в архів за шляхом: archive/2026-03/02_14-30
-			// Тепер кожен запис — це окрема папка всередині місяця
+			// 2. Записуємо розширений об'єкт в архів
 			await db.ref(`archive/${monthKey}/${timeStamp}`).set({
-				archivedAt: date.toISOString(), // Додаємо точну дату для історії
+				archivedAt: date.toISOString(),
+
+				// Старі гілки
 				invoicesHistory: archiveData.invoices || {},
 				invoicesSummaryHistory: archiveData.invoicesSummary || {},
 				usedMaterialsHistory: archiveData.usedMaterials || {},
 				usedMaterialsHistoryHistory: archiveData.usedMaterialsHistory || {},
-				stockAtThatTime: currentStock || {}
+				stockAtThatTime: currentStock || {},
+
+				// Нові гілки, які ви просили додати
+				invoicesReturnHistory: archiveData.invoicesReturn || {},
+				invoicesSummaryReturnHistory: archiveData.invoicesSummaryReturn || {},
+				orderNotificationsHistory: archiveData.orderNotifications || {},
+				remainingMaterialsHistory: archiveData.remainingMaterials || {},
+				remainingMaterialsStartHistory: archiveData.remainingMaterialsStart || {}
 			});
 
 			dispatch({ type: ARCHIVE_DATA_SUCCESS });
-			alert(`✅ Архів створено: archive/${monthKey}/${timeStamp}`);
+			alert(`✅ Повний архів створено: archive/${monthKey}/${timeStamp}`);
 
 		} catch (error) {
 			console.error("Помилка архівації:", error);
