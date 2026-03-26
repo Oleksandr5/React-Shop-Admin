@@ -339,48 +339,57 @@ export const archiveAllDataMonthly = () => {
 			const db = firebase.database();
 			const currentStock = getState().products.products;
 
-			// 1. Додаємо нові шляхи для збору даних
+			// Визначаємо всі шляхи, які потрібно зчитати з бази
 			const paths = {
 				invoices: "invoices",
-				invoicesReturn: "invoicesReturn", // Додано
+				invoicesReturn: "invoicesReturn",
 				invoicesSummary: "invoicesSummary",
-				invoicesSummaryReturn: "invoicesSummaryReturn", // Додано
+				invoicesSummaryReturn: "invoicesSummaryReturn",
 				usedMaterials: "usedMaterials",
 				usedMaterialsHistory: "usedMaterialsHistory",
-				orderNotifications: "orderNotifications", // Додано
-				remainingMaterials: "remainingMaterials", // Додано
-				remainingMaterialsStart: "remainingMaterialsStart" // Додано
+				orderNotifications: "orderNotifications",
+				remainingMaterials: "remainingMaterials",
+				remainingMaterialsStart: "remainingMaterialsStart",
+				// ✅ НОВІ ГІЛКИ:
+				invoiceStock: "invoiceStock",
+				orders: "orders",
+				ordersHistory: "ordersHistory"
 			};
 
 			const archiveData = {};
 
-			// Збираємо дані з усіх гілок паралельно
+			// Збираємо дані паралельно для швидкості
 			await Promise.all(Object.keys(paths).map(async (key) => {
 				const snapshot = await db.ref(paths[key]).once('value');
 				archiveData[key] = snapshot.val();
 			}));
 
-			// 2. Записуємо розширений об'єкт в архів
+			// Записуємо все в папку архіву
 			await db.ref(`archive/${monthKey}/${timeStamp}`).set({
 				archivedAt: date.toISOString(),
+				stockAtThatTime: currentStock || [],
 
-				// Старі гілки
+				// Історія інвойсів та матеріалів
 				invoicesHistory: archiveData.invoices || {},
+				invoicesReturnHistory: archiveData.invoicesReturn || {},
 				invoicesSummaryHistory: archiveData.invoicesSummary || {},
+				invoicesSummaryReturnHistory: archiveData.invoicesSummaryReturn || {},
 				usedMaterialsHistory: archiveData.usedMaterials || {},
 				usedMaterialsHistoryHistory: archiveData.usedMaterialsHistory || {},
-				stockAtThatTime: currentStock || {},
 
-				// Нові гілки, які ви просили додати
-				invoicesReturnHistory: archiveData.invoicesReturn || {},
-				invoicesSummaryReturnHistory: archiveData.invoicesSummaryReturn || {},
+				// Стан звітів та сповіщення
 				orderNotificationsHistory: archiveData.orderNotifications || {},
 				remainingMaterialsHistory: archiveData.remainingMaterials || {},
-				remainingMaterialsStartHistory: archiveData.remainingMaterialsStart || {}
+				remainingMaterialsStartHistory: archiveData.remainingMaterialsStart || {},
+
+				// ✅ ЗАПИС НОВИХ ГІЛОК:
+				invoiceStockHistory: archiveData.invoiceStock || [],
+				ordersHistory: archiveData.orders || [],
+				ordersHistoryArchive: archiveData.ordersHistory || []
 			});
 
 			dispatch({ type: ARCHIVE_DATA_SUCCESS });
-			alert(`✅ Повний архів створено: archive/${monthKey}/${timeStamp}`);
+			alert(`✅ Повний системний архів створено: archive/${monthKey}/${timeStamp}`);
 
 		} catch (error) {
 			console.error("Помилка архівації:", error);

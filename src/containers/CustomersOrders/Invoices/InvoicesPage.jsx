@@ -22,7 +22,10 @@ const CrewInventoryReport = ({
 	onToggle,
 	isAdminFullAccess,
 	isAdminInvoices,
-	isAdminUsedMaterials
+	isAdminUsedMaterials,
+	isArchiveMode,
+	archiveRemainingStart,
+	remainingMaterials
 }) => {
 	const [combinedData, setCombinedData] = useState({
 		invoices: {},
@@ -86,91 +89,112 @@ const CrewInventoryReport = ({
 	useEffect(() => {
 		if (!mainWorkerId) return;
 
+		// --- РЕЖИМ АРХІВУ ---
+		if (isArchiveMode) {
+			setLoading(true);
+
+			const archiveInv = {};
+			const archiveUsed = {};
+			const archiveReturns = {};
+
+			// Збираємо дані по екіпажу (main + partner)
+			[mainWorkerId, partnerWorkerId].filter(id => !!id).forEach(id => {
+				// Взято
+				const dataInv = invoices[id] || {};
+				Object.values(dataInv).forEach(item => {
+					archiveInv[item.productId] = (archiveInv[item.productId] || 0) + Number(item.totalQuantity || 0);
+				});
+
+				// Списано
+				const dataUsed = usedMaterials[id] || {};
+				Object.entries(dataUsed).forEach(([pid, qty]) => {
+					archiveUsed[pid] = (archiveUsed[pid] || 0) + Number(qty || 0);
+				});
+
+				// Повернення
+				const dataRet = invoicesReturn[id] || {};
+				Object.values(dataRet).forEach(order => {
+					if (order.items) {
+						order.items.forEach(item => {
+							if (item.productId) {
+								archiveReturns[item.productId] = (archiveReturns[item.productId] || 0) + Number(item.quantity || 0);
+							}
+						});
+					}
+				});
+			});
+
+			setCombinedData({
+				invoices: archiveInv,
+				used: archiveUsed,
+				invoicesReturn: archiveReturns
+			});
+
+			// ✅ КРИТИЧНО: Тепер беремо початкові залишки ТА реальні залишки з архіву
+			setRemainingMaterialsStart(archiveRemainingStart || {});
+			setHasRemainingMaterialsStartInDB(!!archiveRemainingStart && Object.keys(archiveRemainingStart).length > 0);
+
+			// Встановлюємо фактичні залишки, які були на момент створення архіву
+			setRealRemaining(remainingMaterials || {});
+
+			setLoading(false);
+			return;
+		}
+
+		// --- LIVE РЕЖИМ (Firebase) ---
 		const db = firebase.database();
 		const ids = [mainWorkerId, partnerWorkerId].filter(id => !!id);
 		setLoading(true);
 
-		// Сховище для накопичення (майстер + напарник)
+		// Оновлюємо реальні залишки з пропса, який прийшов через Redux
+		setRealRemaining(remainingMaterials || {});
+
 		const workerData = {};
+		const listeners = [];
 
 		const syncState = () => {
 			const finalInvoices = {};
 			const finalUsed = {};
 			const finalReturns = {};
-
 			Object.values(workerData).forEach(data => {
-				Object.entries(data.invoices || {}).forEach(([pid, qty]) => {
-					finalInvoices[pid] = (finalInvoices[pid] || 0) + qty;
-				});
-				Object.entries(data.used || {}).forEach(([pid, qty]) => {
-					finalUsed[pid] = (finalUsed[pid] || 0) + qty;
-				});
-				Object.entries(data.returns || {}).forEach(([pid, qty]) => {
-					finalReturns[pid] = (finalReturns[pid] || 0) + qty;
-				});
+				Object.entries(data.invoices || {}).forEach(([pid, qty]) => { finalInvoices[pid] = (finalInvoices[pid] || 0) + qty; });
+				Object.entries(data.used || {}).forEach(([pid, qty]) => { finalUsed[pid] = (finalUsed[pid] || 0) + qty; });
+				Object.entries(data.returns || {}).forEach(([pid, qty]) => { finalReturns[pid] = (finalReturns[pid] || 0) + qty; });
 			});
-
-			setCombinedData({
-				invoices: finalInvoices,
-				used: finalUsed,
-				invoicesReturn: finalReturns
-			});
+			setCombinedData({ invoices: finalInvoices, used: finalUsed, invoicesReturn: finalReturns });
 		};
 
-		const listeners = [];
-
-		// 1. Початкове завантаження (щоб вимкнути setLoading)
-		const initialLoads = ids.flatMap(id => [
-			db.ref(`invoicesSummary/${id}`).once('value'),
-			db.ref(`usedMaterials/${id}`).once('value'),
-			db.ref(`invoicesReturn/${id}`).once('value')
-		]);
-
-		Promise.all(initialLoads).finally(() => setLoading(false));
-
-		// 2. Слухачі для кожної гілки кожного працівника
 		ids.forEach(id => {
 			workerData[id] = { invoices: {}, used: {}, returns: {} };
 
-			// ВЗЯТО
 			const invRef = db.ref(`invoicesSummary/${id}`);
 			invRef.on('value', (snap) => {
 				const data = snap.val() || {};
 				const temp = {};
-				Object.values(data).forEach(item => {
-					temp[item.productId] = (temp[item.productId] || 0) + Number(item.totalQuantity || 0);
-				});
+				Object.values(data).forEach(item => { temp[item.productId] = (temp[item.productId] || 0) + Number(item.totalQuantity || 0); });
 				workerData[id].invoices = temp;
 				syncState();
 			});
 			listeners.push(invRef);
 
-			// СПИСАНО
 			const usedRef = db.ref(`usedMaterials/${id}`);
 			usedRef.on('value', (snap) => {
 				const data = snap.val() || {};
 				const temp = {};
-				Object.entries(data).forEach(([pid, qty]) => {
-					temp[pid] = Number(qty || 0);
-				});
+				Object.entries(data).forEach(([pid, qty]) => { temp[pid] = Number(qty || 0); });
 				workerData[id].used = temp;
 				syncState();
 			});
 			listeners.push(usedRef);
 
-			// ПОВЕРНЕННЯ
 			const returnRef = db.ref(`invoicesReturn/${id}`);
 			returnRef.on('value', (snap) => {
 				const data = snap.val() || {};
 				const temp = {};
 				Object.values(data).forEach(order => {
-					if (order.items) {
-						order.items.forEach(item => {
-							if (item.productId) {
-								temp[item.productId] = (temp[item.productId] || 0) + Number(item.quantity || 0);
-							}
-						});
-					}
+					if (order.items) order.items.forEach(item => {
+						if (item.productId) temp[item.productId] = (temp[item.productId] || 0) + Number(item.quantity || 0);
+					});
 				});
 				workerData[id].returns = temp;
 				syncState();
@@ -178,28 +202,28 @@ const CrewInventoryReport = ({
 			listeners.push(returnRef);
 		});
 
-		// 3. СЛУХАЧ ФАКТИЧНИХ ЗАЛИШКІВ (те, чого не вистачало)
-		const remRef = db.ref(`remainingMaterials/${mainWorkerId}`);
-		remRef.on('value', (snapshot) => {
-			setRealRemaining(snapshot.val() || {});
-		});
-		listeners.push(remRef);
-
-		// 4. СЛУХАЧ ПОЧАТКОВИХ ЗАЛИШКІВ (Start) - Замість старого архіву
 		const startRef = db.ref(`remainingMaterialsStart/${mainWorkerId}`);
 		startRef.on('value', (snapshot) => {
 			const data = snapshot.val() || {};
-			// Оновлюємо новий стан для початкових залишків
 			setRemainingMaterialsStart(data);
-			// Перевіряємо, чи є взагалі дані в цій гілці
 			setHasRemainingMaterialsStartInDB(Object.keys(data).length > 0);
 		});
 		listeners.push(startRef);
 
-		return () => {
-			listeners.forEach(ref => ref.off('value'));
-		};
-	}, [mainWorkerId, partnerWorkerId]);
+		setLoading(false);
+
+		return () => { listeners.forEach(ref => ref.off('value')); };
+
+	}, [
+		mainWorkerId,
+		partnerWorkerId,
+		isArchiveMode,
+		archiveRemainingStart,
+		invoices,
+		usedMaterials,
+		invoicesReturn,
+		remainingMaterials // ✅ Додано для відстеження змін реальних залишків в архіві
+	]);
 
 	const getLastArchiveKeys = async (db) => {
 		const arcSnap = await db.ref('archive').orderByKey().limitToLast(1).once('value');
@@ -745,7 +769,8 @@ const UsedMaterialsTable = ({
 	dynamicProductIds, // ЗМІНА: тепер отримуємо це як пропс від батька
 	setDynamicProductIds,
 	isVisible,
-	onToggle
+	onToggle,
+	isArchiveMode
 }) => {
 	const [inputValues, setInputValues] = useState({});
 	const [agreementValues, setAgreementValues] = useState({});
@@ -1845,10 +1870,41 @@ const UsedMaterialsTable = ({
 };
 
 const InvoicesPage = ({
-	hasAccount, customerName, customerId, invoices, invoicesReturn = [], invoicesSummary, invoicesSummaryReturn, fetchInvoices, fetchInvoicesReturn, fetchInvoicesSummary, fetchInvoicesSummaryReturn,
-	customers, notifications, fetchOrderNotifications, deleteNotification, clearNotifications,
-	usedMaterials, fetchUsedMaterials, addUsedMaterial, archiveAllDataMonthly, stock
+	// 1. ПЕРЕЙМЕНОВУЄМО ПРОПСИ, ЩОБ УНИКНУТИ КОНФЛІКТУ
+	hasAccount,
+	customerName,
+	customerId,
+	invoices: rawInvoices,
+	invoicesReturn: rawInvoicesReturn = [],
+	invoicesSummary: rawInvoicesSummary,
+	invoicesSummaryReturn: rawInvoicesSummaryReturn,
+	notifications: rawNotifications,
+	stock: rawStock,
+	usedMaterials: rawUsedMaterials,
+	usedMaterialsHistory: rawUsedMaterialsHistory,
+	remainingMaterials: rawRemainingMaterials = {},
+
+	// Решта пропсів залишається без змін
+	customers,
+	fetchInvoices,
+	fetchInvoicesReturn,
+	fetchInvoicesSummary,
+	fetchInvoicesSummaryReturn,
+	fetchOrderNotifications,
+	deleteNotification,
+	clearNotifications,
+	fetchUsedMaterials,
+	addUsedMaterial,
+	archiveAllDataMonthly,
 }) => {
+
+	const dispatch = useDispatch();
+
+	const [selectedMonth, setSelectedMonth] = useState('');
+	const [availableSnapshots, setAvailableSnapshots] = useState([]);
+	const [selectedSnapshot, setSelectedSnapshot] = useState('');
+	const [fullArchive, setFullArchive] = useState(null);
+	const [months, setMonths] = useState([]);
 
 	const [visibleTables, setVisibleTables] = useState({
 		notifications: true,
@@ -1858,13 +1914,6 @@ const InvoicesPage = ({
 		usedMaterials: true,       // Таблиця в UsedMaterialsTable
 		crewReport: true           // Таблиця в CrewInventoryReport
 	});
-
-	const toggleTable = (tableName) => {
-		setVisibleTables(prev => ({
-			...prev,
-			[tableName]: !prev[tableName]
-		}));
-	};
 
 	const agreementInputRef = useRef(null);
 
@@ -1877,16 +1926,99 @@ const InvoicesPage = ({
 
 	const idThisCustomers = window.localStorage.getItem("idThisCustomers");
 
-	// Додайте це на початку рендеру (всередині компонента InvoicesPage)
-	console.log('--- RENDER CHECK ---');
-	console.log('Current selectedUser ID (from state):', selectedUser); // ми використовуємо стан selectedUser
-	console.log('Current usedMaterials (from Redux):', usedMaterials); // використовуємо деструктурований пропс
 
 	// Перевіряємо: користувач залогінений ТА має відповідне поле "true" у базі адмінів
 	const isAdminInvoices = hasAccount && !!admins[idThisCustomers]?.invoices;
 	const isAdminUsedMaterials = hasAccount && !!admins[idThisCustomers]?.usedMaterials;
 	const isAdminFullAccess = hasAccount && !!admins[idThisCustomers]?.fullAccess;
 
+	const isArchiveMode = !!fullArchive;
+
+	// Створюємо "розумні" змінні
+	const invoices = useMemo(() => {
+		const raw = isArchiveMode ? (fullArchive.invoicesHistory?.[selectedUser] || {}) : rawInvoices;
+		return (raw && typeof raw === 'object' && !Array.isArray(raw)) ? Object.values(raw) : (raw || []);
+	}, [isArchiveMode, fullArchive, rawInvoices, selectedUser]);
+
+	const invoicesReturn = useMemo(() => {
+		const raw = isArchiveMode ? (fullArchive.invoicesReturnHistory?.[selectedUser] || []) : (rawInvoicesReturn || []);
+		return (raw && typeof raw === 'object' && !Array.isArray(raw)) ? Object.values(raw) : (raw || []);
+	}, [isArchiveMode, fullArchive, rawInvoicesReturn, selectedUser]);
+
+	const invoicesSummary = useMemo(() => {
+		const rawData = isArchiveMode ? (fullArchive.invoicesSummaryHistory?.[selectedUser] || {}) : rawInvoicesSummary;
+		if (Array.isArray(rawData)) return rawData;
+		if (rawData && typeof rawData === 'object') {
+			return Object.keys(rawData).map(key => ({
+				...rawData[key],
+				productId: rawData[key].productId || Number(key)
+			}));
+		}
+		return [];
+	}, [isArchiveMode, fullArchive, rawInvoicesSummary, selectedUser]);
+
+	const invoicesSummaryReturn = useMemo(() => {
+		const rawData = isArchiveMode ? (fullArchive.invoicesSummaryReturnHistory?.[selectedUser] || {}) : rawInvoicesSummaryReturn;
+		if (Array.isArray(rawData)) return rawData;
+		if (rawData && typeof rawData === 'object') {
+			return Object.keys(rawData).map(key => ({
+				...rawData[key],
+				productId: rawData[key].productId || Number(key)
+			}));
+		}
+		return [];
+	}, [isArchiveMode, fullArchive, rawInvoicesSummaryReturn, selectedUser]);
+
+	const notifications = useMemo(() => {
+		const rawData = isArchiveMode ? (fullArchive.orderNotificationsHistory || {}) : rawNotifications;
+		if (Array.isArray(rawData)) return rawData;
+		if (rawData && typeof rawData === 'object') {
+			let all = [];
+			Object.values(rawData).forEach(customerNotifs => {
+				if (customerNotifs) all.push(...Object.values(customerNotifs));
+			});
+			return all.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+		}
+		return [];
+	}, [isArchiveMode, fullArchive, rawNotifications]);
+
+	// Матеріали та склад
+	const usedMaterials = isArchiveMode ? (fullArchive.usedMaterialsHistory?.[selectedUser] || {}) : rawUsedMaterials;
+	const usedMaterialsHistory = isArchiveMode ? (fullArchive.usedMaterialsHistoryHistory?.[selectedUser] || {}) : rawUsedMaterialsHistory;
+	const remainingMaterials = isArchiveMode ? (fullArchive.remainingMaterialsHistory?.[selectedUser] || {}) : rawRemainingMaterials;
+	const stock = isArchiveMode ? (fullArchive.stockAtThatTime || []) : rawStock;
+
+	// Для звіту екіпажу
+	const archiveRemainingStart = isArchiveMode ? (fullArchive.remainingMaterialsStartHistory?.[selectedUser] || {}) : null;
+
+
+
+	// Обробники для селектів
+	const handleMonthChange = (month) => {
+		setSelectedMonth(month);
+		setSelectedSnapshot('');
+		setFullArchive(null);
+		if (month) {
+			firebase.database().ref(`archive/${month}`).once('value', (s) => {
+				const data = s.val();
+				if (data) setAvailableSnapshots(Object.keys(data).sort().reverse());
+			});
+		}
+	};
+
+	const handleSnapshotChange = async (snapshotKey) => {
+		setSelectedSnapshot(snapshotKey);
+		if (!snapshotKey) { setFullArchive(null); return; }
+		const snapshot = await firebase.database().ref(`archive/${selectedMonth}/${snapshotKey}`).once('value');
+		setFullArchive(snapshot.val());
+	};
+
+	const toggleTable = (tableName) => {
+		setVisibleTables(prev => ({
+			...prev,
+			[tableName]: !prev[tableName]
+		}));
+	};
 
 	const handleCustomerChange = (e) => {
 		const userId = e.target.value;
@@ -1897,6 +2029,14 @@ const InvoicesPage = ({
 		setPartnerUser('');
 
 	};
+
+	// Завантажуємо список місяців з гілки archive
+	useEffect(() => {
+		firebase.database().ref('archive').once('value', (snapshot) => {
+			const data = snapshot.val();
+			if (data) setMonths(Object.keys(data).sort().reverse());
+		});
+	}, []);
 
 	useEffect(() => {
 		const ref = firebase.database().ref('settings/admins');
@@ -1936,14 +2076,9 @@ const InvoicesPage = ({
 	}, []);
 
 	useEffect(() => {
-		const savedId = window.localStorage.getItem('idSelectedCustomer') || idThisCustomers;
-		if (savedId) {
-			setSelectedUser(savedId);
-			window.localStorage.setItem('idSelectedCustomer', savedId);
-		}
-	}, []);
+		// Якщо ми в режимі архіву — зупиняємо автоматичне завантаження живих даних
+		if (isArchiveMode) return;
 
-	useEffect(() => {
 		if (hasAccount && selectedUser) {
 			fetchInvoices(selectedUser);
 			fetchInvoicesReturn(selectedUser);
@@ -1951,11 +2086,18 @@ const InvoicesPage = ({
 			fetchInvoicesSummaryReturn(selectedUser);
 			fetchOrderNotifications(selectedUser);
 		}
-	}, [selectedUser, hasAccount]);
+		// Додаємо isArchiveMode у масив залежностей
+	}, [selectedUser, hasAccount, isArchiveMode, fetchInvoices, fetchInvoicesReturn, fetchInvoicesSummary, fetchInvoicesSummaryReturn, fetchOrderNotifications]);
 
 	useEffect(() => {
-		if (selectedUser) { fetchUsedMaterials(selectedUser); }
-	}, [selectedUser]);
+		// Якщо ми в режимі архіву — не робимо запит до бази,
+		// щоб не перезаписати архівні дані в Redux живими даними
+		if (isArchiveMode) return;
+
+		if (selectedUser) {
+			fetchUsedMaterials(selectedUser);
+		}
+	}, [selectedUser, isArchiveMode]); // Додаємо isArchiveMode в залежності
 
 	const currentDate = new Date().toLocaleString('uk-UA', {
 		day: '2-digit',
@@ -2536,41 +2678,113 @@ const InvoicesPage = ({
 				</div>
 			)}
 
-			<div className={classes.pageHeader}>
-				<h2 className={classes.pageTitle}>🧾 Накладні: {customerName}</h2>
-				{isAdminInvoices && (
-					<div className={classes.selectWrapper}>
-						<label className={classes.label}>👤 Виберіть отримувача:</label>
-						<select
-							className={classes.select}
-							value={selectedUser}
-							onChange={handleCustomerChange}
-						>
-							<option value="">--Choose customer--</option>
-							{customers.filter(c => (c.id === 7 || c.id > 127) && c.name !== "Шановний клієнт").map(c => (
-								<option key={c.id} value={c.id}>{c.name} (id = {c.id}) ({c.email})</option>
-							))}
-						</select>
+			<div className={classes.pageHeader} style={{
+				background: isArchiveMode ? 'linear-gradient(135deg, #6c757d, #495057)' : 'white', // Змінюємо фон, щоб візуально відрізнити архів
+				padding: '20px',
+				borderRadius: '8px',
+				transition: 'all 0.3s ease'
+			}}>
+				{/* Оригінальний заголовок */}
+				<h2 className={classes.pageTitle} style={{ color: isArchiveMode ? '#fff' : 'inherit' }}>
+					{isArchiveMode ? '📦 Перегляд архіву' : '🧾 Накладні'}: {customerName}
+				</h2>
+
+				<div style={{ display: 'flex', flexDirection: 'column', gap: '15px', marginTop: '15px' }}>
+
+					{/* ВАШ ОРИГІНАЛЬНИЙ СЕЛЕКТ КЛІЄНТА */}
+					{isAdminInvoices && (
+						<div className={classes.selectWrapper}>
+							<label className={classes.label} style={{ color: isArchiveMode ? '#fff' : 'inherit' }}>
+								👤 Виберіть отримувача:
+							</label>
+							<select
+								className={classes.select}
+								value={selectedUser}
+								onChange={handleCustomerChange}
+							>
+								<option value="">--Choose customer--</option>
+								{customers
+									.filter(c => (c.id === 7 || c.id > 127) && c.name !== "Шановний клієнт")
+									.map(c => (
+										<option key={c.id} value={c.id}>{c.name} (id = {c.id}) ({c.email})</option>
+									))
+								}
+							</select>
+						</div>
+					)}
+
+					{/* НОВИЙ БЛОК: ВИБІР АРХІВУ */}
+					<div style={{
+						display: 'flex',
+						gap: '10px',
+						paddingTop: '10px',
+						borderTop: isArchiveMode ? '1px solid #888' : '1px solid #eee',
+						flexWrap: 'wrap'
+					}}>
+						<div style={{ flex: 1, minWidth: '150px' }}>
+							<label className={classes.label} style={{ color: isArchiveMode ? '#fff' : '#666', fontSize: '12px' }}>📅 Місяць архіву:</label>
+							<select
+								value={selectedMonth}
+								onChange={(e) => handleMonthChange(e.target.value)}
+								className={classes.select}
+								style={{ width: '100%', height: '35px' }}
+							>
+								<option value="">-- Поточні дані (Live) --</option>
+								{months.map(m => <option key={m} value={m}>{m}</option>)}
+							</select>
+						</div>
+
+						<div style={{ flex: 1, minWidth: '150px' }}>
+							<label className={classes.label} style={{ color: isArchiveMode ? '#fff' : '#666', fontSize: '12px' }}>🕒 Точка збереження:</label>
+							<select
+								value={selectedSnapshot}
+								onChange={(e) => handleSnapshotChange(e.target.value)}
+								className={classes.select}
+								disabled={!availableSnapshots.length}
+								style={{ width: '100%', height: '35px' }}
+							>
+								<option value="">-- Оберіть час --</option>
+								{availableSnapshots.map(s => (
+									<option key={s} value={s}>{s.replace('_', ' о ')}</option>
+								))}
+							</select>
+						</div>
+
+						{isArchiveMode && (
+							<button
+								onClick={() => { setFullArchive(null); setSelectedSnapshot(''); setSelectedMonth(''); }}
+								style={{ alignSelf: 'flex-end', height: '35px', padding: '0 15px', cursor: 'pointer', borderRadius: '4px', border: 'none', backgroundColor: '#e74c3c', color: '#fff' }}
+							>
+								Повернутись до Live
+							</button>
+						)}
 					</div>
-				)}
+				</div>
 			</div>
 
 			{isAdminUsedMaterials && selectedUser && (
 				<>
 					<UsedMaterialsTable
-						key={selectedUser} // Коли змінюється ID користувача, компонент перемонтується і всі useState всередині нього скинуться в "" автоматично
-						inputRef={agreementInputRef} // Передаємо реф вниз
+						// Snapshot у key — це дуже правильно, воно перемонтує компонент при зміні дати архіву
+						key={`${selectedUser}-${selectedSnapshot}`}
+						inputRef={agreementInputRef}
 						selectedUser={selectedUser}
 						customers={customers}
+
+						// ПЕРЕПИСАНІ ПРОПСИ: прибираємо "display", використовуємо наші нові константи
 						invoicesSummary={invoicesSummary}
 						usedMaterials={usedMaterials}
+						stock={stock}
+
 						fetchUsedMaterials={fetchUsedMaterials}
 						addUsedMaterial={addUsedMaterial}
-						stock={stock}
 						fetchUsedMaterialsHistory={fetchUsedMaterialsHistory}
-						isAdminFullAccess={isAdminFullAccess}
+
+						// Блокування редагування в архіві
+						isAdminFullAccess={isArchiveMode ? false : isAdminFullAccess}
 						isAdminInvoices={isAdminInvoices}
 						isAdminUsedMaterials={isAdminUsedMaterials}
+
 						dynamicProductIds={dynamicProductIds}
 						setDynamicProductIds={setDynamicProductIds}
 						isVisible={visibleTables.usedMaterials}
@@ -2599,20 +2813,32 @@ const InvoicesPage = ({
 							</select>
 
 							<CrewInventoryReport
-								key={`${selectedUser}-${partnerUser}`} // Оновлюється при зміні будь-якого учасника
+								// Додаємо selectedSnapshot у key, щоб при зміні архіву всередині скидалися всі useEffect
+								key={`${selectedUser}-${partnerUser}-${selectedSnapshot}`}
 								mainWorkerId={selectedUser}
 								partnerWorkerId={partnerUser}
+
+								// ПЕРЕПИСАНІ ПРОПСИ: тепер вони використовують змінні, які ми оголосили через useMemo
 								stock={stock}
-								dynamicProductIds={dynamicProductIds}
-								customers={customers}
 								invoices={invoices}
 								invoicesReturn={invoicesReturn}
 								invoicesSummary={invoicesSummary}
+								usedMaterials={usedMaterials}
+
+								dynamicProductIds={dynamicProductIds}
+								customers={customers}
 								isVisible={visibleTables.crewReport}
 								onToggle={() => toggleTable('crewReport')}
-								isAdminFullAccess={isAdminFullAccess}
+
+								// Логіка безпеки
+								isAdminFullAccess={isArchiveMode ? false : isAdminFullAccess}
 								isAdminInvoices={isAdminInvoices}
 								isAdminUsedMaterials={isAdminUsedMaterials}
+
+								// Режим архіву
+								isArchiveMode={isArchiveMode}
+								archiveRemainingStart={archiveRemainingStart}
+								remainingMaterials={remainingMaterials}
 							/>
 						</div>
 					)}
@@ -2951,9 +3177,9 @@ const InvoicesPage = ({
 					</>
 				)
 			}
-
+			{/* Кнопка створення архіву показується тільки в Live режимі */}
 			{
-				isAdminFullAccess && (
+				!isArchiveMode && isAdminFullAccess && (
 					<button className={classes.btnArchive} style={{ backgroundColor: '#e74c3c', width: 'auto', marginBottom: '20px', borderColor: '#c0392b' }}
 						onClick={() => { if (window.confirm("Створити архів?")) archiveAllDataMonthly(); }}>
 						📦 Створити архів за поточний місяць
@@ -2975,7 +3201,9 @@ const mapStateToProps = state => ({
 	invoicesSummaryReturn: state.invoices.summaryReturn,
 	stock: state.products.products,
 	notifications: state.invoices.notifications,
-	usedMaterials: state.invoices.usedMaterials
+	usedMaterials: state.invoices.usedMaterials,
+	usedMaterialsHistory: state.invoices.usedMaterialsHistory || {},
+	remainingMaterials: state.invoices.remainingMaterials || {}
 });
 
 export default connect(mapStateToProps, {
