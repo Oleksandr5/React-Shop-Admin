@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useMemo, useRef } from 'react'
 import { connect, useDispatch } from 'react-redux'
-import { fetchInvoices, fetchInvoicesReturn, fetchInvoicesSummary, fetchInvoicesSummaryReturn, fetchOrderNotifications, deleteNotification, clearNotifications, fetchUsedMaterials, addUsedMaterial, fetchUsedMaterialsHistory, fetchUsedMaterialsHistoryAction, archiveAllDataMonthly, updateUsedMaterialLocal } from '../../../redux/actions/invoices'; // шлях до ваших екшенів інвойсів
+import { fetchInvoices, fetchInvoicesReturn, fetchInvoicesSummary, fetchInvoicesSummaryReturn, fetchOrderNotifications, deleteNotification, clearNotifications, fetchUsedMaterials, addUsedMaterial, fetchUsedMaterialsHistory, archiveAllDataMonthly, updateUsedMaterialLocal } from '../../../redux/actions/invoices'; // шлях до ваших екшенів інвойсів
 
 import classes from './InvoicesPage.module.css';
 import firebase from 'firebase';
@@ -89,91 +89,112 @@ const CrewInventoryReport = ({
 	useEffect(() => {
 		if (!mainWorkerId) return;
 
+		// --- РЕЖИМ АРХІВУ ---
+		if (isArchiveMode) {
+			setLoading(true);
+
+			const archiveInv = {};
+			const archiveUsed = {};
+			const archiveReturns = {};
+
+			// Збираємо дані по екіпажу (main + partner)
+			[mainWorkerId, partnerWorkerId].filter(id => !!id).forEach(id => {
+				// Взято
+				const dataInv = invoices[id] || {};
+				Object.values(dataInv).forEach(item => {
+					archiveInv[item.productId] = (archiveInv[item.productId] || 0) + Number(item.totalQuantity || 0);
+				});
+
+				// Списано
+				const dataUsed = usedMaterials[id] || {};
+				Object.entries(dataUsed).forEach(([pid, qty]) => {
+					archiveUsed[pid] = (archiveUsed[pid] || 0) + Number(qty || 0);
+				});
+
+				// Повернення
+				const dataRet = invoicesReturn[id] || {};
+				Object.values(dataRet).forEach(order => {
+					if (order.items) {
+						order.items.forEach(item => {
+							if (item.productId) {
+								archiveReturns[item.productId] = (archiveReturns[item.productId] || 0) + Number(item.quantity || 0);
+							}
+						});
+					}
+				});
+			});
+
+			setCombinedData({
+				invoices: archiveInv,
+				used: archiveUsed,
+				invoicesReturn: archiveReturns
+			});
+
+			// ✅ КРИТИЧНО: Тепер беремо початкові залишки ТА реальні залишки з архіву
+			setRemainingMaterialsStart(archiveRemainingStart || {});
+			setHasRemainingMaterialsStartInDB(!!archiveRemainingStart && Object.keys(archiveRemainingStart).length > 0);
+
+			// Встановлюємо фактичні залишки, які були на момент створення архіву
+			setRealRemaining(remainingMaterials || {});
+
+			setLoading(false);
+			return;
+		}
+
+		// --- LIVE РЕЖИМ (Firebase) ---
 		const db = firebase.database();
 		const ids = [mainWorkerId, partnerWorkerId].filter(id => !!id);
 		setLoading(true);
 
-		// Сховище для накопичення (майстер + напарник)
+		// Оновлюємо реальні залишки з пропса, який прийшов через Redux
+		setRealRemaining(remainingMaterials || {});
+
 		const workerData = {};
+		const listeners = [];
 
 		const syncState = () => {
 			const finalInvoices = {};
 			const finalUsed = {};
 			const finalReturns = {};
-
 			Object.values(workerData).forEach(data => {
-				Object.entries(data.invoices || {}).forEach(([pid, qty]) => {
-					finalInvoices[pid] = (finalInvoices[pid] || 0) + qty;
-				});
-				Object.entries(data.used || {}).forEach(([pid, qty]) => {
-					finalUsed[pid] = (finalUsed[pid] || 0) + qty;
-				});
-				Object.entries(data.returns || {}).forEach(([pid, qty]) => {
-					finalReturns[pid] = (finalReturns[pid] || 0) + qty;
-				});
+				Object.entries(data.invoices || {}).forEach(([pid, qty]) => { finalInvoices[pid] = (finalInvoices[pid] || 0) + qty; });
+				Object.entries(data.used || {}).forEach(([pid, qty]) => { finalUsed[pid] = (finalUsed[pid] || 0) + qty; });
+				Object.entries(data.returns || {}).forEach(([pid, qty]) => { finalReturns[pid] = (finalReturns[pid] || 0) + qty; });
 			});
-
-			setCombinedData({
-				invoices: finalInvoices,
-				used: finalUsed,
-				invoicesReturn: finalReturns
-			});
+			setCombinedData({ invoices: finalInvoices, used: finalUsed, invoicesReturn: finalReturns });
 		};
 
-		const listeners = [];
-
-		// 1. Початкове завантаження (щоб вимкнути setLoading)
-		const initialLoads = ids.flatMap(id => [
-			db.ref(`invoicesSummary/${id}`).once('value'),
-			db.ref(`usedMaterials/${id}`).once('value'),
-			db.ref(`invoicesReturn/${id}`).once('value')
-		]);
-
-		Promise.all(initialLoads).finally(() => setLoading(false));
-
-		// 2. Слухачі для кожної гілки кожного працівника
 		ids.forEach(id => {
 			workerData[id] = { invoices: {}, used: {}, returns: {} };
 
-			// ВЗЯТО
 			const invRef = db.ref(`invoicesSummary/${id}`);
 			invRef.on('value', (snap) => {
 				const data = snap.val() || {};
 				const temp = {};
-				Object.values(data).forEach(item => {
-					temp[item.productId] = (temp[item.productId] || 0) + Number(item.totalQuantity || 0);
-				});
+				Object.values(data).forEach(item => { temp[item.productId] = (temp[item.productId] || 0) + Number(item.totalQuantity || 0); });
 				workerData[id].invoices = temp;
 				syncState();
 			});
 			listeners.push(invRef);
 
-			// СПИСАНО
 			const usedRef = db.ref(`usedMaterials/${id}`);
 			usedRef.on('value', (snap) => {
 				const data = snap.val() || {};
 				const temp = {};
-				Object.entries(data).forEach(([pid, qty]) => {
-					temp[pid] = Number(qty || 0);
-				});
+				Object.entries(data).forEach(([pid, qty]) => { temp[pid] = Number(qty || 0); });
 				workerData[id].used = temp;
 				syncState();
 			});
 			listeners.push(usedRef);
 
-			// ПОВЕРНЕННЯ
 			const returnRef = db.ref(`invoicesReturn/${id}`);
 			returnRef.on('value', (snap) => {
 				const data = snap.val() || {};
 				const temp = {};
 				Object.values(data).forEach(order => {
-					if (order.items) {
-						order.items.forEach(item => {
-							if (item.productId) {
-								temp[item.productId] = (temp[item.productId] || 0) + Number(item.quantity || 0);
-							}
-						});
-					}
+					if (order.items) order.items.forEach(item => {
+						if (item.productId) temp[item.productId] = (temp[item.productId] || 0) + Number(item.quantity || 0);
+					});
 				});
 				workerData[id].returns = temp;
 				syncState();
@@ -181,28 +202,28 @@ const CrewInventoryReport = ({
 			listeners.push(returnRef);
 		});
 
-		// 3. СЛУХАЧ ФАКТИЧНИХ ЗАЛИШКІВ (те, чого не вистачало)
-		const remRef = db.ref(`remainingMaterials/${mainWorkerId}`);
-		remRef.on('value', (snapshot) => {
-			setRealRemaining(snapshot.val() || {});
-		});
-		listeners.push(remRef);
-
-		// 4. СЛУХАЧ ПОЧАТКОВИХ ЗАЛИШКІВ (Start) - Замість старого архіву
 		const startRef = db.ref(`remainingMaterialsStart/${mainWorkerId}`);
 		startRef.on('value', (snapshot) => {
 			const data = snapshot.val() || {};
-			// Оновлюємо новий стан для початкових залишків
 			setRemainingMaterialsStart(data);
-			// Перевіряємо, чи є взагалі дані в цій гілці
 			setHasRemainingMaterialsStartInDB(Object.keys(data).length > 0);
 		});
 		listeners.push(startRef);
 
-		return () => {
-			listeners.forEach(ref => ref.off('value'));
-		};
-	}, [mainWorkerId, partnerWorkerId]);
+		setLoading(false);
+
+		return () => { listeners.forEach(ref => ref.off('value')); };
+
+	}, [
+		mainWorkerId,
+		partnerWorkerId,
+		isArchiveMode,
+		archiveRemainingStart,
+		invoices,
+		usedMaterials,
+		invoicesReturn,
+		remainingMaterials // ✅ Додано для відстеження змін реальних залишків в архіві
+	]);
 
 	const getLastArchiveKeys = async (db) => {
 		const arcSnap = await db.ref('archive').orderByKey().limitToLast(1).once('value');
@@ -214,6 +235,35 @@ const CrewInventoryReport = ({
 		const lastTimeKey = Object.keys(times).sort().reverse()[0];
 
 		return { monthKey, lastTimeKey };
+	};
+
+	// Запис введених даних прямо в архів Firebase
+	const saveToArchiveDB = async () => {
+		if (!mainWorkerId) {
+			alert("Помилка: ID працівника не знайдено");
+			return;
+		}
+		if (!window.confirm("Записати ці дані в останній існуючий архів?")) return;
+
+		const db = firebase.database();
+		try {
+			// Використовуємо нашу нову функцію
+			const keys = await getLastArchiveKeys(db);
+
+			if (keys) {
+				const { monthKey, lastTimeKey } = keys;
+
+				await db.ref(`archive/${monthKey}/${lastTimeKey}/remainingMaterialsHistory/${mainWorkerId}`)
+					.set(archiveHistory);
+
+				setHasArchiveInDB(true);
+				alert(`✅ Всі дані додано до архіву: ${lastTimeKey}`);
+			} else {
+				alert("Архівів ще не існує. Спершу створіть загальний архів місяця.");
+			}
+		} catch (e) {
+			alert("Помилка: " + e.message);
+		}
 	};
 
 	// 1. Оновлення локального стану при вводі в інпут
@@ -424,6 +474,16 @@ const CrewInventoryReport = ({
 
 				</div>
 				<div className={classes.topActions}>
+					{/* Записати в архів */}
+					{!hasArchiveInDB && (
+						<button
+							onClick={saveToArchiveDB}
+							className={classes.actionBtn}
+							style={{ background: '#f39c12' }}
+						>
+							💾 Записати в архів
+						</button>
+					)}
 
 					{/* Синхронізувати */}
 					{
@@ -699,19 +759,18 @@ const UsedMaterialsTable = ({
 	customers,
 	invoicesSummary,
 	usedMaterials,
-	usedMaterialsHistory,
 	stock,
 	fetchUsedMaterials,
 	addUsedMaterial,
-	fetchUsedMaterialsHistoryAction,
+	fetchUsedMaterialsHistory,
 	isAdminFullAccess,
 	isAdminInvoices,
 	isAdminUsedMaterials,
 	dynamicProductIds, // ЗМІНА: тепер отримуємо це як пропс від батька
-	setLiveDynamicProductIds,
-	isArchiveMode,
+	setDynamicProductIds,
 	isVisible,
-	onToggle
+	onToggle,
+	isArchiveMode
 }) => {
 	const [inputValues, setInputValues] = useState({});
 	const [agreementValues, setAgreementValues] = useState({});
@@ -759,66 +818,70 @@ const UsedMaterialsTable = ({
 		});
 	}, [stock, invoicesSummary, dynamicProductIds]);
 
-	const handleSearchByAgreement = () => {
+	const handleSearchByAgreement = async () => {
 		const term = searchAgreement.trim();
 		if (!term) {
 			alert("Введіть номер угоди для пошуку");
 			return;
 		}
 
-		// 1. Беремо дані безпосередньо з пропсів (вони вже там завдяки Action)
-		const allHistory = usedMaterialsHistory || {};
-		let foundMaterials = [];
+		try {
+			const promises = dynamicProductIds.map(productId =>
+				fetchUsedMaterialsHistory(selectedUser, productId).then(hist => ({
+					productId,
+					hist
+				}))
+			);
 
-		// 2. Проходимо по ID товарів, які зараз використовуються
-		dynamicProductIds.forEach(productId => {
-			const productHistoryRaw = allHistory[productId];
+			const results = await Promise.all(promises);
+			let foundMaterials = [];
 
-			if (productHistoryRaw) {
-				// Отримуємо масив записів (перетворюємо об'єкт Firebase у масив)
-				const historyArray = Object.values(productHistoryRaw);
+			for (const { productId, hist } of results) {
+				if (hist && hist.length > 0) {
+					const matches = hist.filter(log => String(log.agreement).trim() === term);
+					if (matches.length > 0) {
+						const productInfo = fullMaterialsList.find(s => Number(s.productId) === Number(productId));
 
-				// Фільтруємо за номером угоди
-				const matches = historyArray.filter(log => String(log.agreement).trim() === term);
+						matches.forEach(match => {
+							const date = match.createdAt
+								? new Date(match.createdAt).toLocaleString("uk-UA", {
+									day: '2-digit',
+									month: '2-digit',
+									year: '2-digit',
+									hour: '2-digit',
+									minute: '2-digit'
+								})
+								: "---";
 
-				if (matches.length > 0) {
-					const productInfo = fullMaterialsList.find(s => Number(s.productId) === Number(productId));
-
-					matches.forEach(match => {
-						const date = match.createdAt
-							? new Date(match.createdAt).toLocaleString("uk-UA", {
-								day: '2-digit',
-								month: '2-digit',
-								year: '2-digit',
-								hour: '2-digit',
-								minute: '2-digit'
-							})
-							: "---";
-
-						foundMaterials.push({
-							name: productInfo?.name || `Товар #${productId}`,
-							quantity: Number(match.value || 0),
-							units: productInfo?.units || '',
-							date: date,
-							comment: match.comment || ""
+							// ВИПРАВЛЕНО: Додаємо comment в об'єкт
+							foundMaterials.push({
+								name: productInfo?.name || `Товар #${productId}`,
+								quantity: Number(match.value || 0),
+								units: productInfo?.units || '',
+								date: date,
+								comment: match.comment || "" // Отримуємо коментар
+							});
 						});
-					});
+					}
 				}
 			}
-		});
 
-		// 3. Результат пошуку
-		if (foundMaterials.length === 0) {
-			alert(`По угоді №${term} не списано товарів`);
-		} else {
-			const listText = foundMaterials
-				.map(m => {
-					const commentPart = m.comment ? ` (Прим: ${m.comment})` : "";
-					return `• [${m.date}] ${m.name}: ${m.quantity} ${m.units}${commentPart}`;
-				})
-				.join('\n');
+			if (foundMaterials.length === 0) {
+				alert(`По угоді №${term} не списано товарів`);
+			} else {
+				// ВИПРАВЛЕНО: Формуємо текст з урахуванням коментаря (якщо він є)
+				const listText = foundMaterials
+					.map(m => {
+						const commentPart = m.comment ? ` (Прим: ${m.comment})` : "";
+						return `• [${m.date}] ${m.name}: ${m.quantity} ${m.units}${commentPart}`;
+					})
+					.join('\n');
 
-			alert(`📦 Товари списані на угоду №${term}:\n\n${listText}`);
+				alert(`📦 Товари списані на угоду №${term}:\n\n${listText}`);
+			}
+		} catch (err) {
+			console.error("Помилка пошуку:", err);
+			alert("Помилка при пошуку даних");
 		}
 	};
 
@@ -835,23 +898,12 @@ const UsedMaterialsTable = ({
 		}
 
 		if (window.confirm("Оновити список товарів для всіх користувачів?")) {
-			// 1. ПЕРЕВІРКА: Якщо ми в архіві — виходимо і нічого не зберігаємо
-			if (isArchiveMode) {
-				alert("Неможливо оновити список товарів у режимі перегляду архіву.");
-				return;
-			}
-
 			try {
-				// 2. Використовуємо наш прямий шлях до бази
 				await firebase.database().ref('settings/productsForWorkOrders').set(idsArray);
-
-				// 3. Оновлюємо ЛАЙВ-стейт (наш перейменований сеттер)
-				setLiveDynamicProductIds(idsArray);
-
+				setDynamicProductIds(idsArray);
 				setIsEditingIds(false);
 				alert("Список оновлено!");
 			} catch (err) {
-				console.error(err);
 				alert("Помилка збереження.");
 			}
 		}
@@ -879,8 +931,6 @@ const UsedMaterialsTable = ({
 
 			await fetchUsedMaterials(selectedUser);
 			setInputValues(prev => ({ ...prev, [productId]: "" }));
-
-			fetchUsedMaterialsHistoryAction(selectedUser);
 			// ДОДАЄМО ЦЕ: Очищуємо поле угоди для цього productId
 			setAgreementValues(prev => ({ ...prev, [productId]: "" }));
 			// добавити: очищуємо поле коментаря після успішного додавання
@@ -891,65 +941,49 @@ const UsedMaterialsTable = ({
 		}
 	};
 
-	const handleHistory = (productId) => {
-		// Дані вже підготовлені у Redux (або в архіві через useMemo)
-		// usedMaterialsHistory — це об'єкт { productId: { pushId: { data } } }
-		const historyDataRaw = usedMaterialsHistory[productId] || {};
+	const handleHistory = async (productId) => {
+		try {
+			const snapshot = await firebase.database().ref(`usedMaterialsHistory/${selectedUser}/${productId}`).once('value');
+			const res = snapshot.val() || {};
 
-		// Перетворюємо об'єкт у масив з ID
-		const historyArray = Object.keys(historyDataRaw).map(key => ({
-			id: key,
-			...historyDataRaw[key]
-		}));
+			// ПЕРЕТВОРЮЄМО ОБ'ЄКТ У МАСИВ З ID
+			const historyArray = Object.keys(res).map(key => ({
+				id: key, // ОСЬ ТУТ МИ ПРИВ'ЯЗУЄМО КЛЮЧ FIREBASE
+				...res[key]
+			}));
 
-		// Сортуємо і рахуємо суми (ваша логіка)
-		const finalData = recalculateWithTime(historyArray);
+			// Сортуємо за часом і рахуємо суми
+			const finalData = recalculateWithTime(historyArray);
 
-		setHistoryModal({
-			isOpen: true,
-			productId: productId,
-			data: finalData
-		});
+			setHistoryModal({
+				isOpen: true,
+				productId: productId,
+				data: finalData
+			});
+		} catch (err) {
+			console.error("Помилка завантаження:", err);
+		}
 	};
 
 	const handleUndo = async (productId) => {
-		if (isArchiveMode) {
-			alert("В режимі архіву не можна скасовувати дії");
-			return;
-		}
-
 		try {
-			// Отримуємо історію конкретного товару з Redux
-			const productHistoryRaw = usedMaterialsHistory[productId] || {};
-
-			// Перетворюємо в масив та сортуємо за часом, щоб знайти останній запис
-			const hist = Object.values(productHistoryRaw).sort((a, b) => a.createdAt - b.createdAt);
-
+			const hist = await fetchUsedMaterialsHistory(selectedUser, productId);
 			const currentTotal = usedMaterials?.[productId] || 0;
-			if (hist.length === 0) {
-				alert("Історія порожня");
-				return;
-			}
+			if (!hist || hist.length === 0) return;
 
 			const lastEntry = hist[hist.length - 1];
 			const rollbackValue = currentTotal - lastEntry.value;
 
 			if (window.confirm(`Відмінити останню дію (+${lastEntry.value})?`)) {
-				// Викликаємо екшен додавання з параметром rollbackValue
-				// addUsedMaterial сам викличе fetchUsedMaterials всередині себе
 				await addUsedMaterial(selectedUser, productId, null, null, rollbackValue);
-
-				// Оскільки ми змінили базу, оновлюємо і всю історію в Redux
-				fetchUsedMaterialsHistoryAction(selectedUser);
+				await fetchUsedMaterials(selectedUser);
 			}
-		} catch (err) {
-			console.error(err);
-			alert("Помилка при відкаті");
-		}
+		} catch (err) { alert("Помилка при відкаті"); }
 	};
 
-	const handlePrintAllAgreementsReport = () => { // Прибрали async
+	const handlePrintAllAgreementsReport = async () => {
 		try {
+			// --- БЛОК ВИЗНАЧЕННЯ ІМЕНІ ЕКІПАЖУ ---
 			const crewId = selectedUser;
 			const workerObj = customers.find(c => String(c.id) === String(crewId));
 			const crewDisplayName = workerObj ? `${workerObj.name} (${crewId})` : crewId;
@@ -957,42 +991,116 @@ const UsedMaterialsTable = ({
 			// --- ПІДГОТОВКА СПИСКУ МАТЕРІАЛІВ ---
 			const stockMap = new Map((stock || []).map(s => [Number(s.id), s]));
 			const summaryMap = new Map((invoicesSummary || []).map(s => [Number(s.productId), s]));
+			const currentFullMaterialsList = dynamicProductIds.map(id => {
+				const productFromStock = stockMap.get(Number(id));
+				const userInventory = summaryMap.get(Number(id));
+				return {
+					productId: id,
+					name: productFromStock?.name || userInventory?.name || `Товар #${id}`,
+					units: productFromStock?.units || userInventory?.units || ''
+				};
+			});
 
-			// 1. Беремо готові дані з Redux замість Promise.all
-			const allHistory = usedMaterialsHistory || {};
+			// 1. Отримуємо історію для всіх наявних товарів
+			const promises = dynamicProductIds.map(productId =>
+				fetchUsedMaterialsHistory(crewId, productId).then(hist => ({
+					productId,
+					hist
+				}))
+			);
+
+			const results = await Promise.all(promises);
+
+			// 2. Групуємо дані: ключ - номер угоди
 			const agreementsMap = {};
-
-			dynamicProductIds.forEach(productId => {
-				const histRaw = allHistory[productId];
-				if (histRaw) {
-					const hist = Object.values(histRaw); // Перетворюємо в масив
-					const productFromStock = stockMap.get(Number(productId));
-					const userInventory = summaryMap.get(Number(productId));
-
-					const name = productFromStock?.name || userInventory?.name || `Товар #${productId}`;
-					const units = productFromStock?.units || userInventory?.units || '';
+			results.forEach(({ productId, hist }) => {
+				if (hist && hist.length > 0) {
+					const productInfo = currentFullMaterialsList.find(s => Number(s.productId) === Number(productId));
+					const name = productInfo?.name || `Товар #${productId}`;
+					const units = productInfo?.units || '';
 
 					hist.forEach(log => {
 						const agreement = String(log.agreement || "Без угоди").trim();
 						if (!agreementsMap[agreement]) {
 							agreementsMap[agreement] = [];
 						}
+						// ВИПРАВЛЕНО: Додаємо поле comment в об'єкт
 						agreementsMap[agreement].push({
 							name,
 							quantity: Number(log.value || 0),
 							units,
-							comment: log.comment || "",
+							comment: log.comment || "", // Беремо коментар з логу
 							date: log.createdAt ? new Date(log.createdAt).toLocaleString("uk-UA", { day: '2-digit', month: '2-digit', year: '2-digit' }) : "---"
 						});
 					});
 				}
 			});
 
-			// 2. Формування HTML (залишається без змін)
+			// 3. Формуємо HTML
 			const currentDate = new Date().toLocaleString('uk-UA');
-			let reportHtml = `<html><head><title>Звіт по угодах</title>...`; // Ваш існуючий HTML-код...
+			let reportHtml = `
+        <html>
+        <head>
+            <title>Звіт по угодах</title>
+            <style>
+                body { font-family: sans-serif; padding: 20px; line-height: 1.4; }
+                .header { text-align: center; border-bottom: 2px solid #333; margin-bottom: 20px; padding-bottom: 10px; }
+                .agreement-section { margin-bottom: 40px; page-break-inside: avoid; }
+                .agreement-title { background: #17a2b8; color: white; padding: 10px; font-weight: bold; margin-bottom: 0; }
+                table { width: 100%; border-collapse: collapse; font-size: 13px; margin-top: 0; }
+                th, td { border: 1px solid #ccc; padding: 8px 10px; text-align: left; }
+                th { background: #f2f2f2; font-weight: bold; }
+                .no-print { text-align: center; margin: 20px; }
+                @media print { .no-print { display: none; } }
+            </style>
+        </head>
+        <body>
+            <div class="header">
+                <h2>📋 Повний звіт списань по всіх угодах</h2>
+                <p><b>Екіпаж:</b> ${crewDisplayName} | <b>Дата формування:</b> ${currentDate}</p>
+            </div>
+        `;
 
-			// ... далі ваш код рендеру HTML ...
+			const sortedAgreements = Object.keys(agreementsMap).sort();
+
+			if (sortedAgreements.length > 0) {
+				sortedAgreements.forEach(agNum => {
+					const items = agreementsMap[agNum];
+					reportHtml += `
+                <div class="agreement-section">
+                    <div class="agreement-title">📄 Угода №: ${agNum}</div>
+                    <table>
+                        <thead>
+                            <tr>
+                                <th style="width: 15%">Дата</th>
+                                <th style="width: 35%">Товар</th>
+                                <th style="width: 15%; text-align: right;">Кількість</th>
+                                <th>Примітка</th> </tr>
+                        </thead>
+                        <tbody>
+                            ${items.map(m => `
+                                <tr>
+                                    <td>${m.date}</td>
+                                    <td>${m.name}</td>
+                                    <td style="text-align: right;"><b>${m.quantity}</b> ${m.units}</td>
+                                    <td>${m.comment}</td> </tr>
+                            `).join('')}
+                        </tbody>
+                    </table>
+                </div>
+                `;
+				});
+			} else {
+				reportHtml += "<p style='text-align:center;'>Списань по угодах не знайдено.</p>";
+			}
+
+			reportHtml += `
+            <div class="no-print">
+                <button onclick="window.print()" style="padding: 12px 24px; background: #28a745; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 16px; font-weight: bold;">🖨️ Роздрукувати звіт</button>
+            </div>
+        </body>
+        </html>
+        `;
 
 			const newWindow = window.open("", "_blank", "width=1000,height=800");
 			if (newWindow) {
@@ -1005,13 +1113,24 @@ const UsedMaterialsTable = ({
 		}
 	};
 
-	const handlePrintFullHistoryReport = () => { // Прибрали async
+	const handlePrintFullHistoryReport = async () => {
 		try {
+
+			// --- ДОДАЙТЕ ЦЕЙ БЛОК ДЛЯ ВИЗНАЧЕННЯ ІМЕНІ ---
 			const crewId = selectedUser;
+			// Шукаємо об'єкт працівника в масиві customers за його ID
 			const workerObj = customers.find(c => String(c.id) === String(crewId));
 			const crewDisplayName = workerObj ? `${workerObj.name} (${crewId})` : crewId;
+			// --------------------------------------------
 
-			const allHistory = usedMaterialsHistory || {};
+			const promises = dynamicProductIds.map(productId =>
+				fetchUsedMaterialsHistory(selectedUser, productId).then(hist => ({
+					productId,
+					hist
+				}))
+			);
+
+			const results = await Promise.all(promises);
 			const currentDate = new Date().toLocaleString('uk-UA');
 
 			let reportHtml = `
@@ -1040,29 +1159,28 @@ const UsedMaterialsTable = ({
 
 			let hasData = false;
 
-			dynamicProductIds.forEach(productId => {
-				const histRaw = allHistory[productId];
-				if (histRaw) {
-					const hist = Object.values(histRaw);
-					if (hist.length > 0) {
-						hasData = true;
-						const productInfo = fullMaterialsList.find(s => Number(s.productId) === Number(productId));
-						const productName = productInfo?.name || `Товар #${productId}`;
-						const units = productInfo?.units || '';
+			results.forEach(({ productId, hist }) => {
+				if (hist && hist.length > 0) {
+					hasData = true;
+					const productInfo = fullMaterialsList.find(s => Number(s.productId) === Number(productId));
+					const productName = productInfo?.name || `Товар #${productId}`;
+					const units = productInfo?.units || '';
 
-						const sortedLogs = [...hist].sort((a, b) => a.createdAt - b.createdAt);
+					// Сортуємо від старих до нових для коректного підрахунку суми, 
+					// але для виводу потім перевернемо
+					const sortedLogs = [...hist].sort((a, b) => a.createdAt - b.createdAt);
 
-						let runningTotal = 0;
-						const rowsWithTotal = sortedLogs.map(log => {
-							const val = Number(log.value || 0);
-							runningTotal += val;
-							return {
-								...log,
-								currentRunningTotal: runningTotal
-							};
-						}).reverse();
+					let runningTotal = 0;
+					const rowsWithTotal = sortedLogs.map(log => {
+						const val = Number(log.value || 0);
+						runningTotal += val;
+						return {
+							...log,
+							currentRunningTotal: runningTotal
+						};
+					}).reverse(); // Відображаємо нові записи зверху
 
-						reportHtml += `
+					reportHtml += `
                     <div class="product-section">
                         <div class="product-title">
                             <span>📦 ${productName}</span>
@@ -1096,7 +1214,6 @@ const UsedMaterialsTable = ({
                         </table>
                     </div>
                 `;
-					}
 				}
 			});
 
@@ -1349,39 +1466,24 @@ const UsedMaterialsTable = ({
 	return (
 		<div className={classes.usedMaterialsSection} style={{ marginTop: '40px', borderTop: '5px solid #17a2b8', paddingTop: '20px' }}>
 			<div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-				<h3 className={classes.sectionTitle}>
-					🛠 Використані матеріали {finalName}
-					{isArchiveMode && <span style={{ color: '#856404', fontSize: '14px', marginLeft: '10px' }}>(Архів)</span>}
-				</h3>
+				<h3 className={classes.sectionTitle}>🛠 Використані матеріали {finalName}</h3>
 
 				{/* Кнопка видима тільки якщо адмін має повний доступ */}
 				{isAdminFullAccess && (
 					<button
-						disabled={isArchiveMode} // Блокуємо кнопку в архіві
 						onClick={() => {
 							setIsEditingIds(!isEditingIds);
 							setNewIdsString(dynamicProductIds.join(', '));
 						}}
-						style={{
-							fontSize: '12px',
-							padding: '5px 10px',
-							cursor: isArchiveMode ? 'not-allowed' : 'pointer',
-							background: isArchiveMode ? '#6c757d' : '#28a745', // Сірий колір в архіві
-							opacity: isArchiveMode ? 0.6 : 1,
-							border: 'none',
-							color: 'white',
-							borderRadius: '4px'
-						}}
+						style={{ fontSize: '12px', padding: '5px 10px', cursor: 'pointer', background: '#28a745' }}
 					>
-						{isArchiveMode
-							? "🔒 Налаштування недоступні (Архів)"
-							: (isEditingIds ? "✖ Закрити налаштування" : "⚙ Налаштувати список ID")}
+						{isEditingIds ? "✖ Закрити налаштування" : "⚙ Налаштувати список ID (productsForWorkOrders)"}
 					</button>
 				)}
+
 			</div>
 
-			{/* Блок редагування */}
-			{isEditingIds && !isArchiveMode && ( // Додаткова перевірка !isArchiveMode для безпеки
+			{isEditingIds && (
 				<div style={{ marginBottom: '15px', padding: '15px', background: '#fff3cd', border: '1px solid #ffeeba', borderRadius: '8px' }}>
 					<p style={{ margin: '0 0 10px 0', fontSize: '14px', fontWeight: 'bold' }}>🔧 Редагування списку ID товарів (через кому):</p>
 					<textarea
@@ -1768,19 +1870,44 @@ const UsedMaterialsTable = ({
 };
 
 const InvoicesPage = ({
-	hasAccount, customerName, customerId,
-	invoices: rawInvoices, // Перейменували
+	// 1. ПЕРЕЙМЕНОВУЄМО ПРОПСИ, ЩОБ УНИКНУТИ КОНФЛІКТУ
+	hasAccount,
+	customerName,
+	customerId,
+	invoices: rawInvoices,
 	invoicesReturn: rawInvoicesReturn = [],
 	invoicesSummary: rawInvoicesSummary,
 	invoicesSummaryReturn: rawInvoicesSummaryReturn,
-	fetchInvoices, fetchInvoicesReturn, fetchInvoicesSummary, fetchInvoicesSummaryReturn,
-	customers, notifications, fetchOrderNotifications, deleteNotification, clearNotifications,
-	usedMaterials: rawUsedMaterials, // Перейменували
-	usedMaterialsHistory: rawUsedMaterialsHistory, // Перейменували
-	remainingMaterials: rawRemainingMaterials,
-	fetchUsedMaterialsHistoryAction,
-	fetchUsedMaterials, addUsedMaterial, archiveAllDataMonthly, stock
+	notifications: rawNotifications,
+	stock: rawStock,
+	usedMaterials: rawUsedMaterials,
+	usedMaterialsHistory: rawUsedMaterialsHistory,
+	remainingMaterials: rawRemainingMaterials = {},
+
+	// Решта пропсів залишається без змін
+	customers,
+	fetchInvoices,
+	fetchInvoicesReturn,
+	fetchInvoicesSummary,
+	fetchInvoicesSummaryReturn,
+	fetchOrderNotifications,
+	deleteNotification,
+	clearNotifications,
+	fetchUsedMaterials,
+	addUsedMaterial,
+	archiveAllDataMonthly
 }) => {
+
+	console.log('!!!!___usedMaterials', rawUsedMaterials);
+	console.log('!!!!___usedMaterialsHistory', rawUsedMaterialsHistory);
+	console.log(`[${new Date().toLocaleTimeString()}] 🟢 RAW MATERIALS:`, rawUsedMaterials);
+	const dispatch = useDispatch();
+
+	const [selectedMonth, setSelectedMonth] = useState('');
+	const [availableSnapshots, setAvailableSnapshots] = useState([]);
+	const [selectedSnapshot, setSelectedSnapshot] = useState('');
+	const [fullArchive, setFullArchive] = useState(null);
+	const [months, setMonths] = useState([]);
 
 	const [visibleTables, setVisibleTables] = useState({
 		notifications: true,
@@ -1791,160 +1918,164 @@ const InvoicesPage = ({
 		crewReport: true           // Таблиця в CrewInventoryReport
 	});
 
-	const toggleTable = (tableName) => {
-		setVisibleTables(prev => ({
-			...prev,
-			[tableName]: !prev[tableName]
-		}));
-	};
-
 	const agreementInputRef = useRef(null);
 
 	const [selectedUser, setSelectedUser] = useState(customerId || '');
 	// Коментар: НОВЕ: Стейт для збереження вибраного напарника
 	const [partnerUser, setPartnerUser] = useState('');
 	const [admins, setAdmins] = useState({});
-
-
-	const [months, setMonths] = useState([]);
-	const [selectedMonth, setSelectedMonth] = useState('');
-	const [availableSnapshots, setAvailableSnapshots] = useState([]);
-	const [selectedSnapshot, setSelectedSnapshot] = useState('');
-	const [fullArchive, setFullArchive] = useState(null);
-	const [liveDynamicProductIds, setLiveDynamicProductIds] = useState([]); // Сюди підуть ID з Firebase Settings
-
-	const isArchiveMode = !!fullArchive;
-
-	// 1. Інвойси та повернення
-	const invoices = useMemo(() => {
-		if (isArchiveMode) {
-			const archiveAll = fullArchive?.invoicesHistory || {};
-			const customerInvoices = archiveAll[selectedUser] || {};
-			// Захист: перетворюємо на масив, бо Firebase може повернути об'єкт з ключами "0", "1"...
-			return Array.isArray(customerInvoices) ? customerInvoices : Object.values(customerInvoices);
-		}
-		return rawInvoices || [];
-	}, [isArchiveMode, fullArchive, rawInvoices, selectedUser]);
-
-	const invoicesReturn = useMemo(() => {
-		if (isArchiveMode) {
-			const archiveAll = fullArchive?.invoicesReturnHistory || {};
-			const customerData = archiveAll[selectedUser] || {};
-			return Array.isArray(customerData) ? customerData : Object.values(customerData);
-		}
-		return rawInvoicesReturn || [];
-	}, [isArchiveMode, fullArchive, rawInvoicesReturn, selectedUser]);
-
-	const invoicesSummary = useMemo(() => {
-		if (isArchiveMode) {
-			const archiveAll = fullArchive?.invoicesSummaryHistory || {};
-			const summaryData = archiveAll[selectedUser] || {};
-			// Важливо: перетворюємо об'єкт {productId: data} на масив для .map()
-			return Object.keys(summaryData).map(key => ({
-				...summaryData[key],
-				productId: summaryData[key].productId || Number(key)
-			}));
-		}
-		return rawInvoicesSummary || [];
-	}, [isArchiveMode, fullArchive, rawInvoicesSummary, selectedUser]);
-
-	const invoicesSummaryReturn = useMemo(() => {
-		if (isArchiveMode) {
-			const archiveAll = fullArchive?.invoicesSummaryReturnHistory || {};
-			const summaryData = archiveAll[selectedUser] || {};
-			return Object.keys(summaryData).map(key => ({
-				...summaryData[key],
-				productId: summaryData[key].productId || Number(key)
-			}));
-		}
-		return rawInvoicesSummaryReturn || [];
-	}, [isArchiveMode, fullArchive, rawInvoicesSummaryReturn, selectedUser]);
-
-	// 2. Матеріали та звіти
-	const usedMaterials = useMemo(() => {
-		if (isArchiveMode) {
-			const archiveAll = fullArchive?.usedMaterialsHistory || {};
-			return archiveAll[selectedUser] || {};
-		}
-		return rawUsedMaterials || {};
-	}, [isArchiveMode, fullArchive, rawUsedMaterials, selectedUser]);
-
-	const usedMaterialsHistory = useMemo(() => {
-		if (isArchiveMode) {
-			// УВАГА: Перевірте назву поля. 
-			// Судячи з логів, зараз ви берете fullArchive.usedMaterials (цифри), 
-			// а треба брати fullArchive.usedMaterialsHistory (об'єкт з логами).
-			const archiveHistoryAll = fullArchive?.usedMaterialsHistoryHistory || {};
-			const historyData = archiveHistoryAll[selectedUser] || {};
-
-			if (isArchiveMode) {
-				console.log("Archive History Data for user:", historyData);
-			}
-
-			return historyData;
-		}
-
-		return rawUsedMaterialsHistory || {};
-	}, [isArchiveMode, fullArchive, rawUsedMaterialsHistory, selectedUser]);
-
-
-
-	const remainingMaterials = useMemo(() => {
-		if (isArchiveMode) {
-			return fullArchive?.remainingMaterialsHistory?.[selectedUser] || {};
-		}
-		return rawRemainingMaterials || {};
-	}, [isArchiveMode, fullArchive, rawRemainingMaterials, selectedUser]);
-
-	// 3. Склад (stock)
-	const currentStock = useMemo(() => {
-		if (isArchiveMode) {
-			const stockData = fullArchive?.stockAtThatTime || [];
-			// В архіві склад теж може стати об'єктом, перетворюємо назад у масив
-			return Array.isArray(stockData) ? stockData : Object.values(stockData);
-		}
-		return stock || []; // Використовуємо пропс stock з mapStateToProps
-	}, [isArchiveMode, fullArchive, stock]);
-
-	// 4. Початкові залишки (для розрахунків у звіті)
-	const archiveRemainingStartData = useMemo(() =>
-		isArchiveMode ? (fullArchive.remainingMaterialsStartHistory?.[selectedUser] || {}) : {},
-		[isArchiveMode, fullArchive, selectedUser]);
-
-	// 5. Налаштування (ID товарів для звітів)
-	const dynamicProductIds = useMemo(() => {
-		if (isArchiveMode) {
-			// 1. Беремо ID з налаштувань архіву (якщо вони є)
-			const archiveSettings = fullArchive?.settings?.productsForWorkOrders || [];
-
-			// 2. ДОДАТКОВО: Беремо всі ID, які реально є в історії списань цього архіву
-			const historyData = fullArchive?.usedMaterialsHistory?.[selectedUser] || {};
-			const idsFromHistory = Object.keys(historyData).map(id => Number(id));
-
-			// Об'єднуємо обидва списки і прибираємо дублікати
-			const combinedIds = Array.from(new Set([...archiveSettings, ...idsFromHistory]));
-
-			return combinedIds.length > 0 ? combinedIds : [];
-		}
-
-		// Live-режим залишається як був
-		return liveDynamicProductIds;
-	}, [isArchiveMode, fullArchive, liveDynamicProductIds, selectedUser]);
-
-
+	// Коментар: НОВЕ: Стейт для списку ID, який тепер спільний для двох таблиць
+	const [dynamicProductIds, setDynamicProductIds] = useState([]);
 
 	const idThisCustomers = window.localStorage.getItem("idThisCustomers");
 
-	// Додайте це на початку рендеру (всередині компонента InvoicesPage)
-	console.log('--- RENDER CHECK ---');
-	console.log('Current selectedUser ID (from state):', selectedUser); // ми використовуємо стан selectedUser
-	console.log('Current usedMaterials (from Redux):', usedMaterials); // використовуємо деструктурований пропс
 
 	// Перевіряємо: користувач залогінений ТА має відповідне поле "true" у базі адмінів
 	const isAdminInvoices = hasAccount && !!admins[idThisCustomers]?.invoices;
 	const isAdminUsedMaterials = hasAccount && !!admins[idThisCustomers]?.usedMaterials;
 	const isAdminFullAccess = hasAccount && !!admins[idThisCustomers]?.fullAccess;
 
+	const isArchiveMode = !!fullArchive;
+
+	// Створюємо "розумні" змінні
+	const invoices = useMemo(() => {
+		const raw = isArchiveMode ? (fullArchive.invoicesHistory?.[selectedUser] || {}) : rawInvoices;
+		return (raw && typeof raw === 'object' && !Array.isArray(raw)) ? Object.values(raw) : (raw || []);
+	}, [isArchiveMode, fullArchive, rawInvoices, selectedUser]);
+
+	const invoicesReturn = useMemo(() => {
+		const raw = isArchiveMode ? (fullArchive.invoicesReturnHistory?.[selectedUser] || []) : (rawInvoicesReturn || []);
+		return (raw && typeof raw === 'object' && !Array.isArray(raw)) ? Object.values(raw) : (raw || []);
+	}, [isArchiveMode, fullArchive, rawInvoicesReturn, selectedUser]);
+
+	const invoicesSummary = useMemo(() => {
+		const rawData = isArchiveMode ? (fullArchive.invoicesSummaryHistory?.[selectedUser] || {}) : rawInvoicesSummary;
+		if (Array.isArray(rawData)) return rawData;
+		if (rawData && typeof rawData === 'object') {
+			return Object.keys(rawData).map(key => ({
+				...rawData[key],
+				productId: rawData[key].productId || Number(key)
+			}));
+		}
+		return [];
+	}, [isArchiveMode, fullArchive, rawInvoicesSummary, selectedUser]);
+
+	const invoicesSummaryReturn = useMemo(() => {
+		const rawData = isArchiveMode ? (fullArchive.invoicesSummaryReturnHistory?.[selectedUser] || {}) : rawInvoicesSummaryReturn;
+		if (Array.isArray(rawData)) return rawData;
+		if (rawData && typeof rawData === 'object') {
+			return Object.keys(rawData).map(key => ({
+				...rawData[key],
+				productId: rawData[key].productId || Number(key)
+			}));
+		}
+		return [];
+	}, [isArchiveMode, fullArchive, rawInvoicesSummaryReturn, selectedUser]);
+
+	const notifications = useMemo(() => {
+		const rawData = isArchiveMode ? (fullArchive.orderNotificationsHistory || {}) : rawNotifications;
+		if (Array.isArray(rawData)) return rawData;
+		if (rawData && typeof rawData === 'object') {
+			let all = [];
+			Object.values(rawData).forEach(customerNotifs => {
+				if (customerNotifs) all.push(...Object.values(customerNotifs));
+			});
+			return all.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+		}
+		return [];
+	}, [isArchiveMode, fullArchive, rawNotifications]);
+
+	// Матеріали та склад
+	// ✅ Оновлені змінні для синхронізації архіву
+	const usedMaterials = useMemo(() => {
+		// Якщо НЕ режим архіву — завжди повертаємо дані з Redux
+		if (!isArchiveMode) return rawUsedMaterials || {};
+
+		// Якщо режим архіву — тільки тоді шукаємо в fullArchive
+		return fullArchive.usedMaterialsHistory?.[selectedUser] || {};
+	}, [isArchiveMode, fullArchive, rawUsedMaterials, selectedUser]);
+
+
+	const usedMaterialsHistory = useMemo(() => {
+		if (isArchiveMode && fullArchive) {
+			// ТУТ КЛЮЧОВА ЗМІНА: 
+			// В архіві usedMaterials та usedMaterialsHistory мають бути ОДНАКОВИМИ, 
+			// щоб таблиця і звіт бачили одне й те саме.
+			return fullArchive.usedMaterialsHistory?.[selectedUser] || {};
+		}
+		return rawUsedMaterialsHistory || {};
+	}, [isArchiveMode, fullArchive, rawUsedMaterialsHistory, selectedUser]);
+
+	const remainingMaterials = useMemo(() => {
+		if (isArchiveMode && fullArchive) {
+			return fullArchive.remainingMaterialsHistory?.[selectedUser] || {};
+		}
+		return rawRemainingMaterials || {};
+	}, [isArchiveMode, fullArchive, rawRemainingMaterials, selectedUser]);
+
+	const stock = useMemo(() => {
+		if (isArchiveMode && fullArchive) {
+			return fullArchive.stockAtThatTime || [];
+		}
+		return rawStock || [];
+	}, [isArchiveMode, fullArchive, rawStock]);
+
+	// Для звіту екіпажу
+	const archiveRemainingStart = isArchiveMode ? (fullArchive.remainingMaterialsStartHistory?.[selectedUser] || {}) : null;
+
+
+
+	// Обробники для селектів
+	const handleMonthChange = (month) => {
+		setSelectedMonth(month);
+		setSelectedSnapshot('');
+		setFullArchive(null);
+		setDynamicProductIds([]); // Очищення при зміні місяця
+		if (month) {
+			firebase.database().ref(`archive/${month}`).once('value', (s) => {
+				const data = s.val();
+				if (data) setAvailableSnapshots(Object.keys(data).sort().reverse());
+			});
+		}
+	};
+
+	const handleSnapshotChange = async (snapshotKey) => {
+		setSelectedSnapshot(snapshotKey);
+		// Обов'язково очищуємо, щоб старі колонки не "миготіли"
+		setDynamicProductIds([]);
+
+		if (!snapshotKey) {
+			setFullArchive(null);
+			return;
+		}
+
+		const snapshot = await firebase.database().ref(`archive/${selectedMonth}/${snapshotKey}`).once('value');
+		const data = snapshot.val();
+
+		if (data) {
+			setFullArchive(data);
+
+			// Пріоритет: 
+			// 1. settings.productsForWorkOrders з архіву
+			// 2. productsForWorkOrders (якщо в корені архіву)
+			// 3. Дефолтний список (якщо архів старий)
+			const archivedIds = data.settings?.productsForWorkOrders || data.productsForWorkOrders;
+
+			if (archivedIds) {
+				setDynamicProductIds(archivedIds);
+			} else {
+				// Ваш дефолтний список initialList (ті самі 30+ ID)
+				setDynamicProductIds([104, 123, 121, 122, 120, 119, 103, 124, 118, 117, 125, 132, 126, 108, 116, 112, 109, 114, 113, 115, 110, 111, 130, 129, 131, 128, 150, 153, 152, 151, 149, 148, 147]);
+			}
+		}
+	};
+
+	const toggleTable = (tableName) => {
+		setVisibleTables(prev => ({
+			...prev,
+			[tableName]: !prev[tableName]
+		}));
+	};
 
 	const handleCustomerChange = (e) => {
 		const userId = e.target.value;
@@ -1956,75 +2087,57 @@ const InvoicesPage = ({
 
 	};
 
-	const handleMonthChange = (month) => {
-		setSelectedMonth(month);
-		setSelectedSnapshot('');
-		setFullArchive(null);
-		if (!month) {
-			setAvailableSnapshots([]);
-			return;
-		}
-		firebase.database().ref(`archive/${month}`).once('value', snapshot => {
-			const data = snapshot.val();
-			if (data) setAvailableSnapshots(Object.keys(data).sort().reverse());
-		});
-	};
-
-	const handleSnapshotChange = (snapshotId) => {
-		setSelectedSnapshot(snapshotId);
-		if (!snapshotId) {
-			setFullArchive(null);
-			return;
-		}
-		firebase.database().ref(`archive/${selectedMonth}/${snapshotId}`).once('value', snapshot => {
-			setFullArchive(snapshot.val());
-		});
-	};
-
-	// 1. Завантаження списку доступних місяців з архіву (раз при завантаженні)
+	// Завантажуємо список місяців з гілки archive
 	useEffect(() => {
-		firebase.database().ref('archive').once('value', snapshot => {
+		firebase.database().ref('archive').once('value', (snapshot) => {
 			const data = snapshot.val();
 			if (data) setMonths(Object.keys(data).sort().reverse());
 		});
 	}, []);
 
-	// 2. Налаштування адмінів (працює завжди)
 	useEffect(() => {
 		const ref = firebase.database().ref('settings/admins');
 		ref.on('value', snapshot => { setAdmins(snapshot.val() || {}); });
 		return () => ref.off();
 	}, []);
 
-	// 3. Синхронізація ID товарів (Live-версія)
+	// =========================================================================
+	// Коментар: ПЕРЕНЕСЕНО СЮДИ: Автоматична синхронізація та завантаження ID товарів
+	// Коментар: Цей блок гарантує, що база даних не буде порожньою при першому запуску
+	// =========================================================================
 	useEffect(() => {
+		// Якщо ми в режимі архіву — не підписуємося на "живу" базу
+		if (isArchiveMode) return;
+
 		const ref = firebase.database().ref('settings/productsForWorkOrders');
 		const initialList = [104, 123, 121, 122, 120, 119, 103, 124, 118, 117, 125, 132, 126, 108, 116, 112, 109, 114, 113, 115, 110, 111, 130, 129, 131, 128, 150, 153, 152, 151, 149, 148, 147];
 
-		ref.on('value', (snapshot) => {
-			if (!snapshot.exists()) {
-				ref.set(initialList);
-				setLiveDynamicProductIds(initialList); // ЗМІНЕНО НА live...
-			} else {
-				setLiveDynamicProductIds(snapshot.val() || []); // ЗМІНЕНО НА live...
-			}
-		});
+		const syncAndFetch = async () => {
+			try {
+				ref.on('value', async (snapshot) => {
+					// Подвійна перевірка всередині колбеку на випадок затримки мережі
+					if (isArchiveMode) return;
 
+					if (!snapshot.exists()) {
+						await ref.set(initialList);
+						setDynamicProductIds(initialList);
+					} else {
+						setDynamicProductIds(snapshot.val() || []);
+					}
+				});
+			} catch (err) { console.error("❌ Firebase Error:", err); }
+		};
+
+		syncAndFetch();
+
+		// Це важливо: при виході з режиму Live (isArchiveMode стає true) 
+		// або розмонтуванні компонента — відключаємо слухача
 		return () => ref.off();
-	}, []);
 
-	// 4. Ініціалізація вибраного користувача
-	useEffect(() => {
-		const savedId = window.localStorage.getItem('idSelectedCustomer') || idThisCustomers;
-		if (savedId) {
-			setSelectedUser(savedId);
-			window.localStorage.setItem('idSelectedCustomer', savedId);
-		}
-	}, [idThisCustomers]);
+	}, [isArchiveMode]); // <--- ОБОВ'ЯЗКОВО ДОДАЙТЕ СЮДИ isArchiveMode
 
-	// 5. ОСНОВНЕ ЗАВАНТАЖЕННЯ ДАНИХ (З перевіркою архіву)
 	useEffect(() => {
-		// ЯКЩО МИ В АРХІВІ — ЗУПИНЯЄМО ЗАВАНТАЖЕННЯ ЖИВИХ ДАНИХ
+		// Якщо ми в режимі архіву — зупиняємо автоматичне завантаження живих даних
 		if (isArchiveMode) return;
 
 		if (hasAccount && selectedUser) {
@@ -2033,21 +2146,17 @@ const InvoicesPage = ({
 			fetchInvoicesSummary(selectedUser);
 			fetchInvoicesSummaryReturn(selectedUser);
 			fetchOrderNotifications(selectedUser);
-			fetchUsedMaterials(selectedUser);
-			fetchUsedMaterialsHistoryAction(selectedUser);
 		}
-	}, [
-		selectedUser,
-		hasAccount,
-		isArchiveMode, // Важливо додати в залежності
-		fetchInvoices,
-		fetchInvoicesReturn,
-		fetchInvoicesSummary,
-		fetchInvoicesSummaryReturn,
-		fetchOrderNotifications,
-		fetchUsedMaterials,
-		fetchUsedMaterialsHistoryAction
-	]);
+		// Додаємо isArchiveMode у масив залежностей
+	}, [selectedUser, hasAccount, isArchiveMode, fetchInvoices, fetchInvoicesReturn, fetchInvoicesSummary, fetchInvoicesSummaryReturn, fetchOrderNotifications]);
+
+	useEffect(() => {
+		// Приберіть або закоментуйте "if (isArchiveMode) return;"
+		if (selectedUser) {
+			console.log("--- 🚀 Спроба завантаження для:", selectedUser);
+			fetchUsedMaterials(selectedUser);
+		}
+	}, [selectedUser, fetchUsedMaterials]); // Додайте fetchUsedMaterials сюди
 
 	const currentDate = new Date().toLocaleString('uk-UA', {
 		day: '2-digit',
@@ -2715,23 +2824,30 @@ const InvoicesPage = ({
 			{isAdminUsedMaterials && selectedUser && (
 				<>
 					<UsedMaterialsTable
-						key={selectedUser} // Коли змінюється ID користувача, компонент перемонтується і всі useState всередині нього скинуться в "" автоматично
-						inputRef={agreementInputRef} // Передаємо реф вниз
+						// Snapshot у key — це дуже правильно, воно перемонтує компонент при зміні дати архіву
+						key={`${selectedUser}-${selectedSnapshot}`}
+						inputRef={agreementInputRef}
 						selectedUser={selectedUser}
 						customers={customers}
+
+						// ПЕРЕПИСАНІ ПРОПСИ: прибираємо "display", використовуємо наші нові константи
 						invoicesSummary={invoicesSummary}
 						usedMaterials={usedMaterials}
-						usedMaterialsHistory={usedMaterialsHistory}
+						stock={stock}
+
+						isArchiveMode={isArchiveMode}
+
 						fetchUsedMaterials={fetchUsedMaterials}
 						addUsedMaterial={addUsedMaterial}
-						stock={currentStock}
-						fetchUsedMaterialsHistoryAction={fetchUsedMaterialsHistoryAction}
-						isAdminFullAccess={isAdminFullAccess}
+						fetchUsedMaterialsHistory={fetchUsedMaterialsHistory}
+
+						// Блокування редагування в архіві
+						isAdminFullAccess={isArchiveMode ? false : isAdminFullAccess}
 						isAdminInvoices={isAdminInvoices}
 						isAdminUsedMaterials={isAdminUsedMaterials}
-						dynamicProductIds={dynamicProductIds} // Передаємо "розумну" змінну (з useMemo)
-						setLiveDynamicProductIds={setLiveDynamicProductIds} // Передаємо функцію-сеттер
-						isArchiveMode={isArchiveMode}
+
+						dynamicProductIds={dynamicProductIds}
+						setDynamicProductIds={setDynamicProductIds}
 						isVisible={visibleTables.usedMaterials}
 						onToggle={() => toggleTable('usedMaterials')}
 					/>
@@ -2758,28 +2874,32 @@ const InvoicesPage = ({
 							</select>
 
 							<CrewInventoryReport
-								key={`${selectedUser}-${partnerUser}-${selectedSnapshot}`} // Додали snapshot у key для повного скидання стейту при зміні архіву
+								// Додаємо selectedSnapshot у key, щоб при зміні архіву всередині скидалися всі useEffect
+								key={`${selectedUser}-${partnerUser}-${selectedSnapshot}`}
 								mainWorkerId={selectedUser}
 								partnerWorkerId={partnerUser}
-								// Передаємо підмінені змінні з useMemo:
-								stock={currentStock}
-								dynamicProductIds={dynamicProductIds}
+
+								// ПЕРЕПИСАНІ ПРОПСИ: тепер вони використовують змінні, які ми оголосили через useMemo
+								stock={stock}
 								invoices={invoices}
 								invoicesReturn={invoicesReturn}
 								invoicesSummary={invoicesSummary}
 								usedMaterials={usedMaterials}
-								remainingMaterials={remainingMaterials}
-								// Нові пропси для логіки архіву:
-								isArchiveMode={isArchiveMode}
-								archiveRemainingStart={archiveRemainingStartData}
 
-								// Решта залишається без змін:
+								dynamicProductIds={dynamicProductIds}
 								customers={customers}
 								isVisible={visibleTables.crewReport}
 								onToggle={() => toggleTable('crewReport')}
-								isAdminFullAccess={isAdminFullAccess}
+
+								// Логіка безпеки
+								isAdminFullAccess={isArchiveMode ? false : isAdminFullAccess}
 								isAdminInvoices={isAdminInvoices}
 								isAdminUsedMaterials={isAdminUsedMaterials}
+
+								// Режим архіву
+								isArchiveMode={isArchiveMode}
+								archiveRemainingStart={archiveRemainingStart}
+								remainingMaterials={remainingMaterials}
 							/>
 						</div>
 					)}
@@ -3118,7 +3238,7 @@ const InvoicesPage = ({
 					</>
 				)
 			}
-
+			{/* Кнопка створення архіву показується тільки в Live режимі */}
 			{
 				!isArchiveMode && isAdminFullAccess && (
 					<button className={classes.btnArchive} style={{ backgroundColor: '#e74c3c', width: 'auto', marginBottom: '20px', borderColor: '#c0392b' }}
@@ -3156,5 +3276,5 @@ const mapStateToProps = state => {
 
 export default connect(mapStateToProps, {
 	fetchInvoices, fetchInvoicesReturn, fetchInvoicesSummary, fetchInvoicesSummaryReturn, fetchOrderNotifications, deleteNotification, clearNotifications,
-	fetchUsedMaterials, addUsedMaterial, fetchUsedMaterialsHistory, fetchUsedMaterialsHistoryAction, archiveAllDataMonthly
+	fetchUsedMaterials, addUsedMaterial, fetchUsedMaterialsHistory, archiveAllDataMonthly
 })(InvoicesPage);

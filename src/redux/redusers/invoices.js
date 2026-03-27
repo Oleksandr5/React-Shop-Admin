@@ -6,7 +6,8 @@ import {
 	SET_NOTIFICATIONS,
 	SET_USED_MATERIALS,
 	ARCHIVE_DATA_SUCCESS,
-	UPDATE_USED_MATERIAL_SUCCESS
+	UPDATE_USED_MATERIAL_SUCCESS,
+	SET_USED_MATERIALS_HISTORY
 } from "../actions/actionTypes";
 
 const initialState = {
@@ -17,6 +18,7 @@ const initialState = {
 	notifications: [],
 	usedMaterials: {},
 	lastArchived: null,
+	usedMaterialsHistory: {},
 	loading: false
 };
 
@@ -73,6 +75,12 @@ export default function invoicesReducer(state = initialState, action) {
 					...state.usedMaterials,
 					[String(productId)]: Number(value) // Оновлюємо прямо в корені
 				}
+			};
+
+		case SET_USED_MATERIALS_HISTORY:
+			return {
+				...state,
+				usedMaterialsHistory: action.payload
 			};
 
 		default:

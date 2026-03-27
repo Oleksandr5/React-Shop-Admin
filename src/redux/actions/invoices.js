@@ -7,6 +7,7 @@ import {
 	UPDATE_INVOICES_SUMMARY_RETURN,
 	SET_NOTIFICATIONS,
 	SET_USED_MATERIALS,
+	SET_USED_MATERIALS_HISTORY,
 	ARCHIVE_DATA_SUCCESS,
 	UPDATE_USED_MATERIAL_SUCCESS
 } from "./actionTypes";
@@ -350,10 +351,11 @@ export const archiveAllDataMonthly = () => {
 				orderNotifications: "orderNotifications",
 				remainingMaterials: "remainingMaterials",
 				remainingMaterialsStart: "remainingMaterialsStart",
-				// ✅ НОВІ ГІЛКИ:
 				invoiceStock: "invoiceStock",
 				orders: "orders",
-				ordersHistory: "ordersHistory"
+				ordersHistory: "ordersHistory",
+				// ✅ ДОДАЄМО НАЛАШТУВАННЯ (тут лежить список ID товарів)
+				settings: "settings"
 			};
 
 			const archiveData = {};
@@ -382,14 +384,18 @@ export const archiveAllDataMonthly = () => {
 				remainingMaterialsHistory: archiveData.remainingMaterials || {},
 				remainingMaterialsStartHistory: archiveData.remainingMaterialsStart || {},
 
-				// ✅ ЗАПИС НОВИХ ГІЛОК:
+				// Запис нових гілок:
 				invoiceStockHistory: archiveData.invoiceStock || [],
 				ordersHistory: archiveData.orders || [],
-				ordersHistoryArchive: archiveData.ordersHistory || []
+				ordersHistoryArchive: archiveData.ordersHistory || [],
+
+				// ✅ ЗАПИС НАЛАШТУВАНЬ В АРХІВ:
+				// Це збереже productsForWorkOrders на момент створення архіву
+				settings: archiveData.settings || {}
 			});
 
 			dispatch({ type: ARCHIVE_DATA_SUCCESS });
-			alert(`✅ Повний системний архів створено: archive/${monthKey}/${timeStamp}`);
+			alert(`✅ Повний системний архів (включаючи налаштування) створено: archive/${monthKey}/${timeStamp}`);
 
 		} catch (error) {
 			console.error("Помилка архівації:", error);
@@ -402,3 +408,23 @@ export const updateUsedMaterialLocal = (workerId, productId, value) => ({
 	type: UPDATE_USED_MATERIAL_SUCCESS,
 	payload: { workerId, productId, value }
 });
+
+export function fetchUsedMaterialsHistoryAction(customerId) {
+	return async (dispatch) => {
+		try {
+			if (!customerId) return;
+
+			const snapshot = await firebase
+				.database()
+				.ref(`usedMaterialsHistory/${customerId}`)
+				.once("value");
+
+			dispatch({
+				type: SET_USED_MATERIALS_HISTORY,
+				payload: snapshot.val() || {}
+			});
+		} catch (error) {
+			console.log("Error fetching full used materials history:", error);
+		}
+	};
+}
