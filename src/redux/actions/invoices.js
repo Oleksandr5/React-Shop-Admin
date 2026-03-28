@@ -9,7 +9,8 @@ import {
 	SET_USED_MATERIALS,
 	SET_USED_MATERIALS_HISTORY,
 	ARCHIVE_DATA_SUCCESS,
-	UPDATE_USED_MATERIAL_SUCCESS
+	UPDATE_USED_MATERIAL_SUCCESS,
+	SET_REMAINING_MATERIALS_START
 } from "./actionTypes";
 
 // 2️⃣ Функції-екшени
@@ -428,3 +429,21 @@ export function fetchUsedMaterialsHistoryAction(customerId) {
 		}
 	};
 }
+
+// Екшен для запису в стор
+export const setRemainingMaterialsStart = (data) => ({
+	type: SET_REMAINING_MATERIALS_START,
+	payload: data
+});
+
+// Асинхронний екшен для завантаження з Firebase (Thunk)
+export const fetchRemainingMaterialsStart = (workerId) => {
+	console.log("FETCHing for workerId:", workerId); // Що тут приходить?
+	return (dispatch) => {
+		const db = firebase.database();
+		db.ref(`remainingMaterialsStart/${workerId}`).on('value', (snapshot) => {
+			const data = snapshot.val() || {};
+			dispatch(setRemainingMaterialsStart(data));
+		});
+	};
+};

@@ -7,7 +7,8 @@ import {
 	SET_USED_MATERIALS,
 	ARCHIVE_DATA_SUCCESS,
 	UPDATE_USED_MATERIAL_SUCCESS,
-	SET_USED_MATERIALS_HISTORY
+	SET_USED_MATERIALS_HISTORY,
+	SET_REMAINING_MATERIALS_START
 } from "../actions/actionTypes";
 
 const initialState = {
@@ -19,6 +20,7 @@ const initialState = {
 	usedMaterials: {},
 	lastArchived: null,
 	usedMaterialsHistory: {},
+	remainingMaterialsStart: {},
 	loading: false
 };
 
@@ -81,6 +83,12 @@ export default function invoicesReducer(state = initialState, action) {
 			return {
 				...state,
 				usedMaterialsHistory: action.payload
+			};
+
+		case SET_REMAINING_MATERIALS_START:
+			return {
+				...state,
+				remainingMaterialsStart: action.payload
 			};
 
 		default:
