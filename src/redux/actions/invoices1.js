@@ -309,25 +309,24 @@ export const addUsedMaterial = (customerId, productId, value = null, agreement =
 	}
 };
 
-export const fetchUsedMaterialsHistory = async (customerId, productId) => {
+export const fetchUsedMaterialsHistory = (customerId, productId) => {
+	return async (dispatch) => {
+		dispatch(clearUsedMaterialsHistory());
+		try {
+			const snapshot = await firebase.database()
+				.ref(`usedMaterialsHistory/${customerId}/${productId}`)
+				.once("value");
 
-	console.log("--- ПЕРЕВІРКА ВЕРСІЇ КОДУ 2.0 ---"); // Додайте цей рядок
-	if (!customerId || !productId) return [];
-	try {
-		const snapshot = await firebase
-			.database()
-			.ref(`usedMaterialsHistory/${customerId}/${productId}`)
-			.once("value");
+			const data = snapshot.val();
+			const sortedData = data ? Object.values(data).sort((a, b) => a.createdAt - b.createdAt) : [];
 
-		const data = snapshot.val();
-		if (!data) return [];
+			dispatch({ type: SET_USED_MATERIALS_HISTORY, payload: sortedData });
 
-		// Пряме повернення масиву даних для await у компоненті
-		return Object.values(data).sort((a, b) => a.createdAt - b.createdAt);
-	} catch (error) {
-		console.error("Error in fetchUsedMaterialsHistory:", error);
-		return [];
-	}
+			return sortedData; // <--- БЕЗ ЦЬОГО РЯДКА НІЧОГО НЕ ПРАЦЮВАТИМЕ!
+		} catch (error) {
+			return [];
+		}
+	};
 };
 
 // Функція архівації
@@ -413,28 +412,18 @@ export const updateUsedMaterialLocal = (workerId, productId, value) => ({
 export function fetchUsedMaterialsHistoryAction(customerId) {
 	return async (dispatch) => {
 		try {
-			console.log("--- [Action Start] fetchUsedMaterialsHistoryAction для ID:", customerId);
-			if (!customerId) {
-				console.warn("--- [Action] ПЕРЕРВАНО: customerId відсутній");
-				return;
-			}
+			if (!customerId) return;
 
 			const snapshot = await firebase
 				.database()
 				.ref(`usedMaterialsHistory/${customerId}`)
 				.once("value");
 
-			const data = snapshot.val();
-			console.log("--- [Action Success] Дані з Firebase отримано:", data);
-
 			dispatch({
 				type: SET_USED_MATERIALS_HISTORY,
-				payload: data || {}
+				payload: snapshot.val() || {}
 			});
-			console.log("--- [Action Dispatch] SET_USED_MATERIALS_HISTORY виконано");
-
 		} catch (error) {
-			console.error("--- [Action Error] Помилка завантаження історії:", error);
 			console.log("Error fetching full used materials history:", error);
 		}
 	};
@@ -457,3 +446,8 @@ export const fetchRemainingMaterialsStart = (workerId) => {
 		});
 	};
 };
+
+export const clearUsedMaterialsHistory = () => ({
+	type: SET_USED_MATERIALS_HISTORY,
+	payload: [] // Очищуємо в порожній масив
+});

@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useMemo, useRef } from 'react'
 import { connect, useDispatch } from 'react-redux'
-import { fetchInvoices, fetchInvoicesReturn, fetchInvoicesSummary, fetchInvoicesSummaryReturn, fetchOrderNotifications, deleteNotification, clearNotifications, fetchUsedMaterials, addUsedMaterial, fetchUsedMaterialsHistory, fetchUsedMaterialsHistoryAction, archiveAllDataMonthly, updateUsedMaterialLocal, fetchRemainingMaterialsStart, setRemainingMaterialsStart } from '../../../redux/actions/invoices'; // шлях до ваших екшенів інвойсів
+import { fetchInvoices, fetchInvoicesReturn, fetchInvoicesSummary, fetchInvoicesSummaryReturn, fetchOrderNotifications, deleteNotification, clearNotifications, fetchUsedMaterials, addUsedMaterial, fetchUsedMaterialsHistory, fetchUsedMaterialsHistoryAction, archiveAllDataMonthly, updateUsedMaterialLocal, fetchRemainingMaterialsStart, setRemainingMaterialsStart, clearUsedMaterialsHistory } from '../../../redux/actions/invoices'; // шлях до ваших екшенів інвойсів
 
 import classes from './InvoicesPage.module.css';
 import firebase from 'firebase';
@@ -28,8 +28,7 @@ const CrewInventoryReport = ({
 	remainingMaterialsStart,
 	fetchRemainingMaterialsStart,
 	remainingMaterials,
-	onUpdateRemainingStart,
-	archiveStatus
+	onUpdateRemainingStart // <--- 1. ДОДАНО СЮДИ
 }) => {
 	const [combinedData, setCombinedData] = useState({
 		invoices: {},
@@ -442,8 +441,7 @@ const CrewInventoryReport = ({
 		<div className={classes.usedMaterialsSection} style={{ marginTop: '40px', borderTop: '5px solid #17a2b8', paddingTop: '20px' }}>
 			<div className={classes.reportHeaderContainer}>
 				<div className={classes.titleBlock}>
-					<h3 className={classes.sectionTitle}>📊 Звіт екіпажу {archiveStatus}</h3>
-
+					<h3 className={classes.sectionTitle}>📊 Звіт екіпажу</h3>
 					{/* Тепер crewNames визначено і помилки не буде */}
 					<div className={classes.crewInfo}>
 						<strong>👷 Екіпаж:</strong> {crewNames || "Не обрано"}
@@ -456,7 +454,6 @@ const CrewInventoryReport = ({
 					{
 						isAdminFullAccess && (
 							<button
-								disabled={isArchiveMode}
 								onClick={() => {
 									if (window.confirm("Ви впевнені, що хочете синхронізувати всі дані?")) {
 										handleSync();
@@ -735,6 +732,7 @@ const UsedMaterialsTable = ({
 	invoicesSummary,
 	usedMaterials,
 	usedMaterialsHistory,
+	clearUsedMaterialsHistory,
 	stock,
 	fetchUsedMaterials,
 	addUsedMaterial,
@@ -746,8 +744,7 @@ const UsedMaterialsTable = ({
 	setLiveDynamicProductIds,
 	isArchiveMode,
 	isVisible,
-	onToggle,
-	archiveStatus
+	onToggle
 }) => {
 	const [inputValues, setInputValues] = useState({});
 	const [agreementValues, setAgreementValues] = useState({});
@@ -793,37 +790,25 @@ const UsedMaterialsTable = ({
 	}, [stock, invoicesSummary, dynamicProductIds, selectedUser]);
 
 	useEffect(() => {
-		// Лог для перевірки спрацювання
-		console.log("--- [useEffect] Спрацював. Стан модалки:", historyModal.isOpen, "ID продукту:", historyModal.productId);
-
+		// Додаємо перевірку на наявність productId, щоб не рахувати "в повітрі"
 		if (historyModal.isOpen && historyModal.productId && usedMaterialsHistory) {
 			const productId = historyModal.productId;
-			const rawDataForProduct = usedMaterialsHistory[productId] || {};
+			const rawDataForProduct = usedMaterialsHistory[productId];
 
-			console.log(`--- [useEffect] Дані з Redux для ${productId}:`, rawDataForProduct);
+			if (rawDataForProduct) {
+				const historyArray = Object.keys(rawDataForProduct).map(key => ({
+					id: key,
+					...rawDataForProduct[key]
+				}));
 
-			// 1. Перетворюємо в масив
-			let historyArray = Object.keys(rawDataForProduct).map(key => ({
-				id: key,
-				...rawDataForProduct[key]
-			}));
+				const finalData = recalculateWithTime(historyArray);
 
-			// 2. ОБОВ'ЯЗКОВО СОРТУЄМО за часом (від старих до нових)
-			// Без цього cumulativeSum буде рахуватися неправильно, якщо записи прийшли не по порядку
-			historyArray.sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
-
-			// 3. Робимо розрахунок
-			const finalData = recalculateWithTime(historyArray);
-			console.log("--- [useEffect] Результат після розрахунку:", finalData);
-
-			// 4. ОНОВЛЮЄМО СТЕЙТ 
-			// Прибираємо перевірку JSON.stringify, щоб дані оновилися примусово
-			setHistoryModal(prev => ({
-				...prev,
-				data: finalData
-			}));
-
-			console.log("--- [useEffect] Стейт модалки оновлено примусово");
+				// ТІЛЬКИ ЯКЩО ДАНІ РЕАЛЬНО ВІДРІЗНЯЮТЬСЯ ВІД ТИХ, ЩО В МОДАЛЦІ
+				// (Щоб не було нескінченного циклу оновлень)
+				if (JSON.stringify(finalData) !== JSON.stringify(historyModal.data)) {
+					setHistoryModal(prev => ({ ...prev, data: finalData }));
+				}
+			}
 		}
 	}, [usedMaterialsHistory, historyModal.isOpen, historyModal.productId]);
 
@@ -903,28 +888,34 @@ const UsedMaterialsTable = ({
 		}
 
 		if (window.confirm("Оновити список товарів для всіх користувачів?")) {
-			// 1. ПЕРЕВІРКА: Якщо ми в архіві — виходимо і нічого не зберігаємо
 			if (isArchiveMode) {
 				alert("Неможливо оновити список товарів у режимі перегляду архіву.");
 				return;
 			}
 
 			try {
-				// 2. Використовуємо наш прямий шлях до бази
+				// 1. Зберігаємо новий список ID в Firebase
 				await firebase.database().ref('settings/productsForWorkOrders').set(idsArray);
 
-				// 3. Оновлюємо ЛАЙВ-стейт (наш перейменований сеттер)
+				// 2. Оновлюємо локальний стейт для відображення рядків
 				setLiveDynamicProductIds(idsArray);
+
+				// 3. ОНОВЛЕННЯ ІСТОРІЇ:
+				// Оновлюємо дані тільки для поточного відкритого товару.
+				// Це гарантує, що модалка підтягне свіжі цифри без багів циклу.
+				if (selectedUser && historyModal.isOpen && historyModal.productId) {
+					console.log("--- Примусове оновлення історії для поточного вікна ---", historyModal.productId);
+					fetchUsedMaterialsHistory(selectedUser, historyModal.productId);
+				}
 
 				setIsEditingIds(false);
 				alert("Список оновлено!");
 			} catch (err) {
-				console.error(err);
+				console.error("Помилка при збереженні ID:", err);
 				alert("Помилка збереження.");
 			}
 		}
 	};
-
 	const handleAddMaterial = async (productId) => {
 		const valueToAdd = Number(inputValues[productId]);
 		const localAgreement = (agreementValues[productId] || "").trim();
@@ -947,7 +938,7 @@ const UsedMaterialsTable = ({
 
 			await fetchUsedMaterials(selectedUser);
 			setInputValues(prev => ({ ...prev, [productId]: "" }));
-			console.log("--- [handleAddMaterial] Викликаю оновлення історії ---");
+
 			fetchUsedMaterialsHistoryAction(selectedUser);
 			// ДОДАЄМО ЦЕ: Очищуємо поле угоди для цього productId
 			setAgreementValues(prev => ({ ...prev, [productId]: "" }));
@@ -959,26 +950,49 @@ const UsedMaterialsTable = ({
 		}
 	};
 
-	const handleHistory = (productId) => {
-		// Дані вже підготовлені у Redux (або в архіві через useMemo)
-		// usedMaterialsHistory — це об'єкт { productId: { pushId: { data } } }
-		const historyDataRaw = usedMaterialsHistory[productId] || {};
+	const handleHistory = async (productId) => {
+		console.log("--- ВІДКРИТТЯ ІСТОРІЇ --- ID:", productId);
 
-		// Перетворюємо об'єкт у масив з ID
-		const historyArray = Object.keys(historyDataRaw).map(key => ({
-			id: key,
-			...historyDataRaw[key]
-		}));
-
-		// Сортуємо і рахуємо суми (ваша логіка)
-		const finalData = recalculateWithTime(historyArray);
-
+		// 1. Відкриваємо модалку ПУСТОЮ, щоб користувач бачив, що процес пішов
 		setHistoryModal({
 			isOpen: true,
 			productId: productId,
-			data: finalData
+			data: []
 		});
+
+		// 2. Чекаємо на СВІЖІ дані прямо з екшена
+		// ВАЖЛИВО: переконайся, що fetchUsedMaterialsHistory повертає дані (як ми писали в invoices.js)
+		const freshData = await fetchUsedMaterialsHistory(selectedUser, productId);
+
+		console.log("--- ДАНІ ПРИЙШЛИ ПІСЛЯ AWAIT ---", freshData);
+
+		if (freshData && (Array.isArray(freshData) || typeof freshData === 'object')) {
+			// Перетворюємо в масив, якщо прийшов об'єкт
+			const historyArray = Array.isArray(freshData)
+				? freshData
+				: Object.keys(freshData).map(key => ({ id: key, ...freshData[key] }));
+
+			// 3. Рахуємо суми
+			const finalData = recalculateWithTime(historyArray);
+			console.log("--- ОСТАТОЧНИЙ РОЗРАХУНОК ДЛЯ МОДАЛКИ ---", finalData);
+
+			// 4. Записуємо ПРЯМО в стейт модалки
+			setHistoryModal(prev => ({
+				...prev,
+				data: finalData
+			}));
+		} else {
+			console.warn("--- ДАНІ НЕ ПРИЙШЛИ АБО ПОРОЖНІ ---");
+		}
 	};
+
+	const closeHistoryModal = () => {
+		setHistoryModal(prev => ({ ...prev, isOpen: false }));
+		setEditingEntryId(null);
+		// Прибираємо звідси clearUsedMaterialsHistory(), 
+		// щоб не затирати дані до того, як вікно закриється повністю
+	};
+
 
 	const handleUndo = async (productId) => {
 		if (isArchiveMode) {
@@ -1006,7 +1020,7 @@ const UsedMaterialsTable = ({
 				// Викликаємо екшен додавання з параметром rollbackValue
 				// addUsedMaterial сам викличе fetchUsedMaterials всередині себе
 				await addUsedMaterial(selectedUser, productId, null, null, rollbackValue);
-				console.log("--- [handleUndo] Викликаю оновлення історії після відкату ---");
+
 				// Оскільки ми змінили базу, оновлюємо і всю історію в Redux
 				fetchUsedMaterialsHistoryAction(selectedUser);
 			}
@@ -1259,7 +1273,7 @@ const UsedMaterialsTable = ({
 
 			// 4. Оновлення Redux локально
 			dispatch(updateUsedMaterialLocal(selectedUser, historyModal.productId, finalTotal));
-			fetchUsedMaterialsHistoryAction(selectedUser);
+
 			// 5. Закриття режиму редагування в модалці
 			setHistoryModal(prev => ({ ...prev, data: finalData }));
 			setEditingEntryId(null);
@@ -1419,7 +1433,7 @@ const UsedMaterialsTable = ({
 			<div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
 				<h3 className={classes.sectionTitle}>
 					🛠 Використані матеріали {finalName}
-					{archiveStatus}
+					{isArchiveMode && <span style={{ color: '#856404', fontSize: '14px', marginLeft: '10px' }}>(Архів)</span>}
 				</h3>
 
 				{/* Кнопка видима тільки якщо адмін має повний доступ */}
@@ -1668,8 +1682,8 @@ const UsedMaterialsTable = ({
 													onChange={e => setCommentValues(prev => ({ ...prev, [productId]: e.target.value }))}
 													className={classes.inputComment} // Додайте цей клас у CSS (наприклад, width: 120px)											
 												/>
-												<button disabled={isArchiveMode} className={classes.btnAdd} onClick={() => handleAddMaterial(productId)}>Додати</button>
-												<button disabled={isArchiveMode} className={classes.btnUndo} onClick={() => handleUndo(productId)}><span className="undoIcon">↩</span></button>
+												<button className={classes.btnAdd} onClick={() => handleAddMaterial(productId)}>Додати</button>
+												<button className={classes.btnUndo} onClick={() => handleUndo(productId)}><span className="undoIcon">↩</span></button>
 												<button className={classes.btnHistory} onClick={() => handleHistory(productId)}>📜</button>
 											</div>
 										</td>
@@ -1695,7 +1709,7 @@ const UsedMaterialsTable = ({
 								📜 Редагування історії: {stock.find(m => m.id === historyModal.productId)?.name}
 							</h3>
 							<button
-								onClick={() => { setHistoryModal({ ...historyModal, isOpen: false }); setEditingEntryId(null); }}
+								onClick={closeHistoryModal}
 								style={{ background: 'none', border: 'none', fontSize: '24px', cursor: 'pointer', color: '#888' }}
 							>✕</button>
 						</div>
@@ -1799,14 +1813,12 @@ const UsedMaterialsTable = ({
 												) : (
 													<div style={{ display: 'flex', gap: '12px', justifyContent: 'center' }}>
 														<button
-															disabled={isArchiveMode}
 															className={classes.actionBtn}
 															onClick={() => setEditingEntryId(log.id)}
 															style={{ background: 'none', border: 'none', cursor: 'pointer', opacity: 0.7 }}
 															title="Редагувати"
 														>✏️</button>
 														<button
-															disabled={isArchiveMode}
 															className={classes.actionBtn}
 															onClick={() => deleteHistoryItem(log)}
 															style={{ background: 'none', border: 'none', cursor: 'pointer', opacity: 0.7, color: '#dc3545' }}
@@ -1823,7 +1835,7 @@ const UsedMaterialsTable = ({
 
 						<div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '20px' }}>
 							<button
-								onClick={() => { setHistoryModal({ ...historyModal, isOpen: false }); setEditingEntryId(null); }}
+								onClick={closeHistoryModal}
 								className={classes.btnAdd}
 								style={{ width: 'auto', padding: '10px 30px', backgroundColor: '#6c757d' }}
 							>
@@ -1852,7 +1864,7 @@ const InvoicesPage = ({
 	fetchRemainingMaterialsStart, // Функція завантаження (для useEffect)
 	setRemainingMaterialsStart, // Функція оновлення (для інпутів)
 	fetchUsedMaterialsHistoryAction,
-	fetchUsedMaterials, addUsedMaterial, archiveAllDataMonthly, stock
+	fetchUsedMaterials, clearUsedMaterialsHistory, addUsedMaterial, archiveAllDataMonthly, stock
 }) => {
 
 	const [visibleTables, setVisibleTables] = useState({
@@ -2474,7 +2486,7 @@ const InvoicesPage = ({
                 </head>
                 <body>
                     <div class="header-info">
-                        <h3>📦 Залишки на складі:</h3>
+                        <h2>📦 Залишки на складі:</h2>
                         <span>Дата: ${currentDate}</span>
                     </div>
                     <table>
@@ -2703,158 +2715,9 @@ const InvoicesPage = ({
 	console.log("Archive report data:", { invoicesSummary, dynamicProductIds, remainingMaterialsStart })
 
 	console.log('DEBUG: remainingMaterialsStart content:', remainingMaterialsStart);
-	// 1. Використовуємо currentStock замість stock. 
-	// Він уже містить правильні цифри (112 замість 110), якщо ми в архіві.
-	const displayStock = currentStock || [];
-	const visibleStock = displayStock.filter(s => !!s.visibleproduct);
-	// Визначаємо, що саме показувати як дату
-	const displayDate = isArchiveMode && selectedSnapshot
-		? selectedSnapshot.replace('_', ' о ') // Якщо архів і вибрано час — форматуємо його
-		: new Date().toLocaleDateString('uk-UA'); // Якщо Live — показуємо сьогоднішню дату
-
-	const archiveStatus = (
-		<div className={classes.dateText} style={{ display: 'block', width: '100%', marginTop: '8px' }}>
-			{isArchiveMode ? (
-				<>
-					<span style={{
-						color: '#ff4d4d',
-						fontWeight: '900',
-						textShadow: '0.5px 0.5px 2px rgba(255,0,0,0.2)',
-						letterSpacing: '0.5px',
-						textTransform: 'uppercase'
-					}}>Архів</span> від:
-				</>
-			) : (
-				'📅 Дата: '
-			)}
-			<strong> {displayDate}</strong>
-		</div>
-	);
 
 	return (
 		<div className={classes.wrapper}>
-			<div style={{
-				display: 'flex',
-				gap: '15px',
-				padding: '20px',
-				marginTop: '15px',
-				borderRadius: '16px',
-				flexWrap: 'wrap',
-				alignItems: 'flex-end',
-				transition: 'all 0.4s ease',
-				// ДИНАМІЧНИЙ ФОН: Синій для Live, Зелений для Архіву
-				background: isArchiveMode
-					? 'linear-gradient(135deg, #2c3e50 0%, #4ca1af 100%)'
-					: 'linear-gradient(135deg, #1e5d3b 0%, #27ae60 100%)',
-				boxShadow: isArchiveMode
-					? '0 8px 20px rgba(39, 174, 96, 0.3)'
-					: '0 8px 20px rgba(44, 62, 80, 0.2)',
-				border: '1px solid rgba(255,255,255,0.1)',
-				paddingTop: '15px',
-				borderTop: isArchiveMode ? '1px solid rgba(255,255,255,0.2)' : '1px solid rgba(255,255,255,0.1)',
-			}}>
-				{/* БЛОК МІСЯЦЯ */}
-				<div style={{ flex: 1, minWidth: '160px' }}>
-					<label className={classes.label} style={{
-						color: 'rgba(255, 255, 255, 0.9)',
-						fontSize: '11px',
-						fontWeight: 'bold',
-						textTransform: 'uppercase',
-						letterSpacing: '0.8px',
-						marginBottom: '7px',
-						display: 'block'
-					}}>
-						📅 Місяць архіву:
-					</label>
-					<select
-						value={selectedMonth}
-						onChange={(e) => handleMonthChange(e.target.value)}
-						className={classes.select}
-						style={{
-							width: '100%',
-							height: '38px',
-							borderRadius: '8px',
-							border: 'none',
-							backgroundColor: 'rgba(255, 255, 255, 0.95)',
-							padding: '0 10px',
-							fontWeight: '600',
-							color: '#2c3e50',
-							fontSize: '13px',
-							boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
-						}}
-					>
-						<option value="">-- Поточні дані (Live) --</option>
-						{months.map(m => <option key={m} value={m}>{m}</option>)}
-					</select>
-				</div>
-
-				{/* БЛОК ТОЧКИ ЗБЕРЕЖЕННЯ */}
-				<div style={{ flex: 1, minWidth: '160px' }}>
-					<label className={classes.label} style={{
-						color: 'rgba(255, 255, 255, 0.9)',
-						fontSize: '11px',
-						fontWeight: 'bold',
-						textTransform: 'uppercase',
-						letterSpacing: '0.8px',
-						marginBottom: '7px',
-						display: 'block'
-					}}>
-						🕒 Точка збереження:
-					</label>
-					<select
-						value={selectedSnapshot}
-						onChange={(e) => handleSnapshotChange(e.target.value)}
-						className={classes.select}
-						disabled={!availableSnapshots.length}
-						style={{
-							width: '100%',
-							height: '38px',
-							borderRadius: '8px',
-							border: 'none',
-							backgroundColor: availableSnapshots.length ? 'rgba(255, 255, 255, 0.95)' : 'rgba(255, 255, 255, 0.5)',
-							padding: '0 10px',
-							fontWeight: '600',
-							color: '#2c3e50',
-							fontSize: '13px',
-							boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
-							cursor: availableSnapshots.length ? 'pointer' : 'not-allowed'
-						}}
-					>
-						<option value="">-- Оберіть час --</option>
-						{availableSnapshots.map(s => (
-							<option key={s} value={s}>{s.replace('_', ' о ')}</option>
-						))}
-					</select>
-				</div>
-
-				{/* КНОПКА ПОВЕРНЕННЯ */}
-				{isArchiveMode && (
-					<button
-						onClick={() => { setFullArchive(null); setSelectedSnapshot(''); setSelectedMonth(''); }}
-						style={{
-							alignSelf: 'flex-end',
-							height: '38px',
-							padding: '0 20px',
-							cursor: 'pointer',
-							borderRadius: '8px',
-							border: 'none',
-							backgroundColor: '#ff4757',
-							color: '#fff',
-							fontWeight: 'bold',
-							fontSize: '13px',
-							boxShadow: '0 4px 10px rgba(255, 71, 87, 0.3)',
-							transition: 'transform 0.2s, background 0.2s',
-							display: 'flex',
-							alignItems: 'center',
-							gap: '8px'
-						}}
-						onMouseOver={(e) => e.currentTarget.style.backgroundColor = '#ff6b81'}
-						onMouseOut={(e) => e.currentTarget.style.backgroundColor = '#ff4757'}
-					>
-						✕ Повернутись до Live
-					</button>
-				)}
-			</div>
 			{isAdminUsedMaterials && notifications.length > 0 && (
 				<div className={classes.notificationsBlock} style={{ marginBottom: '20px' }}>
 					<button
@@ -2886,7 +2749,7 @@ const InvoicesPage = ({
 							<div className={classes.notificationsHeader}>
 								<h3>
 									🔔 Підтверджені замовлення / повернення
-									{archiveStatus}
+									{isArchiveMode && <span style={{ color: '#ff4d4d', marginLeft: '10px' }}>(АРХІВ)</span>}
 								</h3>
 
 								{/* Кнопка "Очистити" з'являється тільки в Live-режимі */}
@@ -2952,6 +2815,90 @@ const InvoicesPage = ({
 				</div>
 			)}
 
+			<div className={classes.pageHeader} style={{
+				background: isArchiveMode ? 'linear-gradient(135deg, #6c757d, #495057)' : 'white', // Змінюємо фон, щоб візуально відрізнити архів
+				padding: '20px',
+				borderRadius: '8px',
+				transition: 'all 0.3s ease'
+			}}>
+				{/* Оригінальний заголовок */}
+				<h2 className={classes.pageTitle} style={{ color: isArchiveMode ? '#fff' : 'inherit' }}>
+					{isArchiveMode ? '📦 Перегляд архіву' : '🧾 Накладні'}: {customerName}
+				</h2>
+
+				<div style={{ display: 'flex', flexDirection: 'column', gap: '15px', marginTop: '15px' }}>
+
+					{/* ВАШ ОРИГІНАЛЬНИЙ СЕЛЕКТ КЛІЄНТА */}
+					{isAdminInvoices && (
+						<div className={classes.selectWrapper}>
+							<label className={classes.label} style={{ color: isArchiveMode ? '#fff' : 'inherit' }}>
+								👤 Виберіть отримувача:
+							</label>
+							<select
+								className={classes.select}
+								value={selectedUser}
+								onChange={handleCustomerChange}
+							>
+								<option value="">--Choose customer--</option>
+								{customers
+									.filter(c => (c.id === 7 || c.id > 127) && c.name !== "Шановний клієнт")
+									.map(c => (
+										<option key={c.id} value={c.id}>{c.name} (id = {c.id}) ({c.email})</option>
+									))
+								}
+							</select>
+						</div>
+					)}
+
+					{/* НОВИЙ БЛОК: ВИБІР АРХІВУ */}
+					<div style={{
+						display: 'flex',
+						gap: '10px',
+						paddingTop: '10px',
+						borderTop: isArchiveMode ? '1px solid #888' : '1px solid #eee',
+						flexWrap: 'wrap'
+					}}>
+						<div style={{ flex: 1, minWidth: '150px' }}>
+							<label className={classes.label} style={{ color: isArchiveMode ? '#fff' : '#666', fontSize: '12px' }}>📅 Місяць архіву:</label>
+							<select
+								value={selectedMonth}
+								onChange={(e) => handleMonthChange(e.target.value)}
+								className={classes.select}
+								style={{ width: '100%', height: '35px' }}
+							>
+								<option value="">-- Поточні дані (Live) --</option>
+								{months.map(m => <option key={m} value={m}>{m}</option>)}
+							</select>
+						</div>
+
+						<div style={{ flex: 1, minWidth: '150px' }}>
+							<label className={classes.label} style={{ color: isArchiveMode ? '#fff' : '#666', fontSize: '12px' }}>🕒 Точка збереження:</label>
+							<select
+								value={selectedSnapshot}
+								onChange={(e) => handleSnapshotChange(e.target.value)}
+								className={classes.select}
+								disabled={!availableSnapshots.length}
+								style={{ width: '100%', height: '35px' }}
+							>
+								<option value="">-- Оберіть час --</option>
+								{availableSnapshots.map(s => (
+									<option key={s} value={s}>{s.replace('_', ' о ')}</option>
+								))}
+							</select>
+						</div>
+
+						{isArchiveMode && (
+							<button
+								onClick={() => { setFullArchive(null); setSelectedSnapshot(''); setSelectedMonth(''); }}
+								style={{ alignSelf: 'flex-end', height: '35px', padding: '0 15px', cursor: 'pointer', borderRadius: '4px', border: 'none', backgroundColor: '#e74c3c', color: '#fff' }}
+							>
+								Повернутись до Live
+							</button>
+						)}
+					</div>
+				</div>
+			</div>
+
 			{isAdminUsedMaterials && selectedUser && (
 				<>
 					<UsedMaterialsTable
@@ -2962,6 +2909,7 @@ const InvoicesPage = ({
 						invoicesSummary={invoicesSummary}
 						usedMaterials={usedMaterials}
 						usedMaterialsHistory={usedMaterialsHistory}
+						clearUsedMaterialsHistory={clearUsedMaterialsHistory} // Передаємо функцію очищення
 						fetchUsedMaterials={fetchUsedMaterials}
 						addUsedMaterial={addUsedMaterial}
 						stock={currentStock}
@@ -2974,7 +2922,6 @@ const InvoicesPage = ({
 						isArchiveMode={isArchiveMode}
 						isVisible={visibleTables.usedMaterials}
 						onToggle={() => toggleTable('usedMaterials')}
-						archiveStatus={archiveStatus}
 					/>
 
 					{/* Перевірка повного доступу для відображення звіту екіпажу */}
@@ -3022,7 +2969,6 @@ const InvoicesPage = ({
 								isAdminFullAccess={isAdminFullAccess}
 								isAdminInvoices={isAdminInvoices}
 								isAdminUsedMaterials={isAdminUsedMaterials}
-								archiveStatus={archiveStatus}
 							/>
 						</div>
 					)}
@@ -3031,7 +2977,7 @@ const InvoicesPage = ({
 
 
 
-			<h3 className={classes.sectionTitle}>📑 Замовлення / Повернення: ${finalName} {archiveStatus}</h3>
+			<h3 className={classes.sectionTitle}>📑 Замовлення / Повернення: ${finalName}</h3>
 			<div className={classes.headerActions} style={{ marginBottom: '15px', display: 'flex', gap: '10px' }}>
 				<button
 					className={classes.btnPrint}
@@ -3192,7 +3138,7 @@ const InvoicesPage = ({
 				</table>
 			)}
 
-			<h3 className={classes.sectionTitle}>📊 Загальна кількість взятих матеріалів: ${finalName} {archiveStatus}</h3>
+			<h3 className={classes.sectionTitle}>📊 Загальна кількість взятих матеріалів: ${finalName}</h3>
 			<div className={classes.headerActions} style={{ marginBottom: '15px' }}>
 				<button
 					className={classes.btnPrint}
@@ -3275,11 +3221,12 @@ const InvoicesPage = ({
 							marginTop: '20px'
 						}}>
 							<div className={classes.headerInfo}>
-								<h3 style={{ margin: 0 }}>
+								<h2 style={{ margin: 0 }}>
 									📦 {isArchiveMode ? 'Архів залишків' : 'Залишки на складі'}:
-									{archiveStatus}
-								</h3>
-
+								</h2>
+								<span className={classes.dateText}>
+									{isArchiveMode ? 'Архів від: ' : 'Дата: '} {currentDate}
+								</span>
 							</div>
 						</div>
 
@@ -3287,7 +3234,7 @@ const InvoicesPage = ({
 							<button
 								onClick={(e) => {
 									e.stopPropagation();
-									handlePrintStock(visibleStock);
+									handlePrintStock(stock);
 								}}
 								className={classes.btnPrint}
 							>
@@ -3297,7 +3244,7 @@ const InvoicesPage = ({
 							<button
 								onClick={(e) => {
 									e.stopPropagation();
-									handleExportStockToCSV(visibleStock);
+									handleExportStockToCSV(stock);
 								}}
 								className={`${classes.btnExport}`}
 							>
@@ -3310,6 +3257,9 @@ const InvoicesPage = ({
 							onClick={() => toggleTable('remainingInStock')}
 							className={classes.tableHeaderToggle}
 						>
+
+
+
 						</h3>
 						<button
 							className={classes.btnToggle}
@@ -3339,6 +3289,10 @@ const InvoicesPage = ({
 								</thead>
 								<tbody>
 									{(() => {
+										// 1. Використовуємо currentStock замість stock. 
+										// Він уже містить правильні цифри (112 замість 110), якщо ми в архіві.
+										const displayStock = currentStock || [];
+										const visibleStock = displayStock.filter(s => !!s.visibleproduct);
 
 										if (visibleStock.length === 0) {
 											return (
@@ -3407,5 +3361,5 @@ const mapStateToProps = state => {
 
 export default connect(mapStateToProps, {
 	fetchInvoices, fetchInvoicesReturn, fetchInvoicesSummary, fetchInvoicesSummaryReturn, fetchOrderNotifications, deleteNotification, clearNotifications,
-	fetchUsedMaterials, addUsedMaterial, fetchUsedMaterialsHistory, fetchUsedMaterialsHistoryAction, archiveAllDataMonthly, fetchRemainingMaterialsStart, setRemainingMaterialsStart
+	fetchUsedMaterials, addUsedMaterial, fetchUsedMaterialsHistory, fetchUsedMaterialsHistoryAction, archiveAllDataMonthly, fetchRemainingMaterialsStart, setRemainingMaterialsStart, clearUsedMaterialsHistory
 })(InvoicesPage);
