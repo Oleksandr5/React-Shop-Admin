@@ -328,7 +328,7 @@ const CrewInventoryReport = ({
             <td style="text-align: center; color: #28a745;">${row.back}</td>
             <td style="text-align: center; color: red;">${row.spent}</td>
             <td style="text-align: center; font-weight: bold; background: #f9f9f9;">${row.calc}</td>
-            <td style="text-align: center;">${realRemaining[row.pid] || 0}</td>
+            <td style="text-align: center;">${row.fact}</td>
             <td style="text-align: center; ${diffStyle}">${diffText}</td>
         </tr>`;
 		}).join('');
@@ -400,7 +400,7 @@ const CrewInventoryReport = ({
 		const rows = reportRows.map(row => {
 			if (row.prev === 0 && row.taken === 0 && row.back === 0 && row.spent === 0 && row.calc === 0) return null;
 
-			const fact = Number(realRemaining[row.pid] || 0);
+			const fact = row.fact;
 			const diffText = row.diff === 0 ? "OK" : (row.diff > 0 ? `-${row.diff}` : `+${Math.abs(row.diff)}`);
 			const safeName = row.name ? row.name.replace(/"/g, '""') : `ID ${row.pid}`;
 
