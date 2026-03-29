@@ -2845,11 +2845,12 @@ const InvoicesPage = ({
 				transition: 'all 0.4s ease',
 				// Динамічний фон: Синій для Live, Зелений для Архіву
 				background: isArchiveMode
-					? 'linear-gradient(135deg, #1e5d3b 0%, #27ae60 100%)'
-					: 'linear-gradient(135deg, #2c3e50 0%, #4ca1af 100%)',
+					? 'linear-gradient(135deg, #2c3e50 0%, #4ca1af 100%)' // Тепер сіро-синій в Архіві
+					: 'linear-gradient(135deg, #1e5d3b 0%, #27ae60 100%)', // Тепер зелений в Live
+
 				boxShadow: isArchiveMode
-					? '0 8px 20px rgba(39, 174, 96, 0.3)'
-					: '0 8px 20px rgba(44, 62, 80, 0.2)',
+					? '0 8px 20px rgba(44, 62, 80, 0.2)' // Тінь для Архіву
+					: '0 8px 20px rgba(39, 174, 96, 0.3)', // Тінь для Live
 				border: '1px solid rgba(255,255,255,0.1)',
 			}}>
 
