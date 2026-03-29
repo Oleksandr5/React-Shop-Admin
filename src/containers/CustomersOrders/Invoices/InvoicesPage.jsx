@@ -647,34 +647,50 @@ const CrewInventoryReport = ({
 									<td data-label="Фактичний залишок" style={{ textAlign: 'center' }}>
 										<input
 											type="number"
-											value={row.fact !== undefined ? row.fact : ''} // Використовуємо row.fact з нашого розумного useMemo
-											readOnly={isArchiveMode} // Важливо!
+											// Якщо значення 0, показуємо порожній рядок (щоб бачити тільки курсор)
+											value={row.fact === 0 ? '' : (row.fact !== undefined ? row.fact : '')}
+											readOnly={isArchiveMode}
+
+											// 1. Коли клікаємо в інпут
+											onFocus={(e) => {
+												if (isArchiveMode) return;
+												// Якщо там 0, "стираємо" його для зручного вводу
+												if (Number(e.target.value) === 0) {
+													setRealRemaining(prev => ({ ...prev, [pid]: '' }));
+												}
+											}}
 
 											onChange={(e) => {
 												if (isArchiveMode) return;
 												const val = e.target.value;
-												// Оновлюємо тільки локально в React, щоб інпут не блокувався
+												// Дозволяємо порожній рядок, щоб можна було стерти все
 												setRealRemaining(prev => ({
 													...prev,
 													[pid]: val === '' ? '' : Number(val)
 												}));
 											}}
 
+											// 2. Коли йдемо з інпуту
 											onBlur={async (e) => {
-												if (isArchiveMode) return; // Не зберігаємо в базу, якщо це архів
-												const val = e.target.value;
-												if (val !== '') {
-													// Тільки тут робимо важкий запис у Firebase
-													await firebase.database()
-														.ref(`remainingMaterials/${mainWorkerId}/${pid}`)
-														.set(Number(val));
-													console.log(`Збережено для ${pid}: ${val}`);
+												if (isArchiveMode) return;
+												let val = e.target.value;
+
+												// Якщо залишили порожнім — повертаємо 0 (або лишаємо порожнім, як вам зручніше)
+												if (val === '') {
+													val = "0";
+													setRealRemaining(prev => ({ ...prev, [pid]: 0 }));
 												}
+
+												// Зберігаємо в базу
+												await firebase.database()
+													.ref(`remainingMaterials/${mainWorkerId}/${pid}`)
+													.set(Number(val));
 											}}
+
 											style={{
 												width: '50px',
 												border: isArchiveMode ? '1px solid #ccc' : '1px solid #17a2b8',
-												backgroundColor: isArchiveMode ? '#f9f9f9' : '#white',
+												backgroundColor: isArchiveMode ? '#f9f9f9' : 'white',
 												textAlign: 'center',
 												borderRadius: '4px',
 												cursor: isArchiveMode ? 'not-allowed' : 'text'
@@ -1016,24 +1032,41 @@ const UsedMaterialsTable = ({
 		}
 	};
 
-	const handlePrintAllAgreementsReport = () => { // Прибрали async
+	const handlePrintAllAgreementsReport = async () => {
 		try {
 			const crewId = selectedUser;
+			console.log("--- 🚀 START REPORT GENERATION ---");
+
+			if (!crewId) return alert("Будь ласка, виберіть екіпаж");
+
+			// 1. ПРЯМИЙ ЗАПИТ ДО FIREBASE (замість Redux)
+			// Це гарантує отримання даних без зміни існуючих екшенів
+			const snapshot = await firebase
+				.database()
+				.ref(`usedMaterialsHistory/${crewId}`)
+				.once("value");
+
+			const userHistory = snapshot.val();
+			console.log("1. Data fetched directly from Firebase:", userHistory);
+
+			if (!userHistory || Object.keys(userHistory).length === 0) {
+				alert(`Для екіпажу №${crewId} записів про списання не знайдено.`);
+				return;
+			}
+
+			// 2. ПІДГОТОВКА ДАНИХ (назви, одиниці, клієнт)
 			const workerObj = customers.find(c => String(c.id) === String(crewId));
 			const crewDisplayName = workerObj ? `${workerObj.name} (${crewId})` : crewId;
-
-			// --- ПІДГОТОВКА СПИСКУ МАТЕРІАЛІВ ---
 			const stockMap = new Map((stock || []).map(s => [Number(s.id), s]));
 			const summaryMap = new Map((invoicesSummary || []).map(s => [Number(s.productId), s]));
 
-			// 1. Беремо готові дані з Redux замість Promise.all
-			const allHistory = usedMaterialsHistory || {};
 			const agreementsMap = {};
 
-			dynamicProductIds.forEach(productId => {
-				const histRaw = allHistory[productId];
+			// 3. ГРУПУВАННЯ ПО УГОДАХ
+			Object.keys(userHistory).forEach(productId => {
+				const histRaw = userHistory[productId];
 				if (histRaw) {
-					const hist = Object.values(histRaw); // Перетворюємо в масив
+					const hist = Object.values(histRaw);
 					const productFromStock = stockMap.get(Number(productId));
 					const userInventory = summaryMap.get(Number(productId));
 
@@ -1042,34 +1075,96 @@ const UsedMaterialsTable = ({
 
 					hist.forEach(log => {
 						const agreement = String(log.agreement || "Без угоди").trim();
-						if (!agreementsMap[agreement]) {
-							agreementsMap[agreement] = [];
-						}
+						if (!agreementsMap[agreement]) agreementsMap[agreement] = [];
+
 						agreementsMap[agreement].push({
 							name,
 							quantity: Number(log.value || 0),
 							units,
 							comment: log.comment || "",
-							date: log.createdAt ? new Date(log.createdAt).toLocaleString("uk-UA", { day: '2-digit', month: '2-digit', year: '2-digit' }) : "---"
+							date: log.createdAt
+								? new Date(log.createdAt).toLocaleString("uk-UA", { day: '2-digit', month: '2-digit', year: '2-digit' })
+								: "---"
 						});
 					});
 				}
 			});
 
-			// 2. Формування HTML (залишається без змін)
+			// 4. ФОРМУВАННЯ HTML
 			const currentDate = new Date().toLocaleString('uk-UA');
-			let reportHtml = `<html><head><title>Звіт по угодах</title>...`; // Ваш існуючий HTML-код...
+			const modeLabel = isArchiveMode ? "АРХІВ" : "LIVE";
 
-			// ... далі ваш код рендеру HTML ...
+			let reportHtml = `
+            <html>
+            <head>
+                <title>Звіт по угодах - ${crewDisplayName}</title>
+                <style>
+                    body { font-family: sans-serif; padding: 20px; color: #333; }
+                    .header { text-align: center; border-bottom: 2px solid #444; margin-bottom: 20px; padding-bottom: 10px; }
+                    .agreement-section { margin-bottom: 30px; page-break-inside: avoid; }
+                    .agreement-title { background: #17a2b8; color: white; padding: 8px 12px; font-weight: bold; border-radius: 4px 4px 0 0; }
+                    table { width: 100%; border-collapse: collapse; font-size: 13px; }
+                    th, td { border: 1px solid #dee2e6; padding: 8px; text-align: left; }
+                    th { background: #f8f9fa; }
+                    .no-print { text-align: center; margin: 20px; }
+                    @media print { .no-print { display: none; } }
+                </style>
+            </head>
+            <body>
+                <div class="header">
+                    <h2>📋 Повний звіт списань по угодах</h2>
+                    <p><b>Режим:</b> ${modeLabel} | <b>Екіпаж:</b> ${crewDisplayName} | <b>Дата:</b> ${currentDate}</p>
+                </div>
+        `;
 
-			const newWindow = window.open("", "_blank", "width=1000,height=800");
+			const sortedAgreements = Object.keys(agreementsMap).sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+
+			sortedAgreements.forEach(agNum => {
+				const items = agreementsMap[agNum];
+				reportHtml += `
+                <div class="agreement-section">
+                    <div class="agreement-title">📄 Угода №: ${agNum}</div>
+                    <table>
+                        <thead>
+                            <tr>
+                                <th style="width: 15%">Дата</th>
+                                <th>Товар</th>
+                                <th style="width: 15%; text-align: right;">Кількість</th>
+                                <th>Примітка</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${items.map(m => `
+                                <tr>
+                                    <td>${m.date}</td>
+                                    <td>${m.name}</td>
+                                    <td style="text-align: right;"><b>${m.quantity}</b> ${m.units}</td>
+                                    <td>${m.comment}</td>
+                                </tr>
+                            `).join('')}
+                        </tbody>
+                    </table>
+                </div>
+            `;
+			});
+
+			reportHtml += `
+                <div class="no-print">
+                    <button onclick="window.print()" style="padding: 10px 20px; background: #28a745; color: white; border: none; cursor: pointer;">🖨️ Друкувати</button>
+                </div>
+            </body>
+            </html>
+        `;
+
+			const newWindow = window.open("", "_blank", "width=1100,height=850");
 			if (newWindow) {
 				newWindow.document.write(reportHtml);
 				newWindow.document.close();
 			}
+
 		} catch (err) {
-			console.error(err);
-			alert("Не вдалося зібрати загальний звіт.");
+			console.error("🛑 Error:", err);
+			alert("Помилка: " + err.message);
 		}
 	};
 
@@ -1972,30 +2067,36 @@ const InvoicesPage = ({
 
 	// 3. Склад (stock)
 	const currentStock = useMemo(() => {
-		// 1. Якщо ми в LIVE-режимі, просто повертаємо поточний склад
+		// 1. LIVE-режим: без змін
 		if (!isArchiveMode) {
 			return stock || [];
 		}
 
-		// 2. Якщо ми в АРХІВІ:
+		// 2. АРХІВНИЙ режим:
 		const archiveData = fullArchive?.stockAtThatTime || {};
 
-		// Якщо архів прийшов як масив, перетворюємо його на зручний словник {id: quantity}
+		// Перетворюємо архів у Map для швидкого пошуку
 		const archiveMap = Array.isArray(archiveData)
 			? archiveData.reduce((acc, item) => ({ ...acc, [item.id]: item.quantity }), {})
 			: archiveData;
 
-		// 3. Створюємо новий масив на основі існуючих товарів, але з архівними цифрами
-		return (stock || []).map(product => {
-			// Шукаємо, чи була в архіві кількість для цього конкретного ID
-			const archivedQty = archiveMap[product.id];
+		// 3. Обробка списку
+		return (stock || [])
+			.map(product => {
+				const archivedQty = archiveMap[product.id];
 
-			return {
-				...product,
-				// Якщо в архіві є число (навіть 0) — беремо його, інакше лишаємо поточне
-				quantity: archivedQty !== undefined ? archivedQty : product.quantity
-			};
-		});
+				// Перевіряємо, чи існував товар в архіві (чи є ключ в об'єкті)
+				const existsInArchive = archivedQty !== undefined;
+
+				return {
+					...product,
+					// Якщо є в архіві — беремо кількість, якщо ні — ставимо "x"
+					quantity: existsInArchive ? archivedQty : "не було"
+				};
+			});
+		// Якщо ви хочете ПОВНІСТЮ приховати ті, що не в архіві, 
+		// розкоментуйте рядок нижче:
+		// .filter(p => p.quantity !== "не було"); 
 
 	}, [isArchiveMode, fullArchive, stock]); // Переконайся, що fullArchive тут є
 
@@ -2742,18 +2843,61 @@ const InvoicesPage = ({
 				flexWrap: 'wrap',
 				alignItems: 'flex-end',
 				transition: 'all 0.4s ease',
-				// ДИНАМІЧНИЙ ФОН: Синій для Live, Зелений для Архіву
+				// Динамічний фон: Синій для Live, Зелений для Архіву
 				background: isArchiveMode
-					? 'linear-gradient(135deg, #2c3e50 0%, #4ca1af 100%)'
-					: 'linear-gradient(135deg, #1e5d3b 0%, #27ae60 100%)',
+					? 'linear-gradient(135deg, #1e5d3b 0%, #27ae60 100%)'
+					: 'linear-gradient(135deg, #2c3e50 0%, #4ca1af 100%)',
 				boxShadow: isArchiveMode
 					? '0 8px 20px rgba(39, 174, 96, 0.3)'
 					: '0 8px 20px rgba(44, 62, 80, 0.2)',
 				border: '1px solid rgba(255,255,255,0.1)',
-				paddingTop: '15px',
-				borderTop: isArchiveMode ? '1px solid rgba(255,255,255,0.2)' : '1px solid rgba(255,255,255,0.1)',
 			}}>
-				{/* БЛОК МІСЯЦЯ */}
+
+				{/* 1. БЛОК ВИБОРУ ОТРИМУВАЧА (Тільки для адміна) */}
+				{isAdminInvoices && (
+					<div style={{ flex: '1.5', minWidth: '250px' }}>
+						<label className={classes.label} style={{
+							color: 'rgba(255, 255, 255, 0.9)',
+							fontSize: '11px',
+							fontWeight: 'bold',
+							textTransform: 'uppercase',
+							letterSpacing: '0.8px',
+							marginBottom: '7px',
+							display: 'block'
+						}}>
+							👤 Виберіть отримувача:
+						</label>
+						<select
+							className={classes.select}
+							value={selectedUser}
+							onChange={handleCustomerChange}
+							style={{
+								width: '100%',
+								height: '38px',
+								borderRadius: '8px',
+								border: 'none',
+								backgroundColor: 'rgba(255, 255, 255, 0.95)',
+								padding: '0 10px',
+								fontWeight: '600',
+								color: '#2c3e50',
+								fontSize: '13px',
+								boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
+							}}
+						>
+							<option value="">--Choose customer--</option>
+							{customers
+								.filter(c => (c.id === 7 || c.id > 127) && c.name !== "Шановний клієнт")
+								.map(c => (
+									<option key={c.id} value={c.id}>
+										{c.name} (id: {c.id})
+									</option>
+								))
+							}
+						</select>
+					</div>
+				)}
+
+				{/* 2. БЛОК МІСЯЦЯ АРХІВУ */}
 				<div style={{ flex: 1, minWidth: '160px' }}>
 					<label className={classes.label} style={{
 						color: 'rgba(255, 255, 255, 0.9)',
@@ -2788,7 +2932,7 @@ const InvoicesPage = ({
 					</select>
 				</div>
 
-				{/* БЛОК ТОЧКИ ЗБЕРЕЖЕННЯ */}
+				{/* 3. БЛОК ТОЧКИ ЗБЕРЕЖЕННЯ */}
 				<div style={{ flex: 1, minWidth: '160px' }}>
 					<label className={classes.label} style={{
 						color: 'rgba(255, 255, 255, 0.9)',
@@ -2827,12 +2971,11 @@ const InvoicesPage = ({
 					</select>
 				</div>
 
-				{/* КНОПКА ПОВЕРНЕННЯ */}
+				{/* 4. КНОПКА ПОВЕРНЕННЯ */}
 				{isArchiveMode && (
 					<button
 						onClick={() => { setFullArchive(null); setSelectedSnapshot(''); setSelectedMonth(''); }}
 						style={{
-							alignSelf: 'flex-end',
 							height: '38px',
 							padding: '0 20px',
 							cursor: 'pointer',
@@ -2841,17 +2984,18 @@ const InvoicesPage = ({
 							backgroundColor: '#ff4757',
 							color: '#fff',
 							fontWeight: 'bold',
-							fontSize: '13px',
+							fontSize: '12px',
 							boxShadow: '0 4px 10px rgba(255, 71, 87, 0.3)',
-							transition: 'transform 0.2s, background 0.2s',
+							transition: 'all 0.2s',
 							display: 'flex',
 							alignItems: 'center',
-							gap: '8px'
+							gap: '8px',
+							whiteSpace: 'nowrap'
 						}}
-						onMouseOver={(e) => e.currentTarget.style.backgroundColor = '#ff6b81'}
-						onMouseOut={(e) => e.currentTarget.style.backgroundColor = '#ff4757'}
+						onMouseOver={(e) => e.currentTarget.style.transform = 'translateY(-2px)'}
+						onMouseOut={(e) => e.currentTarget.style.transform = 'translateY(0)'}
 					>
-						✕ Повернутись до Live
+						Повернутись до Live
 					</button>
 				)}
 			</div>
@@ -3354,8 +3498,16 @@ const InvoicesPage = ({
 											<tr key={s.id || index}>
 												<td>{s.name}</td>
 												<td className={classes.alignRight}>
-													{/* Тут s.quantity вже буде 112, бо useMemo його підмінив */}
-													{s.quantity} {s.units}
+													{/* Додаємо обгортку для кольору та перевірку */}
+													<span style={{
+														color: s.quantity === "не було" ? "red" : "inherit",
+														fontWeight: s.quantity === "не було" ? "bold" : "normal"
+													}}>
+														{s.quantity}
+													</span>
+
+													{/* Одиниці виміру показуємо ЛИШЕ якщо це число (товар БУВ) */}
+													{s.quantity !== "не було" && ` ${s.units}`}
 												</td>
 											</tr>
 										));
