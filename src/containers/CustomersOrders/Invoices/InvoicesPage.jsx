@@ -2006,37 +2006,67 @@ const InvoicesPage = ({
 	const invoicesSummary = useMemo(() => {
 		if (isArchiveMode) {
 			const archiveAll = fullArchive?.invoicesSummaryHistory || {};
-			const summaryData = archiveAll[selectedUser] || {};
-			// Важливо: перетворюємо об'єкт {productId: data} на масив для .map()
-			return Object.keys(summaryData).map(key => ({
-				...summaryData[key],
-				productId: summaryData[key].productId || Number(key)
-			}));
+			const mainData = archiveAll[selectedUser] || {};
+			const partnerData = archiveAll[partnerUser] || {}; // Дані напарника
+
+			// Збираємо всі унікальні ID товарів від обох
+			const allPids = new Set([...Object.keys(mainData), ...Object.keys(partnerData)]);
+
+			// Перетворюємо в масив, як ви і робили раніше
+			return Array.from(allPids).map(pid => {
+				const m = mainData[pid] || {};
+				const p = partnerData[pid] || {};
+
+				return {
+					// Беремо дані з того об'єкта, де вони є (або з майстра, або з напарника)
+					...(m.productId ? m : p),
+					productId: m.productId || p.productId || Number(pid),
+					// ГОЛОВНЕ: Сумуємо кількість обох працівників
+					totalQuantity: Number(m.totalQuantity || 0) + Number(p.totalQuantity || 0)
+				};
+			});
 		}
 		return rawInvoicesSummary || [];
-	}, [isArchiveMode, fullArchive, rawInvoicesSummary, selectedUser]);
+	}, [isArchiveMode, fullArchive, rawInvoicesSummary, selectedUser, partnerUser]);
 
 	const invoicesSummaryReturn = useMemo(() => {
 		if (isArchiveMode) {
 			const archiveAll = fullArchive?.invoicesSummaryReturnHistory || {};
-			const summaryData = archiveAll[selectedUser] || {};
-			return Object.keys(summaryData).map(key => ({
-				...summaryData[key],
-				productId: summaryData[key].productId || Number(key)
-			}));
+			const mainData = archiveAll[selectedUser] || {};
+			const partnerData = archiveAll[partnerUser] || {};
+
+			const allPids = new Set([...Object.keys(mainData), ...Object.keys(partnerData)]);
+
+			return Array.from(allPids).map(pid => {
+				const m = mainData[pid] || {};
+				const p = partnerData[pid] || {};
+
+				return {
+					...(m.productId ? m : p),
+					productId: m.productId || p.productId || Number(pid),
+					totalQuantity: Number(m.totalQuantity || 0) + Number(p.totalQuantity || 0)
+				};
+			});
 		}
 		return rawInvoicesSummaryReturn || [];
-	}, [isArchiveMode, fullArchive, rawInvoicesSummaryReturn, selectedUser]);
+	}, [isArchiveMode, fullArchive, rawInvoicesSummaryReturn, selectedUser, partnerUser]);
 
 	// 2. Матеріали та звіти
 
 	const usedMaterials = useMemo(() => {
 		if (isArchiveMode) {
 			const archiveAll = fullArchive?.usedMaterialsHistory || {};
-			return archiveAll[selectedUser] || {};
+			const mainUsed = archiveAll[selectedUser] || {};
+			const partnerUsed = archiveAll[partnerUser] || {};
+
+			const combined = { ...mainUsed };
+			Object.entries(partnerUsed).forEach(([pid, qty]) => {
+				combined[pid] = (Number(combined[pid]) || 0) + Number(qty);
+			});
+			return combined;
 		}
 		return rawUsedMaterials || {};
-	}, [isArchiveMode, fullArchive, rawUsedMaterials, selectedUser]);
+	}, [isArchiveMode, fullArchive, rawUsedMaterials, selectedUser, partnerUser]);
 
 	const usedMaterialsHistory = useMemo(() => {
 		if (isArchiveMode) {
