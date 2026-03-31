@@ -936,10 +936,10 @@
 @media (max-width: 768px) {
 
     .isAdminRow {
-        min-height: 600px !important; /* Для адміна на мобілці (багато інпутів) */
+        min-height: 650px !important; /* Для адміна на мобілці (багато інпутів) */
     }
     .isUserRow {
-        min-height: 220px !important; /* Для юзера на мобілці */
+        min-height: 260px !important; /* Для юзера на мобілці */
     }
 
     /* Додатково для мобілки, щоб блоки не злипалися */

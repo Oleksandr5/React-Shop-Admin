@@ -101,7 +101,8 @@ const CrewInventoryReport = ({
 				prev, taken, back, spent, calc, fact, diff,
 				isEmpty: prev === 0 && taken === 0 && back === 0 && spent === 0 && fact === 0
 			};
-		}).filter(row => !row.isEmpty);
+		})
+		// }).filter(row => !row.isEmpty);
 
 	}, [
 		dynamicProductIds, isArchiveMode, stock, remainingMaterialsStart,
@@ -764,7 +765,8 @@ const UsedMaterialsTable = ({
 	isVisible,
 	onToggle,
 	archiveStatus,
-	combinedSummary
+	combinedSummary,
+	remainingMaterialsStart
 }) => {
 	const [inputValues, setInputValues] = useState({});
 	const [agreementValues, setAgreementValues] = useState({});
@@ -1655,6 +1657,7 @@ const UsedMaterialsTable = ({
 								const isAdmin = isAdminUsedMaterials || isAdminFullAccess;
 								if (isAdmin) return true; // Адмін бачить все
 
+								const startLimit = remainingMaterialsStart?.[item.productId] ?? 0;
 								const valueInRedux = usedMaterials?.[item.productId] ?? 0;
 								const summaryItem = combinedSummary?.find(s => s.productId === item.productId);
 								const returned = summaryItem?.returned || 0;
@@ -1662,6 +1665,7 @@ const UsedMaterialsTable = ({
 
 								// Перевіряємо, чи є хоча б одне ненульове значення
 								return (
+									startLimit !== 0 ||
 									item.totalQuantity !== 0 ||
 									valueInRedux !== 0 ||
 									returned !== 0 ||
@@ -1670,11 +1674,13 @@ const UsedMaterialsTable = ({
 							})
 							.map((item) => {
 								const { productId, name, totalQuantity, units } = item;
+								// Отримуємо залишок на початок для конкретного ID товару
+								const startLimit = remainingMaterialsStart?.[productId] ?? 0;
 								const valueInRedux = usedMaterials?.[productId] ?? 0;
 								const summaryItem = combinedSummary?.find(s => s.productId === productId);
 								const returned = summaryItem?.returned || 0;
 								// Безпечніший варіант
-								const remains = (summaryItem?.remains ?? 0) - valueInRedux;
+								const remains = (summaryItem?.remains ?? 0) + startLimit - valueInRedux;
 								const isAdmin = isAdminUsedMaterials || isAdminFullAccess;
 								console.log(`DEBUG [${name}]:`, {
 									productId,
@@ -1723,6 +1729,14 @@ const UsedMaterialsTable = ({
 
 												{/* СІТКА ПОКАЗНИКІВ */}
 												<div className={classes.statsGrid}>
+													<div className={classes.statsRow}>
+														<div style={badgeBoxStyle}>
+															<span style={{ fontSize: '9px', fontWeight: '700', color: '#95a5a6' }}>НА ПОЧАТОК</span>
+															<span style={{ ...badgeBaseStyle, backgroundColor: '#f4f6f7', color: '#7f8c8d' }}>
+																{startLimit}
+															</span>
+														</div>
+													</div>
 													<div className={classes.statsRow}>
 														<div style={badgeBoxStyle}>
 															<span style={{ fontSize: '9px', fontWeight: '700', color: '#95a5a6' }}>ВЗЯТО</span>
@@ -3201,6 +3215,7 @@ const InvoicesPage = ({
 						onToggle={() => toggleTable('usedMaterials')}
 						archiveStatus={archiveStatus}
 						combinedSummary={combinedSummary}
+						remainingMaterialsStart={remainingMaterialsStart}
 					/>
 
 					{/* Перевірка повного доступу для відображення звіту екіпажу */}
