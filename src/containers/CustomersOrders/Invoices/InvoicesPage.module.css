@@ -192,9 +192,9 @@
     transition: border-color 0.2s;
 }
 
-.inputSmall { width: 70px; }
+.inputSmall { width: 100px; }
 .inputAgreement { width: 100px; }
-.inputComment { width: 150px; margin-left: 5px; }
+.inputComment { width: 120px; margin-left: 5px; }
 
 .inputSmall:focus, .inputAgreement:focus, .inputComment:focus {
     border-color: #17a2b8;
@@ -625,7 +625,6 @@
     }
 
     .usedMaterials tr td:nth-child(2)::before {
-        content: "ВЗЯТО:";
         font-size: 10px;
         color: #888;
         font-weight: bold;
@@ -819,4 +818,339 @@
 /* Додатково: вирівнювання для кількості */
 .alignRight {
     text-align: right;
+}
+
+/* --- Нові стилі для адаптивної таблиці материалов --- */
+
+/* Десктопна версія (все в ряд) */
+.usedWrapperOuter {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 15px;
+    justify-content: center;
+}
+
+.statsGrid {
+    display: flex;
+    flex-direction: row;
+    gap: 10px;
+}
+
+.statsRow {
+    display: flex;
+    gap: 8px;
+}
+
+.adminActions {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 6px;
+}
+
+.buttonGroupRow {
+    display: flex;
+    gap: 4px;
+}
+
+
+
+
+/* Змінюємо поріг з 768px на 991px, щоб охопити планшети */
+@media (min-width: 769px) and (max-width: 991px) {
+
+    .isAdminRow {
+        min-height: 400px !important; /* Для адміна на великих екранах */
+    }
+    .isUserRow {
+        min-height: 100px !important; /* Для юзера на великих екранах */
+    }
+
+    .desktopHeader {
+        display: none !important;
+    }
+
+    .productRow {
+        display: block !important;
+        /* ПРИБИРАЄМО height: 600px! Висота має бути автоматичною */
+        height: auto !important; 
+        min-height: min-content !important;
+        margin-bottom: 25px;
+        border: 1px solid #ddd;
+        border-radius: 10px;
+        /* ЗМІНЮЄМО hidden на visible, щоб бачити довгі коментарі */
+        overflow: visible !important; 
+        background: #fff;
+        box-sizing: border-box !important;
+    }
+
+    .nameColumn {
+        display: block !important;
+        width: 100% !important;
+        background: #f9f9f9;
+        font-weight: bold;
+        padding: 15px !important;
+        border-bottom: 1px solid #eee;
+    }
+
+    .controlColumn {
+        display: block !important;
+        width: 100% !important;
+        padding: 20px !important;
+        box-sizing: border-box !important;
+    }
+
+    /* Блок коментаря та інпутів */
+    .adminActions {
+        display: flex !important;
+        flex-direction: column !important;
+        width: 100% !important;
+        max-width: none !important; 
+        gap: 12px !important;
+    }
+
+    .inputSmall, .inputAgreement, .inputComment {
+        width: 100% !important;
+        height: auto !important; /* Дозволяємо йому рости */
+        min-height: 45px !important;
+        text-align: left !important; /* Коментар краще читати зліва */
+        padding: 10px !important;
+    }
+
+    /* Щоб нічого не вилазило за межі екрана */
+    .usedWrapperOuter {
+        flex-direction: column !important;
+        align-items: stretch !important; /* Розтягуємо на всю ширину */
+        width: 100% !important;
+    }
+
+    .statsGrid {
+        width: 100% !important;
+        max-width: none !important;
+    }
+}
+
+/* МОБІЛЬНА ВЕРСІЯ (менше 768px) */
+/* МОБІЛЬНА ВЕРСІЯ (max-width: 768px) */
+@media (max-width: 768px) {
+
+    .isAdminRow {
+        min-height: 600px !important; /* Для адміна на мобілці (багато інпутів) */
+    }
+    .isUserRow {
+        min-height: 220px !important; /* Для юзера на мобілці */
+    }
+
+    /* Додатково для мобілки, щоб блоки не злипалися */
+    .adminActions {
+        gap: 15px !important;
+        padding: 10px 0;
+    }
+
+    .desktopHeader {
+        display: none; /* Ховаємо заголовки таблиці */
+    }
+
+    .productRow {
+        display: block !important;        
+        margin-bottom: 20px;
+        border: 1px solid #ddd;
+        border-radius: 10px;
+        overflow: hidden;
+        background: #fff;
+    }
+
+    .nameColumn {
+        display: block !important;
+        width: 100% !important;
+        background: #f9f9f9;
+        text-align: center;
+        padding: 12px !important;
+        border-bottom: 1px solid #eee;
+    }
+
+    .controlColumn {
+        display: block !important;
+        width: 100% !important;
+        padding: 15px !important;
+    }
+
+    .usedWrapperOuter {
+        flex-direction: column !important;
+        gap: 15px !important;
+        align-items: center;
+    }
+
+    /* Збільшена ширина для показників */
+    .statsGrid {
+        flex-direction: column !important;
+        width: 100% !important;
+        max-width: 300px !important; 
+        margin: 0 auto;
+        gap: 10px !important;
+    }
+
+    .statsRow {
+        display: flex;
+        gap: 10px;
+        width: 100%;
+    }
+
+    /* Збільшена ширина для блоку адміна */
+    .adminActions {
+        display: flex;
+        flex-direction: column !important;
+        width: 100% !important;
+        max-width: 320px !important; 
+        gap: 10px !important;
+    }
+
+    /* Висота та зручність для інпутів */
+    .inputSmall, 
+    .inputAgreement, 
+    .inputComment {
+        width: 100% !important;
+        height: 42px !important;
+        font-size: 16px !important; /* Щоб не зумило на iPhone */
+        text-align: center;
+        border-radius: 8px !important;
+        border: 1px solid #ccc !important;
+    }
+
+    /* Кнопка "+" */
+    .btnAdd {
+        width: 100% !important;
+        height: 48px !important;
+        font-size: 26px !important;
+        font-weight: bold !important;
+        background-color: #2ecc71 !important;
+        color: white !important;
+        border-radius: 8px !important;
+        border: none !important;
+    }
+
+    .buttonGroupRow {
+        display: flex !important;
+        width: 100% !important;
+        gap: 8px !important;
+    }
+
+    .btnUndo, 
+    .btnHistory {
+        height: 42px !important;
+        flex: 1 !important;
+        border-radius: 8px !important;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+}
+
+/* Ізольовані стилі лише для блоку угоди */
+.ga_wrapper {
+    margin-bottom: 15px;
+    padding: 15px;
+    background: #f1f4f9;
+    border: 1px solid #cbd5e0;
+    border-radius: 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.ga_nameDisplay {
+    font-size: 22px;
+    color: #FF0000;
+    margin-bottom: 5px;
+    font-weight: bold;
+}
+
+.ga_inputGroup, .ga_searchBlock {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.ga_searchRow {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.ga_inputField {
+    padding: 10px;
+    border-radius: 6px;
+    border: 1px solid #ccc;
+    font-size: 16px;
+    height: 42px;
+    box-sizing: border-box;
+    background: white;
+}
+
+/* База кнопок (висота і шрифт) */
+.ga_btnBase {
+    height: 45px;
+    border-radius: 8px;
+    border: none;
+    cursor: pointer;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    padding: 0 15px;
+    width: 100%; /* Для мобілки */
+    text-decoration: none;
+}
+
+/* Твої оригінальні кольори */
+.ga_btnSearch { background-color: #3498db !important; }
+.ga_btnGrey   { background-color: #6c757d !important; }
+.ga_btnInfo   { background-color: #17a2b8 !important; }
+.ga_btnBlue   { background-color: #4a6cf7 !important; }
+.ga_btnGreen  { background-color: #2ecc71 !important; }
+
+.ga_btnToggle {
+    width: 100%;
+    min-height: 50px;
+    padding: 10px 20px;
+    background: linear-gradient(135deg, #e67e22 0%, #d35400 100%); 
+    color: white !important;
+    border: none;
+    border-radius: 10px;
+    font-size: 16px;
+    font-weight: 600;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: space-between; /* Стрілочка і текст по боках */
+    transition: all 0.2s ease;
+    box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+    margin-bottom: 15px;
+    margin-top: 10px;
+}
+
+.ga_btnToggle:hover {
+    filter: brightness(1.1);
+    box-shadow: 0 6px 12px rgba(0,0,0,0.15);
+}
+
+.ga_btnToggle:active {
+    transform: scale(0.98); /* Ефект стискання при кліку */
+}
+
+.ga_rowLayout {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+/* Адаптивність для комп'ютера */
+@media (min-width: 768px) {
+    .ga_nameDisplay { font-size: 30px; }
+    .ga_rowLayout { flex-direction: row; }
+    .ga_btnBase { width: auto; flex: 1; }
+    .ga_inputField { max-width: 300px; }
+    .ga_searchRow { flex-wrap: nowrap; }
 }

@@ -763,7 +763,8 @@ const UsedMaterialsTable = ({
 	isArchiveMode,
 	isVisible,
 	onToggle,
-	archiveStatus
+	archiveStatus,
+	combinedSummary
 }) => {
 	const [inputValues, setInputValues] = useState({});
 	const [agreementValues, setAgreementValues] = useState({});
@@ -774,11 +775,10 @@ const UsedMaterialsTable = ({
 	const [historyModal, setHistoryModal] = useState({ isOpen: false, data: [], productId: null });
 	const [editingEntryId, setEditingEntryId] = useState(null);
 	const [commentValues, setCommentValues] = useState({}); // Стейт для коментарів у таблиці
-	const dispatch = useDispatch(); // Додайте цей рядок сюди!
-
+	const dispatch = useDispatch(); // Додайте цей рядок сюди!	
 	// Знаходимо користувача в масиві за його ID
 	const userObj = customers?.find(c => String(c.id) === String(selectedUser));
-
+	console.log('my_combinedSummary', combinedSummary)
 	// Отримуємо ім'я (якщо знайшли) або просто показуємо ID
 	const displayUserName = userObj ? userObj.name : `Користувач #${selectedUser}`;
 
@@ -1562,210 +1562,249 @@ const UsedMaterialsTable = ({
 				</div>
 			)}
 
-			<div className={classes.globalAgreementWrapper} style={{
-				marginBottom: '15px',
-				padding: '15px',
-				background: '#f1f4f9',
-				border: '1px solid #cbd5e0',
-				borderRadius: '8px',
-				display: 'flex',
-				flexDirection: 'column', // За замовчуванням стовпчиком (для мобілок)
-				gap: '15px'
-			}}>
-				{/* Блок: Загальна угода */}
-				<div style={{
-					display: 'flex',
-					flexDirection: 'column', // Лейбл над інпутом на мобілці
-					gap: '8px'
-				}}>
-					{/* ВИВІД ІМЕНІ */}
-					<div style={{ fontSize: '30px', color: '#FF0000', marginTop: '-5px', marginBottom: '15px' }}>
+			<div className={classes.ga_wrapper}>
+				<div className={classes.ga_userHeaderBlock}>
+					<div className={classes.ga_nameDisplay}>
 						👤 Працюємо з: <strong>{displayUserName}</strong>
 					</div>
-					<label style={{ fontWeight: 'bold', color: '#2d3748' }}>📄 Загальна угода:</label>
-					<input
-						ref={inputRef}
-						type="text"
-						placeholder="Номер для всіх товарів..."
-						value={commonAgreement}
-						onChange={(e) => setCommonAgreement(e.target.value)}
-						className={classes.inputAgreement}
-						style={{
-							width: '100%', // На мобілці на всю ширину
-							maxWidth: '300px', // На десктопі не розтягуватиметься надто сильно
-							padding: '8px 12px',
-							borderRadius: '4px',
-							border: '1px solid #ccc',
-							boxSizing: 'border-box' // Важливо, щоб padding не додавався до ширини
-						}}
-					/>
+					<div className={classes.ga_inputGroup}>
+						<label style={{ fontWeight: 'bold', color: '#2d3748' }}>📄 Загальна угода:</label>
+						<input
+							ref={inputRef}
+							type="text"
+							placeholder="Номер для всіх товарів..."
+							value={commonAgreement}
+							onChange={(e) => setCommonAgreement(e.target.value)}
+							className={classes.ga_inputField}
+						/>
+					</div>
 				</div>
 
-				{/* Блок: Перевірка угоди */}
-				<div style={{
-					display: 'flex',
-					flexDirection: 'column',
-					gap: '10px',
-					background: '#ffffff',
-					padding: '12px',
-					borderRadius: '6px',
-					boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
-					border: '1px solid #e2e8f0'
-				}}>
+				<div className={classes.ga_searchBlock}>
 					<label style={{ fontWeight: 'bold', color: '#2d3748' }}>🔍 Перевірка угоди:</label>
-					<div style={{
-						display: 'flex',
-						gap: '8px',
-						flexWrap: 'wrap' // Якщо кнопка не влізе — вона перенесеться вниз
-					}}>
+					<div className={classes.ga_searchRow}>
 						<input
 							type="text"
 							placeholder="Введіть № угоди..."
 							value={searchAgreement}
 							onChange={(e) => setSearchAgreement(e.target.value)}
-							className={classes.inputAgreement}
-							style={{
-								flex: '1', // Інпут забирає весь вільний простір
-								minWidth: '140px', // Але не стає меншим за це значення
-								padding: '8px',
-								borderRadius: '4px',
-								border: '1px solid #ccc'
-							}}
+							className={classes.ga_inputField}
+							style={{ flex: '2' }}
 						/>
-						<button
-							onClick={handleSearchByAgreement}
-							className={classes.btnAdd}
-							style={{
-								width: 'auto',
-								flexGrow: '1', // На дуже малих екранах кнопка теж розтягнеться
-								padding: '8px 15px',
-								backgroundColor: '#3498db',
-								borderColor: '#2980b9',
-								fontSize: '14px',
-								whiteSpace: 'nowrap'
-							}}
-						>
+						<button onClick={handleSearchByAgreement} className={`${classes.ga_btnBase} ${classes.ga_btnSearch}`}>
 							Знайти товари
 						</button>
 					</div>
 				</div>
-				<button
-					onClick={handlePrintAllAgreementsReport}
-					className={classes.btnAdd}
-					style={{
-						marginTop: '10px',
-						backgroundColor: '#6c757d', // Сірий колір, щоб відрізнялася від основної кнопки
-						borderColor: '#5a6268',
-						width: '100%'
-					}}
-				>
-					📋 Звіт по всіх угодах ${finalName}
-				</button>
-				<div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+
+				<div className={classes.ga_rowLayout}>
 					<button
-						onClick={handlePrintFullHistoryReport}
-						className={classes.btnHistory}
-						style={{
-							backgroundColor: '#17a2b8',
-							color: 'white',
-							padding: '8px 15px',
-							display: 'flex',
-							alignItems: 'center',
-							gap: '8px'
+						onClick={() => {
+							console.log("DEBUG: Звіт по всіх угодах для:", finalName);
+							handlePrintAllAgreementsReport();
 						}}
+						className={`${classes.ga_btnBase} ${classes.ga_btnGrey}`}
 					>
-						📜 Звіт по всій історії списань ${finalName}
+						📋 Звіт по всіх угодах {finalName}
 					</button>
 
-				</div>
-				<div className={classes.headerActions} style={{ marginBottom: '15px' }}>
 					<button
-						className={classes.btnPrint}
-						onClick={(e) => {
-							e.stopPropagation();
-							handlePrintUsedMaterials(usedMaterials, stock, finalName);
+						onClick={() => {
+							console.log("DEBUG: Звіт по історії для:", finalName);
+							handlePrintFullHistoryReport();
 						}}
+						className={`${classes.ga_btnBase} ${classes.ga_btnInfo}`}
 					>
+						📜 Звіт по всій історії списань {finalName}
+					</button>
+				</div>
+
+				<div className={classes.ga_rowLayout}>
+					<button className={`${classes.ga_btnBase} ${classes.ga_btnBlue}`} onClick={(e) => { e.stopPropagation(); handlePrintUsedMaterials(usedMaterials, stock, finalName); }}>
 						🖨️ Друк Використані матеріали ${finalName}
 					</button>
-					<button
-						className={classes.btnExport}
-						onClick={(e) => {
-							e.stopPropagation();
-							handleExportUsedMaterialsToCSV(usedMaterials, stock, finalName);
-						}}
-					>
+					<button className={`${classes.ga_btnBase} ${classes.ga_btnGreen}`} onClick={(e) => { e.stopPropagation(); handleExportUsedMaterialsToCSV(usedMaterials, stock, finalName); }}>
 						📥 Експорт Excel (CSV) Використані матеріали ${finalName}
 					</button>
 				</div>
-				<button className={classes.btnToggle} onClick={onToggle}>
-					<span style={{ display: 'flex', alignItems: 'center' }}>
-						{isVisible ? (
-							<>
-								<span className={classes.arrowRed}>▲</span>
-								<span>Згорнути таблицю Використані матеріали {finalName}</span>
-							</>
-						) : (
-							<>
-								<span className={classes.arrowGreen}>▼</span>
-								<span>Розгорнути таблицю Використані матеріали {finalName}</span>
-							</>
-						)}
-					</span>
-				</button>
 
+				<button className={classes.ga_btnToggle} onClick={onToggle}>
+					<span>
+						{isVisible
+							? `▲ Згорнути таблицю Використані матеріали ${finalName}`
+							: `▼ Розгорнути таблицю Використані матеріали ${finalName}`
+						}
+					</span>
+					<span>{isVisible ? '▲' : '▼'}</span>
+				</button>
 			</div>
 
 			{isVisible && (
-				<table className={`${classes.table} ${classes.usedMaterials}`} >
+				<table className={`${classes.table} ${classes.usedMaterials}`}>
 					<thead>
-						<tr>
+						<tr className={classes.desktopHeader}>
 							<th style={{ width: "35%", textAlign: "left" }}>Товар</th>
-							<th style={{ width: "15%", textAlign: "center" }}>Взято</th>
-							<th style={{ width: "50%", textAlign: "center" }}>Управління</th>
+							<th style={{ width: "65%", textAlign: "center" }}>Управління</th>
 						</tr>
 					</thead>
 					<tbody>
 						{fullMaterialsList
-							.slice() // створюємо копію масиву, щоб не мутувати оригінал
-							.sort((a, b) => a.name.localeCompare(b.name)) // сортування за алфавітом
+							.slice()
+							.sort((a, b) => a.name.localeCompare(b.name))
+							.filter((item) => {
+								const isAdmin = isAdminUsedMaterials || isAdminFullAccess;
+								if (isAdmin) return true; // Адмін бачить все
+
+								const valueInRedux = usedMaterials?.[item.productId] ?? 0;
+								const summaryItem = combinedSummary?.find(s => s.productId === item.productId);
+								const returned = summaryItem?.returned || 0;
+								const remains = summaryItem?.remains || 0;
+
+								// Перевіряємо, чи є хоча б одне ненульове значення
+								return (
+									item.totalQuantity !== 0 ||
+									valueInRedux !== 0 ||
+									returned !== 0 ||
+									remains !== 0
+								);
+							})
 							.map((item) => {
 								const { productId, name, totalQuantity, units } = item;
 								const valueInRedux = usedMaterials?.[productId] ?? 0;
+								const summaryItem = combinedSummary?.find(s => s.productId === productId);
+								const returned = summaryItem?.returned || 0;
+								// Безпечніший варіант
+								const remains = (summaryItem?.remains ?? 0) - valueInRedux;
+								const isAdmin = isAdminUsedMaterials || isAdminFullAccess;
+								console.log(`DEBUG [${name}]:`, {
+									productId,
+									isAdmin,
+									"Взято (totalQuantity)": totalQuantity,
+									"Списано (valueInRedux)": valueInRedux,
+									"Знайдено в summary": !!summaryItem, // true або false
+									"Повернено": returned,
+									"Залишок": remains,
+									"Весь summaryItem": summaryItem
+								});
+								const badgeBoxStyle = {
+									display: 'flex',
+									flexDirection: 'column',
+									alignItems: 'center',
+									gap: '2px',
+									flex: '1',
+									minWidth: '65px'
+								};
+
+								const badgeBaseStyle = {
+									display: 'inline-flex',
+									alignItems: 'center',
+									justifyContent: 'center',
+									width: '100%',
+									height: '28px',
+									borderRadius: '6px',
+									fontSize: '13px',
+									fontWeight: 'bold',
+									backgroundColor: '#f8f9fa',
+									color: '#2c3e50',
+									border: '1px solid #dee2e6'
+								};
 
 								return (
-									<tr key={productId}>
-										<td style={{ verticalAlign: "middle" }}>{name} ({productId})</td>
-										<td style={{ textAlign: "center", fontWeight: "bold", color: "#555" }}>
-											{totalQuantity} {units}
+									<tr key={productId} className={`${classes.productRow} ${isAdmin ? classes.isAdminRow : classes.isUserRow}`} >
+										{/* КОЛОНКА 1: НАЗВА */}
+										<td className={classes.nameColumn}>
+											<div style={{ fontWeight: '600', fontSize: '14px' }}>{name}</div>
+											<div style={{ fontSize: '10px', color: '#999' }}>ID: {productId}</div>
 										</td>
-										<td style={{ verticalAlign: "middle" }}>
-											<div className={classes.usedWrapper} style={{ justifyContent: "center" }}>
-												<span className={classes.totalBadge}>{valueInRedux}</span>
-												<input
-													type="number"
-													value={inputValues[productId] ?? ""}
-													onChange={e => setInputValues(prev => ({ ...prev, [productId]: e.target.value }))}
-													className={classes.inputSmall}
-													placeholder="К-сть"
-												/>
-												<input
-													type="text"
-													placeholder={commonAgreement || "Угода №"}
-													value={agreementValues[productId] ?? ""}
-													onChange={e => setAgreementValues(prev => ({ ...prev, [productId]: e.target.value }))}
-													className={classes.inputAgreement}
-												/>
-												<input
-													type="text"
-													placeholder="Коментар..."
-													value={commentValues[productId] ?? ""}
-													onChange={e => setCommentValues(prev => ({ ...prev, [productId]: e.target.value }))}
-													className={classes.inputComment} // Додайте цей клас у CSS (наприклад, width: 120px)											
-												/>
-												<button disabled={isArchiveMode} className={classes.btnAdd} onClick={() => handleAddMaterial(productId)}>Додати</button>
-												<button disabled={isArchiveMode} className={classes.btnUndo} onClick={() => handleUndo(productId)}><span className="undoIcon">↩</span></button>
-												<button className={classes.btnHistory} onClick={() => handleHistory(productId)}>📜</button>
+
+										{/* КОЛОНКА 2: УПРАВЛІННЯ ТА ПОКАЗНИКИ */}
+										<td className={classes.controlColumn}>
+											<div className={classes.usedWrapperOuter}>
+
+												{/* СІТКА ПОКАЗНИКІВ */}
+												<div className={classes.statsGrid}>
+													<div className={classes.statsRow}>
+														<div style={badgeBoxStyle}>
+															<span style={{ fontSize: '9px', fontWeight: '700', color: '#95a5a6' }}>ВЗЯТО</span>
+															<span style={{ ...badgeBaseStyle, backgroundColor: '#eef6fc', color: '#2980b9', borderColor: '#bcdff1' }}>
+																{totalQuantity}
+															</span>
+														</div>
+														<div style={badgeBoxStyle}>
+															<span style={{ fontSize: '9px', fontWeight: '700', color: '#95a5a6' }}>ПОВЕРНЕНО</span>
+															<span style={{ ...badgeBaseStyle, color: '#e74c3c', fontWeight: 'bold' }}>
+																{/* Додаємо мінус тільки якщо число більше 0 */}
+																{returned > 0 ? `-${returned}` : returned}
+															</span>
+														</div>
+													</div>
+													<div className={classes.statsRow}>
+														<div style={badgeBoxStyle}>
+															<span style={{ fontSize: '9px', fontWeight: '700', color: '#95a5a6' }}>ЗАЛИШОК</span>
+															<span style={{
+																...badgeBaseStyle,
+																backgroundColor: remains < 0 ? '#fdedec' : (remains === 0 ? '#eafaf1' : '#fef5e7'),
+																color: remains < 0 ? '#e74c3c' : (remains === 0 ? '#27ae60' : '#d35400'),
+																border: `1px solid ${remains < 0 ? '#f5b7b1' : (remains === 0 ? '#2ecc71' : '#f8c471')
+																	}`
+															}}>
+																{remains}
+															</span>
+														</div>
+														<div style={badgeBoxStyle}>
+															<span style={{ fontSize: '9px', fontWeight: '700', color: '#95a5a6' }}>СПИСАНО</span>
+															<span className={classes.totalBadge} style={{ margin: 0, width: '100%', height: '28px' }}>
+																{valueInRedux}
+															</span>
+														</div>
+													</div>
+												</div>
+
+												{/* БЛОК КНОПОК ТА ІНПУТІВ */}
+												{isAdmin && (
+													<div className={classes.adminActions}>
+														<input
+															type="number"
+															placeholder={`К-сть (${units})`}
+															className={classes.inputSmall}
+															style={{ height: '40px' }} // Висота для мобілки
+															value={inputValues[productId] ?? ""}
+															onChange={e => setInputValues(prev => ({ ...prev, [productId]: e.target.value }))}
+														/>
+														<input
+															type="text"
+															placeholder={commonAgreement || "Угода №"}
+															className={classes.inputAgreement}
+															style={{ height: '40px' }}
+															value={agreementValues[productId] ?? ""}
+															onChange={e => setAgreementValues(prev => ({ ...prev, [productId]: e.target.value }))}
+														/>
+
+														{/* НОВИЙ ІНПУТ КОМЕНТАР */}
+														<input
+															type="text"
+															placeholder="Коментар..."
+															className={classes.inputComment}
+															style={{ height: '40px' }}
+															value={commentValues?.[productId] ?? ""}
+															onChange={e => setCommentValues(prev => ({ ...prev, [productId]: e.target.value }))}
+														/>
+
+														<button
+															disabled={isArchiveMode}
+															className={classes.btnAdd}
+															style={{ height: '45px', fontSize: '24px' }}
+															onClick={() => handleAddMaterial(productId)}
+														>
+															+
+														</button>
+
+														<div className={classes.buttonGroupRow}>
+															<button className={classes.btnUndo} style={{ height: '40px' }} onClick={() => handleUndo(productId)}>↩</button>
+															<button className={classes.btnHistory} style={{ height: '40px' }} onClick={() => handleHistory(productId)}>📜</button>
+														</div>
+													</div>
+												)}
 											</div>
 										</td>
 									</tr>
@@ -1969,6 +2008,7 @@ const InvoicesPage = ({
 	const agreementInputRef = useRef(null);
 
 	const [selectedUser, setSelectedUser] = useState(customerId || '');
+	console.log('first_selectedUser', selectedUser)
 	// Коментар: НОВЕ: Стейт для збереження вибраного напарника
 	const [partnerUser, setPartnerUser] = useState('');
 	const [admins, setAdmins] = useState({});
@@ -2290,12 +2330,22 @@ const InvoicesPage = ({
 
 	// 4. Ініціалізація вибраного користувача
 	useEffect(() => {
-		const savedId = window.localStorage.getItem('idSelectedCustomer') || idThisCustomers;
-		if (savedId) {
-			setSelectedUser(savedId);
-			window.localStorage.setItem('idSelectedCustomer', savedId);
+		// Коментар: Визначаємо, чи є користувач адміном
+		const isAdmin = isAdminFullAccess || isAdminUsedMaterials;
+
+		if (isAdmin) {
+			// Коментар: Адміну відновлюємо останнього обраного клієнта з пам'яті
+			const savedId = window.localStorage.getItem('idSelectedCustomer');
+			if (savedId) {
+				setSelectedUser(savedId);
+			}
+		} else {
+			// Коментар: Звичайному користувачу ЗАВЖДИ ставимо його власний ID
+			setSelectedUser(idThisCustomers);
+			// Коментар: Також оновлюємо localStorage, щоб там був актуальний ID
+			window.localStorage.setItem('idSelectedCustomer', idThisCustomers);
 		}
-	}, [idThisCustomers]);
+	}, [idThisCustomers, isAdminFullAccess, isAdminUsedMaterials]);
 
 	// 5. ОСНОВНЕ ЗАВАНТАЖЕННЯ ДАНИХ (З перевіркою архіву)
 	useEffect(() => {
@@ -2864,7 +2914,7 @@ const InvoicesPage = ({
 
 	return (
 		<div className={classes.wrapper}>
-			<div style={{
+			{isAdminUsedMaterials && (<div style={{
 				display: 'flex',
 				gap: '15px',
 				padding: '20px',
@@ -3029,7 +3079,7 @@ const InvoicesPage = ({
 						Повернутись до Live
 					</button>
 				)}
-			</div>
+			</div>)}
 			{isAdminUsedMaterials && notifications.length > 0 && (
 				<div className={classes.notificationsBlock} style={{ marginBottom: '20px' }}>
 					<button
@@ -3127,7 +3177,7 @@ const InvoicesPage = ({
 				</div>
 			)}
 
-			{isAdminUsedMaterials && selectedUser && (
+			{selectedUser && (
 				<>
 					<UsedMaterialsTable
 						key={selectedUser} // Коли змінюється ID користувача, компонент перемонтується і всі useState всередині нього скинуться в "" автоматично
@@ -3150,6 +3200,7 @@ const InvoicesPage = ({
 						isVisible={visibleTables.usedMaterials}
 						onToggle={() => toggleTable('usedMaterials')}
 						archiveStatus={archiveStatus}
+						combinedSummary={combinedSummary}
 					/>
 
 					{/* Перевірка повного доступу для відображення звіту екіпажу */}
