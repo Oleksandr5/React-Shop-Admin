@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useMemo, useRef } from 'react'
 import { connect, useDispatch } from 'react-redux'
-import { fetchInvoices, fetchInvoicesReturn, fetchInvoicesSummary, fetchInvoicesSummaryReturn, fetchOrderNotifications, deleteNotification, clearNotifications, fetchUsedMaterials, addUsedMaterial, fetchUsedMaterialsHistory, fetchUsedMaterialsHistoryAction, archiveAllDataMonthly, updateUsedMaterialLocal, fetchRemainingMaterialsStart, setRemainingMaterialsStart } from '../../../redux/actions/invoices'; // шлях до ваших екшенів інвойсів
+import { fetchInvoices, fetchInvoicesReturn, fetchAllInvoices, fetchAllInvoicesReturn, fetchInvoicesSummary, fetchInvoicesSummaryReturn, fetchOrderNotifications, deleteNotification, clearNotifications, fetchUsedMaterials, addUsedMaterial, fetchUsedMaterialsHistory, fetchUsedMaterialsHistoryAction, fetchAllUsedMaterialsHistoryAction, archiveAllDataMonthly, updateUsedMaterialLocal, fetchRemainingMaterialsStart, setRemainingMaterialsStart } from '../../../redux/actions/invoices'; // шлях до ваших екшенів інвойсів
 
 import classes from './InvoicesPage.module.css';
 import firebase from 'firebase';
@@ -789,6 +789,8 @@ const UsedMaterialsTable = ({
 	selectedUser,
 	inputRef,
 	customers,
+	invoices,
+	invoicesReturn,
 	invoicesSummary,
 	usedMaterials,
 	usedMaterialsHistory,
@@ -824,12 +826,15 @@ const UsedMaterialsTable = ({
 	const [historyModal, setHistoryModal] = useState({ isOpen: false, data: [], productId: null });
 	const [editingEntryId, setEditingEntryId] = useState(null);
 	const [commentValues, setCommentValues] = useState({}); // Стейт для коментарів у таблиці
+
 	const dispatch = useDispatch(); // Додайте цей рядок сюди!	
 	// Знаходимо користувача в масиві за його ID
 	const userObj = customers?.find(c => String(c.id) === String(selectedUser));
 	console.log('my_combinedSummary', combinedSummary)
 	// Отримуємо ім'я (якщо знайшли) або просто показуємо ID
 	const displayUserName = userObj ? userObj.name : `Користувач #${selectedUser}`;
+
+
 
 	useEffect(() => {
 		if (isVisible && !isArchiveMode && selectedUser) {
@@ -1797,6 +1802,7 @@ const UsedMaterialsTable = ({
 					</button>
 				</div>
 
+
 				<div className={classes.ga_rowLayout}>
 					<button className={`${classes.ga_btnBase} ${classes.ga_btnBlue}`} onClick={(e) => { e.stopPropagation(); handlePrintUsedMaterials(usedMaterials, stock, finalName); }}>
 						🖨️ Друк Використані матеріали ${finalName}
@@ -2161,20 +2167,27 @@ const UsedMaterialsTable = ({
 const InvoicesPage = ({
 	hasAccount, customerName, customerId,
 	invoices: rawInvoices, // Перейменували
+	allInvoices: rawAllInvoices, // Перейменували
 	invoicesReturn: rawInvoicesReturn = [],
+	allInvoicesReturn: rawAllInvoicesReturn = [],
 	invoicesSummary: rawInvoicesSummary,
 	invoicesSummaryReturn: rawInvoicesSummaryReturn,
 	fetchInvoices, fetchInvoicesReturn, fetchInvoicesSummary, fetchInvoicesSummaryReturn,
 	customers, notifications: rawNotifications, fetchOrderNotifications, deleteNotification, clearNotifications,
 	usedMaterials: rawUsedMaterials, // Перейменували
 	usedMaterialsHistory: rawUsedMaterialsHistory, // Перейменували
+	allUsedMaterialsHistory: rawAllUsedMaterialsHistory,
 	remainingMaterials: rawRemainingMaterials,
 	remainingMaterialsStart: rawRemainingMaterialsStart,
 	fetchRemainingMaterialsStart, // Функція завантаження (для useEffect)
 	setRemainingMaterialsStart, // Функція оновлення (для інпутів)
 	fetchUsedMaterialsHistoryAction,
+	fetchAllUsedMaterialsHistoryAction,
+	fetchAllInvoices, fetchAllInvoicesReturn,
 	fetchUsedMaterials, addUsedMaterial, archiveAllDataMonthly, stock
 }) => {
+
+
 
 	const [visibleTables, setVisibleTables] = useState({
 		notifications: true,
@@ -2210,10 +2223,9 @@ const InvoicesPage = ({
 	const [liveDynamicUserIds, setLiveDynamicUserIds] = useState([]);
 	const [partnerRemainingStart, setPartnerRemainingStart] = useState({});
 	const [partnerRealRemaining, setPartnerRealRemaining] = useState({});
-
+	const [globalSearchTerm, setGlobalSearchTerm] = useState("");
 	const isArchiveMode = !!fullArchive;
 
-	// 1. Інвойси та повернення
 	const invoices = useMemo(() => {
 		if (isArchiveMode) {
 			const archiveAll = fullArchive?.invoicesHistory || {};
@@ -2232,6 +2244,50 @@ const InvoicesPage = ({
 		}
 		return rawInvoicesReturn || [];
 	}, [isArchiveMode, fullArchive, rawInvoicesReturn, selectedUser]);
+
+	const allInvoices = useMemo(() => {
+		if (isArchiveMode) {
+			// Беремо всі інвойси всіх користувачів з архіву
+			const archiveAll = fullArchive?.invoicesHistory || {};
+			const flattenedList = [];
+
+			// Перетворюємо структуру { userId: { invId: {...} } } на плаский масив
+			Object.keys(archiveAll).forEach(userId => {
+				const userInvs = archiveAll[userId] || {};
+				// Перетворюємо об'єкт інвойсів конкретного юзера в масив
+				const invArray = Array.isArray(userInvs) ? userInvs : Object.values(userInvs);
+
+				invArray.forEach(inv => {
+					flattenedList.push({ ...inv, customerId: userId });
+				});
+			});
+
+			return flattenedList;
+		}
+		// Якщо не архів — повертаємо сирі дані з Redux
+		return rawAllInvoices || [];
+	}, [isArchiveMode, fullArchive, rawAllInvoices]);
+
+	const allInvoicesReturn = useMemo(() => {
+		if (isArchiveMode) {
+			// Беремо всі повернення всіх користувачів з архіву
+			const archiveAllReturns = fullArchive?.invoicesReturnHistory || {};
+			const flattenedReturns = [];
+
+			Object.keys(archiveAllReturns).forEach(userId => {
+				const userRets = archiveAllReturns[userId] || {};
+				const retArray = Array.isArray(userRets) ? userRets : Object.values(userRets);
+
+				retArray.forEach(ret => {
+					flattenedReturns.push({ ...ret, customerId: userId });
+				});
+			});
+
+			return flattenedReturns;
+		}
+		// Якщо не архів — повертаємо сирі дані з Redux
+		return rawAllInvoicesReturn || [];
+	}, [isArchiveMode, fullArchive, rawAllInvoicesReturn]);
 
 	const invoicesSummary = useMemo(() => {
 		if (isArchiveMode) {
@@ -2316,7 +2372,22 @@ const InvoicesPage = ({
 		return rawUsedMaterialsHistory || {};
 	}, [isArchiveMode, fullArchive, rawUsedMaterialsHistory, selectedUser]);
 
+	const allUsedMaterialsHistory = useMemo(() => {
+		if (isArchiveMode) {
+			// Якщо ми в архіві, беремо ВСЮ історію списань з архіву
+			// Використовуємо ту саму назву поля, яку ви знайшли: usedMaterialsHistoryHistory
+			const archiveAllHistory = fullArchive?.usedMaterialsHistoryHistory || {};
 
+			if (isArchiveMode) {
+				console.log("Global Archive History Data:", archiveAllHistory);
+			}
+
+			return archiveAllHistory;
+		}
+
+		// Якщо не в архіві — повертаємо сирі дані з Redux (всі екіпажі)
+		return rawAllUsedMaterialsHistory || {};
+	}, [isArchiveMode, fullArchive, rawAllUsedMaterialsHistory]);
 
 	const remainingMaterials = useMemo(() => {
 		if (isArchiveMode) {
@@ -2464,6 +2535,380 @@ const InvoicesPage = ({
 		return rawNotifications || [];
 	}, [isArchiveMode, fullArchive, rawNotifications, selectedUser, isAdminInvoices]);
 
+	useEffect(() => {
+
+		// Якщо користувач авторизований і ми НЕ в режимі архіву
+
+		if (hasAccount && !isArchiveMode) {
+			// Завантажуємо всю базу списань
+			fetchAllUsedMaterialsHistoryAction();
+
+			// Завантажуємо всю базу інвойсів (накладних)
+			fetchAllInvoices();
+
+			// Завантажуємо всю базу повернень
+			fetchAllInvoicesReturn();
+		}
+
+	}, [hasAccount, isArchiveMode, fetchAllInvoices, fetchAllInvoicesReturn, fetchAllUsedMaterialsHistoryAction]);
+
+	const handlePrintMaterialGlobalSearch = (searchQuery) => {
+		try {
+			// 1. Перевірка вхідних даних
+			const localInvoices = allInvoices || [];
+			const localReturns = allInvoicesReturn || [];
+			const localCustomers = customers || [];
+
+			if (!searchQuery || searchQuery.trim() === "") return alert("Введіть назву товару");
+
+			const query = searchQuery.toLowerCase().trim();
+			const currentDate = new Date().toLocaleString('uk-UA');
+			const modeTitle = isArchiveMode ? "АРХІВ" : "ПОТОЧНІ ДАНІ";
+
+			// ЛОГ 1: Загальна кількість даних перед початком
+			console.log("--- КРОК 1: ЗАПУСК ПОШУКУ ---", {
+				пошуковийЗапит: query,
+				режим: modeTitle,
+				інвойсівВсього: localInvoices.length,
+				поверненьВсього: localReturns.length,
+				клієнтівВсього: localCustomers.length
+			});
+
+			const resultsByUser = {};
+
+			// Об'єднуємо всі транзакції
+			const allTransactions = [
+				...localInvoices.map(inv => ({ ...inv, _isReturn: false })),
+				...localReturns.map(ret => ({ ...ret, _isReturn: true }))
+			];
+
+			// ЛОГ 2: Об'єднаний масив
+			console.log("--- КРОК 2: ОБ'ЄДНАНИЙ МАСИВ ---", {
+				всьогоТранзакцій: allTransactions.length
+			});
+
+			allTransactions.forEach((trans, index) => {
+				// Перевірка наявності товарів у різних форматах (items або orderData)
+				const items = Array.isArray(trans.items)
+					? trans.items
+					: Object.values(trans.orderData || {});
+
+				// Фільтруємо товари, що збігаються з запитом
+				const matchedItems = items.filter(it => it.name?.toLowerCase().includes(query));
+
+				if (matchedItems.length > 0) {
+					const uId = String(trans.customerId);
+					const userObj = localCustomers.find(c => String(c.id) === uId);
+					const userName = userObj ? userObj.name : `Екіпаж ID: ${uId}`;
+
+					// ЛОГ 3: Знайдено збіг (виводимо перші кілька для економії місця в консолі)
+					if (Object.keys(resultsByUser).length < 5) {
+						console.log(`Знайдено у: ${userName}`, {
+							orderId: trans.idOrderHistory || trans.id,
+							matchedItemsCount: matchedItems.length
+						});
+					}
+
+					if (!resultsByUser[userName]) resultsByUser[userName] = [];
+
+					resultsByUser[userName].push({
+						...trans,
+						matchedItems
+					});
+				}
+			});
+
+			// ЛОГ 4: Фінальний результат групування
+			console.log("--- КРОК 3: РЕЗУЛЬТАТИ ---", {
+				знайденоДляКористувачів: Object.keys(resultsByUser).length,
+				саміКористувачі: Object.keys(resultsByUser)
+			});
+
+			if (Object.keys(resultsByUser).length === 0) {
+				return alert(`Нічого не знайдено для "${searchQuery}" у режимі ${modeTitle}`);
+			}
+
+			// 2. ФОРМУВАННЯ HTML (без змін, як у робочій версії)
+			let reportHtml = `
+            <html>
+            <head>
+                <title>Звіт по замовленнях: ${searchQuery}</title>
+                <style>
+                    body { font-family: 'Segoe UI', sans-serif; padding: 20px; color: #333; }
+                    .header { text-align: center; border-bottom: 3px solid #17a2b8; margin-bottom: 20px; padding-bottom: 10px; }
+                    .mode-badge { background: ${isArchiveMode ? '#e67e22' : '#27ae60'}; color: white; padding: 2px 8px; border-radius: 10px; font-size: 13px; }
+                    .user-section { margin-bottom: 40px; border: 1px solid #ccc; border-radius: 8px; overflow: hidden; page-break-inside: avoid; }
+                    .user-header { background: #17a2b8; color: white; padding: 10px 15px; font-size: 18px; font-weight: bold; }
+                    table { width: 100%; border-collapse: collapse; background: white; }
+                    th, td { border: 1px solid #999; padding: 8px; text-align: left; font-size: 13px; }
+                    th { background: #f2f2f2; font-weight: bold; }
+                    .return-row { background-color: #fff5f5; }
+                    .comment-box { background-color: #fff9db; color: #856404; font-size: 12px; padding: 5px; }
+                    .total-row { background: #eee; font-weight: bold; }
+                    @media print { .no-print { display: none; } }
+                    .no-print { text-align: center; margin: 20px; }
+                </style>
+            </head>
+            <body>
+                <div class="header">
+                    <h2>📑 Глобальний звіт по замовленнях: "${searchQuery}"</h2>
+                    <p><span class="mode-badge">${modeTitle}</span> &nbsp; 📅 ${currentDate}</p>
+                </div>
+        `;
+
+			Object.keys(resultsByUser).sort().forEach(userName => {
+				reportHtml += `
+                <div class="user-section">
+                    <div class="user-header">👤 Клієнт/Екіпаж: ${userName}</div>
+                    <table>
+                        <thead>
+                            <tr>
+                                <th style="width: 100px;">ID</th>
+                                <th>Товар</th>
+                                <th style="width: 120px; text-align: right;">Кількість</th>
+                                <th style="width: 150px;">Дата</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+            `;
+
+				let userGrandTotal = 0;
+
+				resultsByUser[userName].forEach(trans => {
+					const isRet = trans._isReturn;
+					const orderComment = trans.orderComment || trans.comment || "";
+					const itemsCount = trans.matchedItems.length;
+					const totalRows = itemsCount + (orderComment ? 1 : 0);
+
+					trans.matchedItems.forEach((item, idx) => {
+						const q = Number(item.quantity || 0);
+						const displayQ = isRet ? -q : q;
+						userGrandTotal += displayQ;
+
+						reportHtml += `
+                        <tr class="${isRet ? 'return-row' : ''}">
+                            ${idx === 0 ? `<td rowspan="${totalRows}" style="vertical-align: top; font-weight: bold;">
+                                ${isRet ? '<span style="color: red;">↩ </span>' : ''}${trans.idOrderHistory || trans.id}
+                            </td>` : ''}
+                            <td>
+                                <b>${item.name}</b>
+                                ${item.comment ? `<div style="color: #d35400; font-size: 11px;">📝 ${item.comment}</div>` : ''}
+                            </td>
+                            <td style="text-align: right; ${isRet ? 'color: red; font-weight: bold;' : ''}">
+                                ${displayQ} ${item.units || ''}
+                            </td>
+                            ${idx === 0 ? `<td rowspan="${totalRows}" style="vertical-align: top;">${trans.date || ''}</td>` : ''}
+                        </tr>
+                    `;
+					});
+
+					if (orderComment) {
+						reportHtml += `
+                        <tr class="${isRet ? 'return-row' : ''}">
+                            <td colspan="2" class="comment-box"><b>💬 Коментар:</b> ${orderComment}</td>
+                        </tr>
+                    `;
+					}
+				});
+
+				reportHtml += `
+                            <tr class="total-row">
+                                <td colspan="2" style="text-align: right;">ЗАГАЛЬНИЙ ПІДСУМОК ПО КЛІЄНТУ:</td>
+                                <td style="text-align: right;">${userGrandTotal.toFixed(2)}</td>
+                                <td></td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            `;
+			});
+
+			reportHtml += `
+                <div class="no-print">
+                    <button style="padding: 10px 20px; cursor: pointer;" onclick="window.print()">🖨️ Друкувати звіт</button>
+                </div>
+            </body></html>
+        `;
+
+			const win = window.open("", "_blank", "width=1000,height=850");
+			if (win) {
+				win.document.write(reportHtml);
+				win.document.close();
+			}
+
+		} catch (e) {
+			console.error("Глобальний пошук ПОМИЛКА КРИТИЧНА:", e);
+			alert("Помилка при генерації звіту. Деталі в консолі.");
+		}
+	};
+
+	const handlePrintUsedMaterialGlobalSearch = (searchQuery) => {
+		try {
+			// allUsedMaterialsHistory автоматично підтягне архів або реалтайм завдяки вашому useMemo
+			const historyData = allUsedMaterialsHistory || {};
+			const productsList = stock || [];
+			const customersList = customers || [];
+
+			if (!searchQuery || searchQuery.trim() === "") return alert("Введіть назву товару");
+
+			// Перевірка на наявність даних (важливо для архіву, що вантажиться)
+			if (Object.keys(historyData).length === 0) {
+				return alert(isArchiveMode ? "Архів порожній або ще завантажується..." : "Дані про списання відсутні.");
+			}
+
+			const query = searchQuery.toLowerCase().trim();
+			const currentDate = new Date().toLocaleString('uk-UA');
+			const modeTitle = isArchiveMode ? "АРХІВ" : "ПОТОЧНІ ДАНІ";
+
+			// 1. ГРУПУВАННЯ ДАНИХ ЗА ПРАЦІВНИКОМ
+			const resultsByUser = {};
+
+			Object.keys(historyData).forEach(uId => {
+				const userProducts = historyData[uId] || {};
+				const userObj = customersList.find(c => String(c.id) === String(uId));
+				const userName = userObj ? userObj.name : `Екіпаж ID: ${uId}`;
+
+				Object.keys(userProducts).forEach(prodId => {
+					const prodInfo = productsList.find(p => String(p.productId || p.id) === String(prodId));
+
+					// Перевіряємо, чи назва товару відповідає запиту
+					if (prodInfo?.name?.toLowerCase().includes(query)) {
+						if (!resultsByUser[userName]) {
+							resultsByUser[userName] = {};
+						}
+						if (!resultsByUser[userName][prodId]) {
+							resultsByUser[userName][prodId] = {
+								name: prodInfo.name,
+								units: prodInfo.units || '',
+								events: []
+							};
+						}
+
+						const eventsObj = userProducts[prodId] || {};
+						Object.values(eventsObj).forEach(event => {
+							resultsByUser[userName][prodId].events.push(event);
+						});
+					}
+				});
+			});
+
+			if (Object.keys(resultsByUser).length === 0) {
+				return alert(`Нічого не знайдено для "${searchQuery}" у вибраному режимі (${modeTitle})`);
+			}
+
+			// 2. ФОРМУВАННЯ HTML ДЛЯ POPUP-ВІКНА
+			let reportHtml = `
+            <html>
+            <head>
+                <title>Звіт: ${searchQuery} (${modeTitle})</title>
+                <style>
+                    body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; padding: 20px; color: #333; line-height: 1.4; }
+                    .header { text-align: center; border-bottom: 3px solid #4a90e2; margin-bottom: 25px; padding-bottom: 10px; }
+                    .header h2 { margin: 5px 0; color: #2c3e50; }
+                    .mode-badge { background: ${isArchiveMode ? '#e67e22' : '#27ae60'}; color: white; padding: 3px 10px; border-radius: 12px; font-size: 14px; vertical-align: middle; }
+                    
+                    .user-section { margin-bottom: 35px; border: 1px solid #dee2e6; border-radius: 6px; overflow: hidden; page-break-inside: avoid; box-shadow: 0 2px 5px rgba(0,0,0,0.05); }
+                    .user-header { background: #4a90e2; color: white; padding: 12px 15px; font-size: 18px; font-weight: bold; }
+                    
+                    .product-block { margin: 10px; border: 1px solid #eee; border-radius: 4px; }
+                    .product-title { background: #f8f9fa; padding: 10px 15px; font-weight: bold; border-bottom: 1px solid #ddd; display: flex; justify-content: space-between; color: #17a2b8; }
+                    
+                    table { width: 100%; border-collapse: collapse; font-size: 13px; }
+                    th, td { border: 1px solid #eee; padding: 10px 12px; text-align: left; }
+                    th { background: #f2f2f2; font-weight: bold; text-transform: uppercase; font-size: 11px; color: #666; }
+                    tr:nth-child(even) { background-color: #fafafa; }
+                    
+                    .no-print { text-align: center; margin: 30px; }
+                    .btn-print { padding: 12px 30px; background: #28a745; color: white; border: none; border-radius: 5px; cursor: pointer; font-size: 16px; font-weight: bold; box-shadow: 0 2px 4px rgba(0,0,0,0.2); }
+                    @media print { .no-print { display: none; } body { padding: 0; } .user-section { border: 1px solid #000; } }
+                </style>
+            </head>
+            <body>
+                <div class="header">
+                    <h2>🌍 Глобальний звіт по списанню: "${searchQuery}"</h2>
+                    <p>
+                        <span class="mode-badge">${modeTitle}</span> 
+                        &nbsp; | &nbsp; 📅 <b>Дата:</b> ${currentDate}
+                    </p>
+                </div>
+        `;
+
+			// Додаємо дані працівників (сортуємо за алфавітом)
+			Object.keys(resultsByUser).sort().forEach(userName => {
+				reportHtml += `<div class="user-section"><div class="user-header">👤 Майстер: ${userName}</div>`;
+
+				const userMaterials = resultsByUser[userName];
+				Object.keys(userMaterials).forEach(prodId => {
+					const data = userMaterials[prodId];
+					let total = 0;
+
+					// Сортуємо події від нових до старих
+					const rows = data.events
+						.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0))
+						.map(e => {
+							const val = Number(e.value || 0);
+							total += val;
+							return `
+                            <tr>
+                                <td style="width: 20%">${e.createdAt ? new Date(e.createdAt).toLocaleString("uk-UA") : "---"}</td>
+                                <td style="width: 25%">${e.agreement || "—"}</td>
+                                <td style="width: 20%"><b>${val}</b> ${data.units}</td>
+                                <td><small>${e.comment || ""}</small></td>
+                            </tr>
+                        `;
+						}).join('');
+
+					reportHtml += `
+                    <div class="product-block">
+                        <div class="product-title">
+                            <span>📦 ${data.name}</span>
+                            <span>Разом: ${total.toFixed(2)} ${data.units}</span>
+                        </div>
+                        <table>
+                            <thead>
+                                <tr><th>Дата</th><th>Об'єкт / Угода</th><th>Кількість</th><th>Примітка</th></tr>
+                            </thead>
+                            <tbody>
+                                ${rows}
+                            </tbody>
+                        </table>
+                    </div>
+                `;
+				});
+				reportHtml += `</div>`;
+			});
+
+			reportHtml += `
+                <div class="no-print">
+                    <button class="btn-print" onclick="window.print()">
+                        🖨️ Роздрукувати звіт
+                    </button>
+                </div>
+            </body>
+            </html>
+        `;
+
+			// 3. ВІДКРИТТЯ POPUP
+			const winWidth = 1100;
+			const winHeight = 850;
+			const left = (window.screen.width / 2) - (winWidth / 2);
+			const top = (window.screen.height / 2) - (winHeight / 2);
+
+			const win = window.open("", "GlobalSearchReport",
+				`width=${winWidth},height=${winHeight},top=${top},left=${left},scrollbars=yes,resizable=yes`);
+
+			if (win) {
+				win.document.write(reportHtml);
+				win.document.close();
+			} else {
+				alert("Помилка: Браузер заблокував спливаюче вікно. Дозвольте спливаючі вікна для цього сайту.");
+			}
+
+		} catch (e) {
+			console.error("Помилка генерації звіту:", e);
+			alert("Сталася помилка при формуванні звіту. Перевірте консоль.");
+		}
+	};
 
 	const handleCustomerChange = (e) => {
 		const userId = e.target.value;
@@ -3069,7 +3514,7 @@ const InvoicesPage = ({
 	const selectedCustomerObj = customers.find(c => String(c.id) === String(selectedUser));
 	const finalName = selectedCustomerObj ? selectedCustomerObj.name : "Клієнт";
 
-	const allInvoices = useMemo(() => {
+	const allInvoice = useMemo(() => {
 		// Виносимо парсер, щоб не створювати його в циклі сортування
 		const getTimestamp = (dateStr) => {
 			if (!dateStr || typeof dateStr !== 'string') return 0;
@@ -3383,101 +3828,216 @@ const InvoicesPage = ({
 					</button>
 				)}
 			</div>
+
 			{isAdminUsedMaterials && notifications.length > 0 && (
-				<div className={classes.notificationsBlock} style={{ marginBottom: '20px' }}>
-					<button
-						className={classes.btnToggle}
-						onClick={() => setVisibleTables(prev => ({ ...prev, notifications: !prev.notifications }))}
-						style={{
-							marginBottom: visibleTables.notifications ? '15px' : '0'
-						}}
-					>
-						<span style={{ display: 'flex', alignItems: 'center' }}>
-							{visibleTables.notifications ? (
-								<>
-									<span className={classes.arrowRed}>▲</span>
-									<span>Приховати активні сповіщення</span>
-								</>
-							) : (
-								<>
-									<span className={classes.arrowGreen}>▼</span>
-									<span>Показати активні сповіщення</span>
-								</>
-							)}
-						</span>
-						<span style={{ fontSize: '0.9em', opacity: 0.9, marginLeft: 'auto' }}>
-							({notifications.length})
-						</span>
-					</button>
-					{visibleTables.notifications && (
-						<div className={classes.notificationsContent}>
-							<div className={classes.notificationsHeader}>
-								<h3>
-									🔔 Підтверджені замовлення / повернення
-									{archiveStatus}
-								</h3>
-
-								{/* Кнопка "Очистити" з'являється тільки в Live-режимі */}
-								{!isArchiveMode && (
-									<button
-										className={classes.clearBtn}
-										onClick={() => { if (window.confirm("Очистити всі?")) clearNotifications(isAdminInvoices ? null : selectedUser); }}
-									>
-										❌ Очистити всі
-									</button>
+				<>
+					<div className={classes.notificationsBlock} style={{ marginBottom: '20px' }}>
+						<button
+							className={classes.btnToggle}
+							onClick={() => setVisibleTables(prev => ({ ...prev, notifications: !prev.notifications }))}
+							style={{
+								marginBottom: visibleTables.notifications ? '15px' : '0'
+							}}
+						>
+							<span style={{ display: 'flex', alignItems: 'center' }}>
+								{visibleTables.notifications ? (
+									<>
+										<span className={classes.arrowRed}>▲</span>
+										<span>Приховати активні сповіщення</span>
+									</>
+								) : (
+									<>
+										<span className={classes.arrowGreen}>▼</span>
+										<span>Показати активні сповіщення</span>
+									</>
 								)}
-							</div>
+							</span>
+							<span style={{ fontSize: '0.9em', opacity: 0.9, marginLeft: 'auto' }}>
+								({notifications.length})
+							</span>
+						</button>
+						{visibleTables.notifications && (
+							<div className={classes.notificationsContent}>
+								<div className={classes.notificationsHeader}>
+									<h3>
+										🔔 Підтверджені замовлення / повернення
+										{archiveStatus}
+									</h3>
 
-							<div className={classes.notificationsList}>
-								{notifications
-									// Додаємо сортування перед рендером
-									.sort((a, b) => {
-										const idA = parseInt(a.orderId || a.id || 0, 10);
-										const idB = parseInt(b.orderId || b.id || 0, 10);
-										return idB - idA; // Від більшого до меншого
-									})
-									.map((n, i) => {
-										const isReturn = n.type === 'return';
+									{/* Кнопка "Очистити" з'являється тільки в Live-режимі */}
+									{!isArchiveMode && (
+										<button
+											className={classes.clearBtn}
+											onClick={() => { if (window.confirm("Очистити всі?")) clearNotifications(isAdminInvoices ? null : selectedUser); }}
+										>
+											❌ Очистити всі
+										</button>
+									)}
+								</div>
 
-										// Визначаємо поля (враховуючи різницю між Live та Архівною структурою)
-										const orderId = n.orderId || n.id || '---';
-										const customerId = n.customerId || n.userId || '---';
-										const date = n.date || n.createdAt || '---';
+								<div className={classes.notificationsList}>
+									{notifications
+										// Додаємо сортування перед рендером
+										.sort((a, b) => {
+											const idA = parseInt(a.orderId || a.id || 0, 10);
+											const idB = parseInt(b.orderId || b.id || 0, 10);
+											return idB - idA; // Від більшого до меншого
+										})
+										.map((n, i) => {
+											const isReturn = n.type === 'return';
 
-										return (
-											<div
-												key={`${orderId}_${i}`}
-												className={`${classes.notificationItem} ${isReturn ? classes.returnType : ''}`}
-											>
+											// Визначаємо поля (враховуючи різницю між Live та Архівною структурою)
+											const orderId = n.orderId || n.id || '---';
+											const customerId = n.customerId || n.userId || '---';
+											const date = n.date || n.createdAt || '---';
+
+											return (
 												<div
-													onClick={() => handleOrderDetails({ ...n, orderId, customerId })}
-													style={{ cursor: 'pointer', flex: 1 }}
-													title="Натисніть, щоб побачити деталі"
+													key={`${orderId}_${i}`}
+													className={`${classes.notificationItem} ${isReturn ? classes.returnType : ''}`}
 												>
-													<strong>
-														{isReturn ? '↩️ Повернення' : '📦 Замовлення'} #{orderId}
-													</strong>
-													<div className={classes.meta}>
-														👤 {customerId} ({customers.find(c => String(c.id) === String(customerId))?.name || 'Клієнт'}) | 📅 {date}
-													</div>
-												</div>
-
-												{/* Кошик з'являється тільки в Live-режимі (як і було) */}
-												{!isArchiveMode && (
-													<button
-														className={classes.deleteBtn}
-														onClick={() => { if (window.confirm("Видалити сповіщення?")) deleteNotification(n); }}
+													<div
+														onClick={() => handleOrderDetails({ ...n, orderId, customerId })}
+														style={{ cursor: 'pointer', flex: 1 }}
+														title="Натисніть, щоб побачити деталі"
 													>
-														🗑
-													</button>
-												)}
-											</div>
-										);
-									})}
+														<strong>
+															{isReturn ? '↩️ Повернення' : '📦 Замовлення'} #{orderId}
+														</strong>
+														<div className={classes.meta}>
+															👤 {customerId} ({customers.find(c => String(c.id) === String(customerId))?.name || 'Клієнт'}) | 📅 {date}
+														</div>
+													</div>
+
+													{/* Кошик з'являється тільки в Live-режимі (як і було) */}
+													{!isArchiveMode && (
+														<button
+															className={classes.deleteBtn}
+															onClick={() => { if (window.confirm("Видалити сповіщення?")) deleteNotification(n); }}
+														>
+															🗑
+														</button>
+													)}
+												</div>
+											);
+										})}
+								</div>
 							</div>
+						)}
+					</div>
+					<div style={{
+						padding: '15px',
+						background: '#f8f9fa',
+						borderRadius: '10px',
+						marginBottom: '20px',
+						border: '1px solid #dee2e6',
+						boxShadow: '0 2px 4px rgba(0,0,0,0.05)'
+					}}>
+						<h4 style={{ marginTop: 0, color: '#333' }}>🔍 Глобальний пошук по матеріалу</h4>
+
+						<div style={{
+							display: 'flex',
+							alignItems: 'center',
+							flexWrap: 'wrap',
+							gap: '10px'
+						}}>
+							{/* Випадаючий список */}
+							<select
+								value={globalSearchTerm}
+								onChange={(e) => setGlobalSearchTerm(e.target.value)}
+								style={{
+									padding: '10px',
+									flex: '1 1 300px',
+									minWidth: '200px',
+									maxWidth: '100%', // Щоб не виходило за межі екрану
+									borderRadius: '5px',
+									border: '1px solid #ced4da',
+									fontSize: '14px',
+									outline: 'none',
+									height: '42px',
+									appearance: 'auto', // Гарантує стандартний вигляд зі стрілкою та скролом
+									overflowY: 'auto'   // Дозволяє внутрішній скрол, якщо браузер це підтримує для select
+								}}
+							>
+								<option value="">-- Оберіть матеріал зі списку --</option>
+								{(stock || [])
+									.filter(product => {
+										const pId = String(product.productId || product.id);
+										return (dynamicProductIds || []).some(id => String(id) === pId);
+									})
+									.sort((a, b) => (a.name || "").localeCompare(b.name || ""))
+									.map((product) => (
+										<option key={product.productId || product.id} value={product.name}>
+											{product.name}
+										</option>
+									))
+								}
+							</select>
+
+							{/* Кнопка 1: Замовлення */}
+							<button
+								onClick={() => handlePrintMaterialGlobalSearch(globalSearchTerm)}
+								disabled={!globalSearchTerm}
+								style={{
+									padding: '10px 20px',
+									flex: '1 1 200px', // Розтягується на всю ширину на мобілках
+									background: globalSearchTerm ? '#17a2b8' : '#ccc',
+									color: '#fff',
+									border: 'none',
+									borderRadius: '5px',
+									cursor: globalSearchTerm ? 'pointer' : 'default',
+									fontWeight: 'bold',
+									transition: '0.3s',
+									height: '42px',
+									whiteSpace: 'nowrap'
+								}}
+							>
+								📦 Пошук в замовленнях
+							</button>
+
+							{/* Кнопка 2: Списання */}
+							<button
+								onClick={() => handlePrintUsedMaterialGlobalSearch(globalSearchTerm)}
+								disabled={!globalSearchTerm}
+								style={{
+									padding: '10px 20px',
+									flex: '1 1 200px', // Розтягується на всю ширину на мобілках
+									background: globalSearchTerm ? '#6c757d' : '#ccc',
+									color: '#fff',
+									border: 'none',
+									borderRadius: '5px',
+									cursor: globalSearchTerm ? 'pointer' : 'default',
+									fontWeight: 'bold',
+									transition: '0.3s',
+									height: '42px',
+									whiteSpace: 'nowrap'
+								}}
+							>
+								🔨 Пошук списань (об'єкти)
+							</button>
+
+							{/* Кнопка скидання */}
+							{globalSearchTerm && (
+								<button
+									onClick={() => setGlobalSearchTerm("")}
+									style={{
+										flex: '1 1 100%', // На мобілках скидання буде окремим рядком знизу (опціонально)
+										textAlign: 'center',
+										background: 'none',
+										border: 'none',
+										color: '#dc3545',
+										cursor: 'pointer',
+										fontSize: '14px',
+										padding: '5px'
+									}}
+								>
+									❌ Скинути
+								</button>
+							)}
 						</div>
-					)}
-				</div>
+					</div>
+				</>
+
 			)}
 
 			{selectedUser && (
@@ -3487,6 +4047,8 @@ const InvoicesPage = ({
 						inputRef={agreementInputRef} // Передаємо реф вниз
 						selectedUser={selectedUser}
 						customers={customers}
+						invoices={invoices}
+						invoicesReturn={invoicesReturn}
 						invoicesSummary={invoicesSummary}
 						usedMaterials={usedMaterials}
 						usedMaterialsHistory={usedMaterialsHistory}
@@ -3614,8 +4176,8 @@ const InvoicesPage = ({
 					style={{ padding: '8px 16px', cursor: 'pointer', borderRadius: '4px', border: '1px solid #ccc', background: '#f8f9fa' }}
 					onClick={(e) => {
 						e.stopPropagation();
-						// Фільтруємо allInvoices, щоб залишити тільки замовлення обраного користувача
-						const filteredData = allInvoices.filter(inv =>
+						// Фільтруємо allInvoice, щоб залишити тільки замовлення обраного користувача
+						const filteredData = allInvoice.filter(inv =>
 							String(inv.customerId || inv.computedId) === String(selectedUser)
 						);
 						handlePrintOrderTable(filteredData, finalName);
@@ -3630,7 +4192,7 @@ const InvoicesPage = ({
 					onClick={(e) => {
 						e.stopPropagation();
 						// Аналогічно фільтруємо перед експортом
-						const filteredData = allInvoices.filter(inv =>
+						const filteredData = allInvoice.filter(inv =>
 							String(inv.customerId || inv.computedId) === String(selectedUser)
 						);
 						handleExportOrderToCSV(filteredData, finalName);
@@ -3674,7 +4236,7 @@ const InvoicesPage = ({
 					</thead>
 					<tbody>
 						{(() => {
-							const filtered = allInvoices.filter(inv =>
+							const filtered = allInvoice.filter(inv =>
 								String(inv.customerId || inv.computedId) === String(selectedUser)
 							);
 
@@ -4014,6 +4576,10 @@ const mapStateToProps = state => {
 		notifications: state.invoices.notifications,
 		usedMaterials: state.invoices.usedMaterials,
 		usedMaterialsHistory: state.invoices.usedMaterialsHistory || {},
+		// Дані для глобального пошуку (історія ВСІХ)
+		allUsedMaterialsHistory: state.invoices.allUsedMaterialsHistory || {},
+		allInvoices: state.invoices.allInvoices || {},
+		allInvoicesReturn: state.invoices.allInvoicesReturn || {},
 		remainingMaterials: state.invoices.remainingMaterials || {},
 		remainingMaterialsStart: state.invoices.remainingMaterialsStart || {}
 
@@ -4021,6 +4587,6 @@ const mapStateToProps = state => {
 };
 
 export default connect(mapStateToProps, {
-	fetchInvoices, fetchInvoicesReturn, fetchInvoicesSummary, fetchInvoicesSummaryReturn, fetchOrderNotifications, deleteNotification, clearNotifications,
-	fetchUsedMaterials, addUsedMaterial, fetchUsedMaterialsHistory, fetchUsedMaterialsHistoryAction, archiveAllDataMonthly, fetchRemainingMaterialsStart, setRemainingMaterialsStart
+	fetchInvoices, fetchAllInvoices, fetchAllInvoicesReturn, fetchInvoicesReturn, fetchInvoicesSummary, fetchInvoicesSummaryReturn, fetchOrderNotifications, deleteNotification, clearNotifications,
+	fetchUsedMaterials, addUsedMaterial, fetchUsedMaterialsHistory, fetchUsedMaterialsHistoryAction, fetchAllUsedMaterialsHistoryAction, archiveAllDataMonthly, fetchRemainingMaterialsStart, setRemainingMaterialsStart
 })(InvoicesPage);

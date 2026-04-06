@@ -1,6 +1,8 @@
 import {
 	UPDATE_INVOICES,
+	UPDATE_ALL_INVOICES,
 	UPDATE_INVOICES_RETURN,
+	UPDATE_ALL_INVOICES_RETURN,
 	UPDATE_INVOICES_SUMMARY,
 	UPDATE_INVOICES_SUMMARY_RETURN,
 	SET_NOTIFICATIONS,
@@ -8,18 +10,22 @@ import {
 	ARCHIVE_DATA_SUCCESS,
 	UPDATE_USED_MATERIAL_SUCCESS,
 	SET_USED_MATERIALS_HISTORY,
-	SET_REMAINING_MATERIALS_START
+	SET_REMAINING_MATERIALS_START,
+	SET_ALL_USED_MATERIALS_HISTORY
 } from "../actions/actionTypes";
 
 const initialState = {
 	invoices: [],
 	invoicesReturn: [],
+	allInvoices: [],
+	allInvoicesReturn: [],
 	summary: [],
 	summaryReturn: [],
 	notifications: [],
 	usedMaterials: {},
 	lastArchived: null,
 	usedMaterialsHistory: {},
+	allUsedMaterialsHistory: {},
 	remainingMaterialsStart: {},
 	loading: false
 };
@@ -37,6 +43,18 @@ export default function invoicesReducer(state = initialState, action) {
 			return {
 				...state,
 				invoicesReturn: action.payload
+			};
+
+		case UPDATE_ALL_INVOICES:
+			return {
+				...state,
+				allInvoices: action.payload
+			};
+
+		case UPDATE_ALL_INVOICES_RETURN:
+			return {
+				...state,
+				allInvoicesReturn: action.payload
 			};
 
 		case UPDATE_INVOICES_SUMMARY:
@@ -83,6 +101,12 @@ export default function invoicesReducer(state = initialState, action) {
 			return {
 				...state,
 				usedMaterialsHistory: action.payload
+			};
+
+		case SET_ALL_USED_MATERIALS_HISTORY:
+			return {
+				...state,
+				allUsedMaterialsHistory: action.payload
 			};
 
 		case SET_REMAINING_MATERIALS_START:

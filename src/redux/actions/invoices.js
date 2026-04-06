@@ -2,7 +2,9 @@ import firebase from "firebase";
 
 import {
 	UPDATE_INVOICES,
+	UPDATE_ALL_INVOICES,
 	UPDATE_INVOICES_RETURN,
+	UPDATE_ALL_INVOICES_RETURN,
 	UPDATE_INVOICES_SUMMARY,
 	UPDATE_INVOICES_SUMMARY_RETURN,
 	SET_NOTIFICATIONS,
@@ -10,7 +12,8 @@ import {
 	SET_USED_MATERIALS_HISTORY,
 	ARCHIVE_DATA_SUCCESS,
 	UPDATE_USED_MATERIAL_SUCCESS,
-	SET_REMAINING_MATERIALS_START
+	SET_REMAINING_MATERIALS_START,
+	SET_ALL_USED_MATERIALS_HISTORY
 } from "./actionTypes";
 
 // 2️⃣ Функції-екшени
@@ -42,6 +45,59 @@ export function fetchInvoicesReturn(customerId) {
 			});
 		} catch (error) {
 			console.log("Error fetching invoices return:", error);
+		}
+	};
+}
+
+export function fetchAllInvoices() {
+	return async (dispatch) => {
+		try {
+			// Беремо ВСІ інвойси з бази
+			const snapshot = await firebase.database().ref(`invoices`).once("value");
+			const data = snapshot.val() || {};
+
+			// Оскільки в базі вони лежать як {userId: {invoiceId: {...}}}, 
+			// нам треба перетворити це на один плоский масив для пошуку
+			const allList = [];
+			Object.keys(data).forEach(userId => {
+				Object.values(data[userId]).forEach(inv => {
+					allList.push({ ...inv, customerId: userId });
+				});
+			});
+
+			dispatch({
+				type: UPDATE_ALL_INVOICES,
+				payload: allList
+			});
+
+			console.log('allList', allList)
+		} catch (error) {
+			console.log("Error fetching ALL invoices:", error);
+		}
+	};
+}
+
+export function fetchAllInvoicesReturn() {
+	return async (dispatch) => {
+		try {
+			const snapshot = await firebase.database().ref(`invoicesReturn`).once("value");
+			const data = snapshot.val() || {};
+
+			const allReturns = [];
+			Object.keys(data).forEach(userId => {
+				Object.values(data[userId]).forEach(ret => {
+					allReturns.push({ ...ret, customerId: userId });
+				});
+			});
+
+			console.log('allReturns', allReturns)
+
+			dispatch({
+				type: UPDATE_ALL_INVOICES_RETURN,
+				payload: allReturns
+			});
+		} catch (error) {
+			console.log("Error fetching ALL returns:", error);
 		}
 	};
 }
@@ -511,6 +567,24 @@ export function fetchUsedMaterialsHistoryAction(customerId) {
 		} catch (error) {
 			console.error("--- [Action Error] Помилка завантаження історії:", error);
 			console.log("Error fetching full used materials history:", error);
+		}
+	};
+}
+
+export function fetchAllUsedMaterialsHistoryAction() {
+	return async (dispatch) => {
+		try {
+			const snapshot = await firebase.database().ref(`usedMaterialsHistory`).once("value");
+			const data = snapshot.val();
+			console.log('data_2', data);
+			dispatch({
+				type: SET_ALL_USED_MATERIALS_HISTORY, // НОВИЙ ТИП ТУТ
+				payload: data || {}
+			});
+
+			return data || {};
+		} catch (error) {
+			console.error("Помилка завантаження всієї історії:", error);
 		}
 	};
 }
