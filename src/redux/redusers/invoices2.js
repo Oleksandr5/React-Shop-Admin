@@ -86,17 +86,12 @@ export default function invoicesReducer(state = initialState, action) {
 			};
 
 		case SET_REMAINING_MATERIALS_START:
-			// Дістаємо ID з глобального вікна
-			// const checkId = Number(window.currentDiagnosticId);
-			// const isTestUser = checkId === 7 || checkId === 155;
+			// ПЕРЕВІРКА 4: Чи дійшов екшен до редьюсера
+			// alert(`📥 ПЕРЕВІРКА 4 (Reducer):\nДані прийшли в редьюсер.\nPayload: ${JSON.stringify(action.payload)}`);
 
-			// if (!isTestUser) {
-			// 	alert(`📥 ПЕРЕВІРКА 4 (Reducer):\nДані прийшли в редьюсер.\nPayload customerId=${checkId}: ${JSON.stringify(action.payload)}`);
-
-			// 	if (!action.payload || Object.keys(action.payload).length === 0) {
-			// 		alert("⚠️ УВАГА (Reducer): Payload порожній або null.");
-			// 	}
-			// }
+			if (!action.payload || Object.keys(action.payload).length === 0) {
+				alert("⚠️ УВАГА (Reducer): Payload порожній або null. У стор запишеться порожній об'єкт.");
+			}
 			return {
 				...state,
 				remainingMaterialsStart: action.payload

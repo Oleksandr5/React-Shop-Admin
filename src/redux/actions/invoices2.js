@@ -331,152 +331,78 @@ export const fetchUsedMaterialsHistory = async (customerId, productId) => {
 };
 
 // Функція архівації
-export const archiveAllDataMonthly = async () => {
-	try {
-		// 1. Отримуємо повний зліпок бази (Стиль v8: .ref().once('value'))
-		const rootRef = firebase.database().ref("/");
-		const snapshot = await rootRef.once("value");
-		const data = snapshot.val();
+export const archiveAllDataMonthly = () => {
+	return async (dispatch, getState) => {
+		try {
+			const date = new Date();
+			const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+			const timeStamp = `${String(date.getDate()).padStart(2, '0')}_${String(date.getHours()).padStart(2, '0')}-${String(date.getMinutes()).padStart(2, '0')}`;
 
-		if (!data) {
-			console.warn("Дані в базі відсутні");
-			return;
-		}
+			const db = firebase.database();
+			const currentStock = getState().products.products;
 
-		const {
-			invoices = {},
-			invoicesReturn = {},
-			invoicesSummary = {},
-			invoicesSummaryReturn = {},
-			usedMaterials = {},
-			usedMaterialsHistory = {},
-			orderNotifications = {},
-			remainingMaterials = {},
-			remainingMaterialsStart = {},
-			invoiceStock = [],
-			products = [],
-			ordersHistory = [],
-			settings = {}
-		} = data;
+			// Визначаємо всі шляхи, які потрібно зчитати з бази
+			const paths = {
+				invoices: "invoices",
+				invoicesReturn: "invoicesReturn",
+				invoicesSummary: "invoicesSummary",
+				invoicesSummaryReturn: "invoicesSummaryReturn",
+				usedMaterials: "usedMaterials",
+				usedMaterialsHistory: "usedMaterialsHistory",
+				orderNotifications: "orderNotifications",
+				remainingMaterials: "remainingMaterials",
+				remainingMaterialsStart: "remainingMaterialsStart",
+				invoiceStock: "invoiceStock",
+				orders: "orders",
+				ordersHistory: "ordersHistory",
+				// ✅ ДОДАЄМО НАЛАШТУВАННЯ (тут лежить список ID товарів)
+				settings: "settings"
+			};
 
-		console.log('data_1', data);
+			const archiveData = {};
 
-		const clientIds = settings?.clientsForWorkOrders || [];
-		const productIds = settings?.productsForWorkOrders || [];
+			// Збираємо дані паралельно для швидкості
+			await Promise.all(Object.keys(paths).map(async (key) => {
+				const snapshot = await db.ref(paths[key]).once('value');
+				archiveData[key] = snapshot.val();
+			}));
 
-		// --- ФОРМУВАННЯ ШЛЯХУ ---
-		const date = new Date();
-		const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
-		const timeStamp = `${String(date.getDate()).padStart(2, '0')}_${String(date.getHours()).padStart(2, '0')}-${String(date.getMinutes()).padStart(2, '0')}`;
+			// Записуємо все в папку архіву
+			await db.ref(`archive/${monthKey}/${timeStamp}`).set({
+				archivedAt: date.toISOString(),
+				stockAtThatTime: currentStock || [],
 
-		const archivePath = `archive/${monthKey}/${timeStamp}`;
+				// Історія інвойсів та матеріалів
+				invoicesHistory: archiveData.invoices || {},
+				invoicesReturnHistory: archiveData.invoicesReturn || {},
+				invoicesSummaryHistory: archiveData.invoicesSummary || {},
+				invoicesSummaryReturnHistory: archiveData.invoicesSummaryReturn || {},
+				usedMaterialsHistory: archiveData.usedMaterials || {},
+				usedMaterialsHistoryHistory: archiveData.usedMaterialsHistory || {},
 
-		const newRemainingMaterialsStart = {};
+				// Стан звітів та сповіщення
+				orderNotificationsHistory: archiveData.orderNotifications || {},
+				remainingMaterialsHistory: archiveData.remainingMaterials || {},
+				remainingMaterialsStartHistory: archiveData.remainingMaterialsStart || {},
 
-		// --- 2. ЛОГІКА РОЗРАХУНКУ ЗАЛИШКІВ ---
-		clientIds.forEach((cid) => {
-			newRemainingMaterialsStart[cid] = {};
-			productIds.forEach((pid) => {
-				const factualValue = remainingMaterials?.[cid]?.[pid];
-				if (factualValue !== undefined && factualValue !== null && factualValue !== "") {
-					newRemainingMaterialsStart[cid][pid] = Number(factualValue);
-				} else {
-					const start = Number(remainingMaterialsStart?.[cid]?.[pid] || 0);
-					const added = Number(invoicesSummary?.[cid]?.[pid]?.totalQuantity || 0);
-					const returned = Number(invoicesSummaryReturn?.[cid]?.[pid]?.totalQuantity || 0);
-					const spent = Number(usedMaterials?.[cid]?.[pid] || 0);
+				// Запис нових гілок:
+				invoiceStockHistory: archiveData.invoiceStock || [],
+				ordersHistory: archiveData.orders || [],
+				ordersHistoryArchive: archiveData.ordersHistory || [],
 
-					let calc = start + added - returned - spent;
-					newRemainingMaterialsStart[cid][pid] = calc < 0 ? 0 : calc;
-				}
+				// ✅ ЗАПИС НАЛАШТУВАНЬ В АРХІВ:
+				// Це збереже productsForWorkOrders на момент створення архіву
+				settings: archiveData.settings || {}
 			});
-		});
 
-		// --- 3. РОЗДІЛЕННЯ ORDERS HISTORY ---
-		const completedOrdersHistory = [];
-		const activeOrdersHistory = [];
+			dispatch({ type: ARCHIVE_DATA_SUCCESS });
+			alert(`✅ Повний системний архів (включаючи налаштування) створено: archive/${monthKey}/${timeStamp}`);
 
-		if (Array.isArray(ordersHistory)) {
-			ordersHistory.forEach((customerData) => {
-				const completedCarts = [];
-				const activeCarts = [];
-				const completedStock = [];
-				const activeStock = [];
-
-				if (customerData.cartsHistory) {
-					customerData.cartsHistory.forEach((item) => {
-						item.status === "completed" ? completedCarts.push(item) : activeCarts.push(item);
-					});
-				}
-				if (customerData.stockHistory) {
-					customerData.stockHistory.forEach((item) => {
-						item.status === "completed" ? completedStock.push(item) : activeStock.push(item);
-					});
-				}
-
-				if (completedCarts.length > 0 || completedStock.length > 0) {
-					completedOrdersHistory.push({
-						...customerData,
-						cartsHistory: completedCarts,
-						stockHistory: completedStock
-					});
-				}
-				if (activeCarts.length > 0 || activeStock.length > 0) {
-					activeOrdersHistory.push({
-						...customerData,
-						cartsHistory: activeCarts,
-						stockHistory: activeStock
-					});
-				}
-			});
+		} catch (error) {
+			console.error("Помилка архівації:", error);
+			alert("Помилка при створенні архіву: " + error.message);
 		}
-
-		// --- 4. ПАКЕТНЕ ОНОВЛЕННЯ БАЗИ (Стиль v8: об'єкт updates) ---
-		const updates = {};
-
-		// ЗАПИС В АРХІВ
-		updates[`${archivePath}/archivedAt`] = date.toISOString();
-		updates[`${archivePath}/stockAtThatTime`] = products;
-		updates[`${archivePath}/invoicesHistory`] = invoices;
-		updates[`${archivePath}/invoicesReturnHistory`] = invoicesReturn;
-		updates[`${archivePath}/invoicesSummaryHistory`] = invoicesSummary;
-		updates[`${archivePath}/invoicesSummaryReturnHistory`] = invoicesSummaryReturn;
-		updates[`${archivePath}/usedMaterialsHistory`] = usedMaterials;
-		updates[`${archivePath}/usedMaterialsHistoryHistory`] = usedMaterialsHistory;
-		updates[`${archivePath}/orderNotificationsHistory`] = orderNotifications;
-		updates[`${archivePath}/remainingMaterialsHistory`] = remainingMaterials;
-		updates[`${archivePath}/remainingMaterialsStartHistory`] = remainingMaterialsStart;
-		updates[`${archivePath}/invoiceStockHistory`] = invoiceStock;
-		updates[`${archivePath}/ordersHistoryArchive`] = completedOrdersHistory;
-
-		// ОНОВЛЕННЯ РОБОЧИХ ГІЛОК
-		updates["ordersHistory"] = activeOrdersHistory;
-
-		// Ці рядки встановлюють null, що очищує "живі" гілки для нового місяця.
-		// Якщо ти хочеш залишити старі дані в робочих гілках, просто закоментуй ці рядки:
-		updates["invoices"] = null;
-		updates["invoicesReturn"] = null;
-		updates["invoicesSummary"] = null;
-		updates["invoicesSummaryReturn"] = null;
-		updates["usedMaterials"] = null;
-		updates["usedMaterialsHistory"] = null;
-		updates["orderNotifications"] = null;
-		updates["remainingMaterials"] = null;
-		// updates["invoiceStock"] = null;
-
-		// Встановлюємо новий старт
-		updates["remainingMaterialsStart"] = newRemainingMaterialsStart;
-
-		// Виконуємо оновлення (Стиль v8)
-		await firebase.database().ref().update(updates);
-
-		console.log(`✅ Системний архів створено (v8): ${archivePath}`);
-
-		return true;
-
-	} catch (error) {
-		console.error("Помилка при виконанні архівації:", error);
-	}
+	};
 };
 
 export const updateUsedMaterialLocal = (workerId, productId, value) => ({
@@ -506,8 +432,7 @@ export function fetchUsedMaterialsHistoryAction(customerId) {
 				payload: data || {}
 			});
 			console.log("--- [Action Dispatch] SET_USED_MATERIALS_HISTORY виконано");
-			// ОБОВ'ЯЗКОВО ПОВЕРТАЄМО ДАНІ АБО TRUE
-			return data || {};
+
 		} catch (error) {
 			console.error("--- [Action Error] Помилка завантаження історії:", error);
 			console.log("Error fetching full used materials history:", error);
@@ -522,13 +447,57 @@ export const setRemainingMaterialsStart = (data) => ({
 });
 
 // Асинхронний екшен для завантаження з Firebase (Thunk)
+// export const fetchRemainingMaterialsStart = (workerId) => {
+// 	console.log("FETCHing for workerId:", workerId); // Що тут приходить?
+// 	alert("Запит залишків для ID: " + workerId);
+// 	return (dispatch) => {
+// 		const db = firebase.database();
+// 		db.ref(`remainingMaterialsStart/${workerId}`).on('value', (snapshot) => {
+// 			const data = snapshot.val() || {};
+// 			dispatch(setRemainingMaterialsStart(data));
+// 		});
+// 	};
+// };
+
 export const fetchRemainingMaterialsStart = (workerId) => {
-	console.log("FETCHing for workerId:", workerId); // Що тут приходить?
+	// 1. Початок функції (те, що ти бачиш зараз 15 разів)
+	alert(`🔍 Крок 1 (Зовнішній): Виклик для ID: ${workerId}`);
+
 	return (dispatch) => {
-		const db = firebase.database();
-		db.ref(`remainingMaterialsStart/${workerId}`).on('value', (snapshot) => {
-			const data = snapshot.val() || {};
-			dispatch(setRemainingMaterialsStart(data));
-		});
+		// 2. Перевірка, чи взагалі заходить всередину Thunk
+		alert(`🚀 Крок 2 (Внутрішній): Thunk почав роботу для ${workerId}`);
+
+		try {
+			if (!workerId || workerId === 'undefined') {
+				alert("⚠️ Відміна: workerId порожній або 'undefined'");
+				return;
+			}
+
+			const db = firebase.database();
+			const path = `remainingMaterialsStart/${workerId}`;
+
+			alert(`📡 Крок 3 (Запит): Підключаємось до ${path}`);
+
+			// Ми залишаємо .on, щоб не міняти логіку "живого" оновлення
+			db.ref(path).on('value', (snapshot) => {
+				try {
+					const data = snapshot.val();
+
+					// 4. Результат від бази
+					alert(`✅ Крок 4 (Firebase): Отримано дані:\n${JSON.stringify(data)}`);
+
+					dispatch(setRemainingMaterialsStart(data || {}));
+				} catch (innerError) {
+					alert(`❌ Помилка обробки даних: ${innerError.message}`);
+				}
+			}, (error) => {
+				// 5. Помилка доступу (Rules)
+				alert(`⛔️ ПЕРЕВІРКА 5 (Firebase Error):\nКод: ${error.code}\n${error.message}`);
+			});
+
+		} catch (globalError) {
+			// Це той самий "непробивний" catch
+			alert(`💥 КРИТИЧНИЙ ЗБІЙ у коді: ${globalError.message}`);
+		}
 	};
 };
