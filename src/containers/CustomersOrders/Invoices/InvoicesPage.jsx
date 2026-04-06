@@ -2455,16 +2455,17 @@ const InvoicesPage = ({
 	const dynamicProductIds = useMemo(() => {
 		if (isArchiveMode) {
 			// 1. Беремо ID з налаштувань архіву (якщо вони є)
-			const archiveSettings = fullArchive?.settings?.productsForWorkOrders || [];
+			// в fullArchive не зберігає settings
+			// const archiveSettings = fullArchive?.settings?.productsForWorkOrders || [];
 
-			// 2. ДОДАТКОВО: Беремо всі ID, які реально є в історії списань цього архіву
-			const historyData = fullArchive?.usedMaterialsHistory?.[selectedUser] || {};
-			const idsFromHistory = Object.keys(historyData).map(id => Number(id));
+			// // 2. ДОДАТКОВО: Беремо всі ID, які реально є в історії списань цього архіву
+			// const historyData = fullArchive?.usedMaterialsHistory?.[selectedUser] || {};
+			// const idsFromHistory = Object.keys(historyData).map(id => Number(id));
 
-			// Об'єднуємо обидва списки і прибираємо дублікати
-			const combinedIds = Array.from(new Set([...archiveSettings, ...idsFromHistory]));
+			// // Об'єднуємо обидва списки і прибираємо дублікати
+			// const combinedIds = Array.from(new Set([...archiveSettings, ...idsFromHistory]));
 
-			return combinedIds.length > 0 ? combinedIds : [];
+			// return combinedIds.length > 0 ? combinedIds : [];
 		}
 
 		// Live-режим залишається як був
