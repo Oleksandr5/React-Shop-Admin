@@ -113,3 +113,26 @@
 		width: 120px;
 	}
 }
+
+/* Обов'язково окремо від інших правил */
+@keyframes shake {
+  0% { transform: translateX(0); }
+  25% { transform: translateX(-5px); }
+  50% { transform: translateX(5px); }
+  75% { transform: translateX(-5px); }
+  100% { transform: translateX(0); }
+}
+
+:global(.shake) {
+  /* display: inline-block потрібен, щоб анімація transform працювала на input */
+  display: inline-block !important; 
+  animation: shake 0.4s ease-in-out !important;
+  border-color: #dc3545 !important;
+  box-shadow: 0 0 10px rgba(220, 53, 69, 0.5) !important;
+}
+
+:global(.text_danger_limit) {
+  color: #dc3545 !important;
+  font-weight: bold !important;
+  transition: color 0.3s ease;
+}

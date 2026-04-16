@@ -1,4 +1,5 @@
 import { FETCH_PRODUCTS_DATA_START, FETCH_PRODUCTS_DATA_SUCCESS, FETCH_PRODUCTS_DATA_ERROR, TOGGLE_FILTER_HANDLER, MENU_CLOSE_HANDLER, ON_SELECTED_PRODUCTS, ON_SELECTED_PRODUCTS_ADMIN, RESET_FILTERS, RESET_FILTERS_ADMIN, UPDATE_IS_SUBCATEGORY, UPDATE_ORDERS, UPDATE_ORDERS_HISTORY, UPDATEPRODUCTS, UPDATE_PRODUCTS_DELETED, UPDATECATEGORIES, UPDATE_IS_ORDERS_THIS_CART, UPDATE_IS_ORDERS_HISTORY_THIS_CART, UPDATE_FILTER_PROPS, UPDATE_FILTER_PROPS_ADMIN, UPDATE_IS_QUANT_PROD_IN_DB, SET_FILTER_BY, SET_SEARCH_QUERY, SET_CURRENT_PAGE, SET_TOTAL_PRODUCTS_COUNT, CHANGE_PORTION_NUMBER, UPDATE_INVOICE_STOCK } from './actionTypes'
+import { onScrollCart, topFunctionCart, bottomFunctionCart, errorFunctionCart } from './menu'
 import axios from '../../axios/axios-quiz'
 import firebase from 'firebase'
 import classes from '../../containers/Cart/Cart.module.css'
@@ -1328,11 +1329,6 @@ export function addProductToCart(obj) {
 			customerId = responseIdLastCustomer.data + 1
 		}
 
-		const responseProducts = await axios.get(`products.json`)
-		const productsData = responseProducts.data
-
-		const quantityThisProductInDataBase = productsData.filter(product => product.id === productId)[0].quantity
-
 		let productQuantity
 
 		if (quantityProductYourOrder) {
@@ -1341,85 +1337,79 @@ export function addProductToCart(obj) {
 			productQuantity = +document.querySelector(`input[name = product_${productId}]`).value
 		}
 
-		if (productQuantity <= quantityThisProductInDataBase) {
+		const responseOrders = await axios.get(`orders.json`)
+		const ordersState = responseOrders.data ? responseOrders.data : []
+		//            const ordersState = [...getState().products.orders]
 
-			const responseOrders = await axios.get(`orders.json`)
-			const ordersState = responseOrders.data ? responseOrders.data : []
-			//            const ordersState = [...getState().products.orders]
-
-			let { indexOrders, ordersThis } = getThisOrder(ordersState, customerId)
+		let { indexOrders, ordersThis } = getThisOrder(ordersState, customerId)
 
 
-			let time = getDate()
+		let time = getDate()
 
-			let orders
+		let orders
 
-			if (ordersThis) {
+		if (ordersThis) {
 
-				orders = { ...ordersThis }
+			orders = { ...ordersThis }
 
-				const cart = orders.cart
-				if (cart) {
-					const isProduct = cart.filter((cart, index) => cart.id === productId)[0]
+			const cart = orders.cart
+			if (cart) {
+				const isProduct = cart.filter((cart, index) => cart.id === productId)[0]
 
-					if (isProduct) {
-						const quantityInCart = isProduct.quantity
+				if (isProduct) {
+					const quantityInCart = isProduct.quantity
 
-						let quantityTotal = +(quantityInCart + productQuantity).toFixed(1)
+					let quantityTotal = +(quantityInCart + productQuantity).toFixed(1)
 
-						isProduct.quantity = quantityTotal
+					isProduct.quantity = quantityTotal
 
-					} else {
-						cart[cart.length] = { id: productId, quantity: productQuantity }
-					}
 				} else {
-					orders.cart = []
-					orders.cart[0] = { id: productId, quantity: productQuantity }
+					cart[cart.length] = { id: productId, quantity: productQuantity }
 				}
-
-				orders.date = time
-				orders.status = 'in process...'
-
 			} else {
-				const db = firebase.database();
-				const orderId = await addOrderId(db);
-
-				orders = {
-					orderId: orderId,      // 👈 додаємо
-					customerId: customerId,
-					cart: [{ id: productId, quantity: productQuantity }],
-					date: time,
-					status: 'in process...',
-					checked: false
-				}
-
+				orders.cart = []
+				orders.cart[0] = { id: productId, quantity: productQuantity }
 			}
 
-			ordersState[indexOrders] = orders
-			dispatch(updateOrders(ordersState))
-
-			try {
-				//            await axios.post(`orders/${customerId}`, this.state.orders)
-
-				const db = firebase.database()
-				db.ref(`orders/${indexOrders}`).set(orders)
-
-			} catch (e) {
-				console.log(e)
-			}
-			if (!quantityProductYourOrder) {
-				document.querySelector(`input[id = input_product_${productId}]`).value = 1
-
-				document.querySelector(`span[id = product_price_${productId}]`).innerHTML = priceIncludedPromotion2(price, promotion)
-
-			} else {
-				document.querySelector(`input[id = input_product_${productId}_inHistory_${indexOrderInHistory}]`).value = quantityProductYourOrder
-
-				document.querySelector(`p[id = product_price_${productId}_inHistory_${indexOrderInHistory}]`).querySelector('span').innerHTML = price
-			}
+			orders.date = time
+			orders.status = 'in process...'
 
 		} else {
-			alert('Вибачте, такої кількості товару немає в наявності!')
+			const db = firebase.database();
+			const orderId = await addOrderId(db);
+
+			orders = {
+				orderId: orderId,      // 👈 додаємо
+				customerId: customerId,
+				cart: [{ id: productId, quantity: productQuantity }],
+				date: time,
+				status: 'in process...',
+				checked: false
+			}
+
+		}
+
+		ordersState[indexOrders] = orders
+		dispatch(updateOrders(ordersState))
+
+		try {
+			//            await axios.post(`orders/${customerId}`, this.state.orders)
+
+			const db = firebase.database()
+			db.ref(`orders/${indexOrders}`).set(orders)
+
+		} catch (e) {
+			console.log(e)
+		}
+		if (!quantityProductYourOrder) {
+			document.querySelector(`input[id = input_product_${productId}]`).value = 1
+
+			document.querySelector(`span[id = product_price_${productId}]`).innerHTML = priceIncludedPromotion2(price, promotion)
+
+		} else {
+			document.querySelector(`input[id = input_product_${productId}_inHistory_${indexOrderInHistory}]`).value = quantityProductYourOrder
+
+			document.querySelector(`p[id = product_price_${productId}_inHistory_${indexOrderInHistory}]`).querySelector('span').innerHTML = price
 		}
 	}
 }
@@ -1769,151 +1759,13 @@ export const removeOrderHistoryIds = async (db) => {
 	}
 };
 
-// export function addProductWithCartToOrdersHistory(obj) {
-// 	return async (dispatch, getState) => {
-
-// 		const db = firebase.database()
-// 		let { customerId } = obj
-// 		const { email, productComments, orderComment } = obj
-
-// 		const customersState = [...getState().inform.customers]
-// 		const responseOrders = await axios.get(`orders.json`)
-
-// 		const rawOrders = responseOrders.data ? responseOrders.data : []
-// 		const ordersState = (Array.isArray(rawOrders) ? rawOrders : Object.values(rawOrders)).filter(Boolean)
-
-// 		let { indexOrders, ordersThis } = getThisOrder(ordersState, customerId)
-
-// 		console.log('--- ПЕРЕД ОПРАЦЮВАННЯМ ---');
-// 		console.log('Поточний кошик замовлення:', ordersThis.cart);
-
-// 		const responseProducts = await axios.get(`products.json`)
-// 		const productsData = responseProducts.data
-
-// 		let counterIdInOrdersThisCart = 0
-
-// 		for (let i = 0; i < productsData.length; i++) {
-// 			if (counterIdInOrdersThisCart >= ordersThis.cart.length) break;
-
-// 			ordersThis.cart.forEach((cart, index) => {
-// 				if (productsData[i].id === cart.id) {
-// 					ordersThis.cart[index].price = priceIncludedPromotion2(productsData[i].price, productsData[i].promotion)
-// 					if (productComments && productComments[cart.id]) {
-// 						ordersThis.cart[index].comment = productComments[cart.id]
-// 					}
-// 					counterIdInOrdersThisCart++
-// 				}
-// 			})
-// 		}
-
-// 		const customerInBase = customersState.filter(customer => customer.email === email)[0]
-// 		const idThisCustomerInBase = customerInBase ? customerInBase.id : null
-
-// 		if (idThisCustomerInBase) {
-// 			customerId = idThisCustomerInBase
-// 		}
-
-// 		let time = getDate()
-// 		const orderHistoryId = await addOrderHistoryId(db);
-
-// 		const newCartHistoryItem = {
-// 			orderHistoryId,
-// 			cart: ordersThis.cart,
-// 			date: time,
-// 			status: 'in process...',
-// 			customerId,
-// 			checked: false,
-// 			orderComment: orderComment || ''
-// 		}
-
-// 		console.log('Сформований новий елемент для історії:', newCartHistoryItem);
-
-// 		/* Коментар: Транзакція для ordersHistory */
-// 		try {
-// 			console.log('Починаємо транзакцію ordersHistory...');
-
-// 			await db.ref('ordersHistory').transaction((currentData) => {
-// 				// 1. Логуємо дані, якими вони прийшли з сервера (РОБИМО ЗНІМОК)
-// 				console.log('ТРАНЗАКЦІЯ: Дані з бази ПЕРЕД зміною:', currentData ? JSON.parse(JSON.stringify(currentData)) : 'null');
-
-// 				let data = currentData || [];
-// 				if (!Array.isArray(data)) {
-// 					data = Object.values(data);
-// 				}
-
-// 				let indexInTransaction = data.findIndex(item => item && item.customerId === idThisCustomerInBase);
-
-// 				if (indexInTransaction !== -1) {
-// 					if (!data[indexInTransaction].cartsHistory) {
-// 						data[indexInTransaction].cartsHistory = [];
-// 					}
-
-// 					// Додаємо нове замовлення
-// 					data[indexInTransaction].cartsHistory.push(newCartHistoryItem);
-
-// 					console.log(`ТРАНЗАКЦІЯ: Знайдено клієнта (index: ${indexInTransaction}). Додаємо замовлення.`);
-// 				} else {
-// 					const newOrderEntry = {
-// 						customerId,
-// 						cartsHistory: [newCartHistoryItem],
-// 						checked: false
-// 					};
-// 					data.push(newOrderEntry);
-// 					console.log('ТРАНЗАКЦІЯ: Створюємо новий запис для клієнта');
-// 				}
-
-// 				// 2. Логуємо фінальний результат перед відправкою (РОБИМО ЗНІМОК)
-// 				console.log('ТРАНЗАКЦІЯ: Фінальний результат ПІСЛЯ зміни:', JSON.parse(JSON.stringify(data)));
-
-// 				return data;
-// 			});
-
-// 			console.log('Транзакція ordersHistory успішно завершена');
-
-// 			console.log('Транзакція ordersHistory успішно завершена');
-// 			const finalHistoryResponse = await axios.get(`ordersHistory.json`);
-// 			dispatch(updateOrdersHistory(finalHistoryResponse.data || []));
-
-// 		} catch (e) {
-// 			console.error("Помилка транзакції ordersHistory:", e);
-// 		}
-
-// 		/* Коментар: Транзакція для очищення orders */
-// 		try {
-// 			console.log('Починаємо транзакцію для видалення з orders...');
-// 			await db.ref('orders').transaction((currentOrders) => {
-// 				console.log('ТРАНЗАКЦІЯ (orders): Поточний список замовлень:', currentOrders);
-
-// 				if (!currentOrders) return null;
-
-// 				let ordersArr = Array.isArray(currentOrders) ? currentOrders : Object.values(currentOrders);
-// 				const updatedOrders = ordersArr.filter(order => order && order.customerId !== customerId);
-
-// 				console.log('ТРАНЗАКЦІЯ (orders): Список після видалення клієнта:', updatedOrders);
-// 				return updatedOrders.length > 0 ? updatedOrders : null;
-// 			});
-
-// 			const finalOrdersResponse = await axios.get(`orders.json`);
-// 			dispatch(updateOrders(finalOrdersResponse.data || []));
-// 			console.log('Видалення з orders успішне');
-
-// 		} catch (e) {
-// 			console.error("Помилка при видаленні з orders:", e);
-// 		}
-
-// 		dispatch(updateIsOrdersThisCart(false));
-// 	}
-// }
-
 export function addProductWithCartToOrdersHistory(obj) {
 	return async (dispatch, getState) => {
 
 		const db = firebase.database()
-		/* Коментар: Отримуємо orderType з об'єкта аргументів */
 		let { customerId, orderType } = obj
 		const { email, productComments, orderComment } = obj
 
-		/* Коментар: Визначаємо назву гілки в базі даних на основі типу операції */
 		const historyBranch = orderType === 'return' ? 'stockHistory' : 'cartsHistory'
 
 		const customersState = [...getState().inform.customers]
@@ -1924,59 +1776,68 @@ export function addProductWithCartToOrdersHistory(obj) {
 
 		let { indexOrders, ordersThis } = getThisOrder(ordersState, customerId)
 
-		console.log('--- ПЕРЕД ОПРАЦЮВАННЯМ ---');
-		console.log('Поточний кошик замовлення:', ordersThis.cart);
-
 		const responseProducts = await axios.get(`products.json`)
 		const productsData = responseProducts.data
 
-		let counterIdInOrdersThisCart = 0
+		// --- ПЕРЕВІРКА КІЛЬКОСТІ (БЕЗ ЗМІН) ---
+		let outOfStockItems = [];
 
-		for (let i = 0; i < productsData.length; i++) {
-			if (counterIdInOrdersThisCart >= ordersThis.cart.length) break;
+		if (ordersThis && ordersThis.cart) {
+			ordersThis.cart.forEach((cartItem, index) => {
+				const productInStock = productsData.find(p => p && p.id === cartItem.id);
 
-			ordersThis.cart.forEach((cart, index) => {
-				if (productsData[i].id === cart.id) {
-					ordersThis.cart[index].price = priceIncludedPromotion2(productsData[i].price, productsData[i].promotion)
-					if (productComments && productComments[cart.id]) {
-						ordersThis.cart[index].comment = productComments[cart.id]
+				if (productInStock) {
+					if (orderType !== 'return' && cartItem.quantity > productInStock.quantity) {
+						outOfStockItems.push({
+							name: productInStock.name || `ID: ${productInStock.id}`,
+							requested: cartItem.quantity,
+							available: productInStock.quantity
+						});
 					}
-					counterIdInOrdersThisCart++
+
+					ordersThis.cart[index].price = priceIncludedPromotion2(productInStock.price, productInStock.promotion)
+					if (productComments && productComments[cartItem.id]) {
+						ordersThis.cart[index].comment = productComments[cartItem.id]
+					}
 				}
-			})
+			});
 		}
 
-		const customerInBase = customersState.filter(customer => customer.email === email)[0]
-		const idThisCustomerInBase = customerInBase ? customerInBase.id : null
-
-		if (idThisCustomerInBase) {
-			customerId = idThisCustomerInBase
+		if (outOfStockItems.length > 0) {
+			let errorMessage = "Неможливо оформити замовлення. Недостатньо товару на складі:\n\n";
+			outOfStockItems.forEach(item => {
+				errorMessage += `- ${item.name}: потрібно ${item.requested}, в наявності ${item.available}\n`;
+			});
+			alert(errorMessage);
+			dispatch(errorFunctionCart());
+			return false; // <--- Повертаємо false, якщо перевірка не пройшла
 		}
 
-		let time = getDate()
-		const orderHistoryId = await addOrderHistoryId(db);
-
-		const newCartHistoryItem = {
-			orderHistoryId,
-			cart: ordersThis.cart,
-			date: time,
-			status: 'in process...',
-			customerId,
-			checked: false,
-			orderComment: orderComment || '',
-			orderType // Додати сам тип для легшої фільтрації в майбутньому
-		}
-
-		console.log('Сформований новий елемент для історії:', newCartHistoryItem);
-
-		/* Коментар: Транзакція для ordersHistory */
+		// --- ОСНОВНА ЛОГІКА (БЕЗ ЗМІН, просто обгорнута в try для повернення результату) ---
 		try {
-			console.log('Починаємо транзакцію ordersHistory...');
+			const customerInBase = customersState.filter(customer => customer.email === email)[0]
+			const idThisCustomerInBase = customerInBase ? customerInBase.id : null
 
+			if (idThisCustomerInBase) {
+				customerId = idThisCustomerInBase
+			}
+
+			let time = getDate()
+			const orderHistoryId = await addOrderHistoryId(db);
+
+			const newCartHistoryItem = {
+				orderHistoryId,
+				cart: ordersThis.cart,
+				date: time,
+				status: 'in process...',
+				customerId,
+				checked: false,
+				orderComment: orderComment || '',
+				orderType
+			}
+
+			/* Транзакція для ordersHistory */
 			await db.ref('ordersHistory').transaction((currentData) => {
-				// 1. Логуємо дані, якими вони прийшли з сервера (РОБИМО ЗНІМОК)
-				console.log('ТРАНЗАКЦІЯ: Дані з бази ПЕРЕД зміною:', currentData ? JSON.parse(JSON.stringify(currentData)) : 'null');
-
 				let data = currentData || [];
 				if (!Array.isArray(data)) {
 					data = Object.values(data);
@@ -1985,62 +1846,45 @@ export function addProductWithCartToOrdersHistory(obj) {
 				let indexInTransaction = data.findIndex(item => item && item.customerId === customerId);
 
 				if (indexInTransaction !== -1) {
-					/* Коментар: Використовуємо динамічне ім'я гілки (historyBranch) для запису даних */
 					if (!data[indexInTransaction][historyBranch]) {
 						data[indexInTransaction][historyBranch] = [];
 					}
 					data[indexInTransaction][historyBranch].push(newCartHistoryItem);
-
-					console.log(`ТРАНЗАКЦІЯ: Знайдено клієнта (index: ${indexInTransaction}). Додаємо замовлення.`);
 				} else {
-					/* Коментар: Створюємо новий запис клієнта з динамічною гілкою */
 					const newOrderEntry = {
 						customerId,
 						[historyBranch]: [newCartHistoryItem],
 						checked: false
 					};
 					data.push(newOrderEntry);
-					console.log('ТРАНЗАКЦІЯ: Створюємо новий запис для клієнта');
 				}
-
-				// 2. Логуємо фінальний результат перед відправкою (РОБИМО ЗНІМОК)
-				console.log('ТРАНЗАКЦІЯ: Фінальний результат ПІСЛЯ зміни:', JSON.parse(JSON.stringify(data)));
-
 				return data;
 			});
 
-			console.log('Транзакція ordersHistory успішно завершена');
 			const finalHistoryResponse = await axios.get(`ordersHistory.json`);
 			dispatch(updateOrdersHistory(finalHistoryResponse.data || []));
 
-		} catch (e) {
-			console.error("Помилка транзакції ordersHistory:", e);
-		}
-
-		/* Коментар: Транзакція для очищення orders */
-		try {
-			console.log('Починаємо транзакцію для видалення з orders...');
+			/* Транзакція для очищення orders */
 			await db.ref('orders').transaction((currentOrders) => {
-				console.log('ТРАНЗАКЦІЯ (orders): Поточний список замовлень:', currentOrders);
-
 				if (!currentOrders) return null;
 
 				let ordersArr = Array.isArray(currentOrders) ? currentOrders : Object.values(currentOrders);
 				const updatedOrders = ordersArr.filter(order => order && order.customerId !== customerId);
 
-				console.log('ТРАНЗАКЦІЯ (orders): Список після видалення клієнта:', updatedOrders);
 				return updatedOrders.length > 0 ? updatedOrders : null;
 			});
 
 			const finalOrdersResponse = await axios.get(`orders.json`);
 			dispatch(updateOrders(finalOrdersResponse.data || []));
-			console.log('Видалення з orders успішне');
+
+			dispatch(updateIsOrdersThisCart(false));
+
+			return true; // <--- ПОВЕРТАЄМО TRUE: все пройшло успішно!
 
 		} catch (e) {
-			console.error("Помилка при видаленні з orders:", e);
+			console.error("Помилка при виконанні транзакцій:", e);
+			return false; // <--- ПОВЕРТАЄМО FALSE: замовлення не збереглося
 		}
-
-		dispatch(updateIsOrdersThisCart(false));
 	}
 }
 

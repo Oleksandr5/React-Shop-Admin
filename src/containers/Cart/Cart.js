@@ -151,158 +151,6 @@ class Cart extends Component {
 		}, 500);
 	}
 
-	// sendOrders(obj) {
-
-	// 	this.setState({
-	// 		disabledBtnSend: true,
-	// 		orderType: 'order' // <--- ДОДАЄМО ЦЕЙ РЯДОК
-	// 	})
-
-	// 	const { hasAccount, event, idThisCustomers } = obj
-
-	// 	event.preventDefault()
-
-	// 	let randomTime = Math.random() * 1000
-
-	// 	console.log('randomTime', +(randomTime / 1000).toFixed(1))
-
-	// 	// successfulInfo ```````
-	// 	let successfulOrder = document.getElementById('blockInfo')
-
-	// 	let successfulInfo = `Обробка даних...`
-
-	// 	let successfulOrder_Info = document.getElementById('blockInfo').querySelector('p.text-info')
-
-	// 	successfulOrder_Info.innerHTML = successfulInfo
-	// 	successfulOrder_Info.classList.add("font-weight-bold")
-	// 	successfulOrder.classList.remove("d-none")
-
-	// 	// successfulInfo .........   
-
-	// 	setTimeout(async () => {
-
-	// 		let emailAccount
-
-	// 		if (!hasAccount) {
-
-	// 			let { name, tel, email } = this.state
-
-	// 			if (window.localStorage.getItem('idThisCustomers')) {
-	// 				this.props.customers.forEach(customer => {
-	// 					if (customer.id === +window.localStorage.getItem('idThisCustomers')) {
-	// 						name = customer.name
-	// 						tel = customer.tel
-	// 						email = customer.email
-	// 					}
-	// 				})
-	// 			}
-
-	// 			emailAccount = email
-
-	// 			const thisCustomerEmailInBase = this.props.customers.filter(customer => customer.email === emailAccount)[0]
-
-	// 			const isThisCustomerEmailInBase = thisCustomerEmailInBase ? true : false
-
-	// 			if (!isThisCustomerEmailInBase) {
-	// 				this.props.addNewCustomer({ email, name, tel, hasAccount, auth: false })
-	// 			} else {
-	// 				const auth = thisCustomerEmailInBase.auth
-
-	// 				if (auth) {
-
-	// 					let errorAuthInfo = `Вибачте, під цим емейлом вже зареєстрований користувач, авторизуйтеся або введіть інший емейл!!!`
-
-	// 					successfulOrder_Info.innerHTML = errorAuthInfo
-	// 					successfulOrder_Info.classList.add("text-danger")
-
-	// 					this.props.errorFunctionCart()
-
-	// 					return
-
-	// 				} else {
-	// 					this.props.addNewCustomer({ email, name, tel, hasAccount, auth: false })
-	// 				}
-
-	// 			}
-
-	// 		} else {
-	// 			emailAccount = this.props.customers.filter(customer => customer.id === this.props.customerId)[0].email
-	// 		}
-
-	// 		try {
-
-	// 			console.log('sending_your_order...')
-
-	// 			// отримуємо поточні замовлення
-	// 			let orders = []
-	// 			try {
-	// 				const responseOrders = await axios.get(`orders.json`)
-	// 				orders = responseOrders.data ?? []
-	// 			} catch (err) {
-	// 				console.error('Помилка отримання orders:', err)
-	// 			}
-
-	// 			let { ordersThis } = this.getThisOrder(orders, idThisCustomers)
-	// 			const arrThisCart = ordersThis.cart
-
-	// 			// Додаємо замовлення до історії (без змін у products)
-	// 			this.props.addProductWithCartToOrdersHistory({
-	// 				customerId: this.props.customerId,
-	// 				email: emailAccount,
-	// 				productComments: this.state.productComments, // передаємо об'єкт з коментарями до товарів
-	// 				orderComment: this.state.orderComment        // передаємо загальний коментар
-	// 			})
-
-	// 			// очищення кошика
-	// 			const formControls = Object.assign({ ...this.state.formControls })
-
-	// 			Object.keys(formControls).forEach(name => {
-	// 				formControls[name].value = ''
-	// 				formControls[name].valid = false
-	// 				formControls[name].touched = false
-	// 			})
-
-	// 			// 4. Оновлюємо інтерфейс через DOM (повідомлення про успіх)
-	// 			const blockInfo = document.getElementById('blockInfo')
-	// 			if (blockInfo) {
-	// 				const infoParagraph = blockInfo.querySelector('p.text-info')
-	// 				const errorInfo = blockInfo.querySelector('.errorInfo')
-	// 				const successInfo = blockInfo.querySelector('.successInfo')
-
-	// 				if (infoParagraph) {
-	// 					infoParagraph.classList.remove("font-weight-bold", "text-danger")
-	// 					infoParagraph.innerHTML = `Замовлення відправлене, ми з Вами зв'яжемося найближчим часом! Щоб відслідковувати свої замовлення перейдіть у "Ваші оформлені замовлення!" ↓`
-	// 				}
-
-	// 				blockInfo.classList.remove("d-none")
-	// 				if (errorInfo) errorInfo.classList.add("d-none")
-	// 				if (successInfo) successInfo.classList.remove("d-none")
-	// 			}
-	// 			// Після успішної відправки:
-	// 			this.setState({
-	// 				successfulOrder: true,
-	// 				isOrdersThisCart: false,
-	// 				orderComment: '',      // Очищаємо загальний коментар
-	// 				productComments: {},   // Очищаємо коментарі до товарів
-	// 				formControls,          // Очищаємо форму (ви це вже робите вище)
-	// 				email: ""
-	// 			})
-
-	// 		} catch (e) {
-
-	// 			console.log('Помилка замовлення:', e);
-
-	// 		} finally {
-
-	// 			// 🔓 завжди розблоковуємо кнопку
-	// 			this.setState({ disabledBtnSend: false });
-
-	// 		}
-
-	// 	}, randomTime)
-
-	// }
-
 	sendOrders(obj) {
 
 		/* Коментар: Визначаємо поточний тип операції зі стану, щоб передати його в екшен */
@@ -390,80 +238,68 @@ class Cart extends Component {
 			}
 
 			try {
-
 				console.log('sending_your_order...')
 
-				// отримуємо поточні замовлення
-				let orders = []
-				try {
-					const responseOrders = await axios.get(`orders.json`)
-					orders = responseOrders.data ?? []
-				} catch (err) {
-					console.error('Помилка отримання orders:', err)
-				}
-
-				let { ordersThis } = this.getThisOrder(orders, idThisCustomers)
-				const arrThisCart = ordersThis.cart
-
-				// Додаємо замовлення до історії (без змін у products)
-				this.props.addProductWithCartToOrdersHistory({
+				// Зберігаємо результат виконання екшену в змінну success.
+				// Оскільки в екшені є return, success буде або true, або false.
+				const success = await this.props.addProductWithCartToOrdersHistory({
 					customerId: this.props.customerId,
 					email: emailAccount,
-					productComments: this.state.productComments, // передаємо об'єкт з коментарями до товарів
-					orderComment: this.state.orderComment, // передаємо загальний коментар
-					/* Коментар: Передаємо тип операції в екшен */
+					productComments: this.state.productComments,
+					orderComment: this.state.orderComment,
 					orderType: currentOrderType
 				})
 
-				// очищення кошика
-				const formControls = Object.assign({ ...this.state.formControls })
+				// ПЕРЕВІРКА: чи повернув екшен успіх (true)
+				if (success === true) {
 
-				Object.keys(formControls).forEach(name => {
-					formControls[name].value = ''
-					formControls[name].valid = false
-					formControls[name].touched = false
-				})
+					// Очищаємо поля форми
+					const formControls = Object.assign({ ...this.state.formControls })
+					Object.keys(formControls).forEach(name => {
+						formControls[name].value = ''
+						formControls[name].valid = false
+						formControls[name].touched = false
+					})
 
-				// 4. Оновлюємо інтерфейс через DOM (повідомлення про успіх)
-				const blockInfo = document.getElementById('blockInfo')
-				if (blockInfo) {
-					const infoParagraph = blockInfo.querySelector('p.text-info')
-					const errorInfo = blockInfo.querySelector('.errorInfo')
-					const successInfo = blockInfo.querySelector('.successInfo')
+					const blockInfo = document.getElementById('blockInfo')
+					if (blockInfo) {
+						const infoParagraph = blockInfo.querySelector('p.text-info')
+						const errorInfo = blockInfo.querySelector('.errorInfo')
+						const successInfo = blockInfo.querySelector('.successInfo')
 
-					if (infoParagraph) {
-						infoParagraph.classList.remove("font-weight-bold", "text-danger")
+						if (infoParagraph) {
+							infoParagraph.classList.remove("font-weight-bold", "text-danger")
+							infoParagraph.innerHTML = currentOrderType === 'return'
+								? `Повернення оформлене! Щоб відслідковувати статус, перейдіть у "Ваші повернення на склад!" ↓`
+								: `Замовлення відправлене, ми з Вами зв'яжемося найближчим часом! Щоб відслідковувати свої замовлення перейдіть у "Ваші оформлені замовлення!" ↓`
+						}
 
-						/* Коментар: Динамічно змінюємо текст залежно від того, чи це звичайне замовлення, чи повернення */
-						infoParagraph.innerHTML = currentOrderType === 'return'
-							? `Повернення оформлене! Щоб відслідковувати статус, перейдіть у "Ваші повернення на склад!" ↓`
-							: `Замовлення відправлене, ми з Вами зв'яжемося найближчим часом! Щоб відслідковувати свої замовлення перейдіть у "Ваші оформлені замовлення!" ↓`
+						blockInfo.classList.remove("d-none")
+						if (errorInfo) errorInfo.classList.add("d-none")
+						if (successInfo) successInfo.classList.remove("d-none")
 					}
 
-					// Коментар: Показуємо блок з інфою та керуємо видимістю іконок успіху/помилки
-					blockInfo.classList.remove("d-none")
-					if (errorInfo) errorInfo.classList.add("d-none")
-					if (successInfo) successInfo.classList.remove("d-none")
+					this.setState({
+						successfulOrder: true,
+						isOrdersThisCart: false,
+						orderComment: '',
+						productComments: {},
+						formControls,
+						email: ""
+					})
+
+				} else {
+					// Якщо екшен повернув false (наприклад, спрацював alert через залишки товару)
+					// Приховуємо "Обробка даних...", щоб користувач міг далі редагувати кошик
+					const blockInfo = document.getElementById('blockInfo')
+					if (blockInfo) blockInfo.classList.add("d-none")
 				}
-				// Коментар: Після успішної відправки очищаємо стан компонента
-				this.setState({
-					successfulOrder: true,
-					isOrdersThisCart: false,
-					orderComment: '',      // Очищаємо загальний коментар
-					productComments: {},   // Очищаємо коментарі до товарів
-					formControls,          // Очищаємо форму (ви це вже робите вище)
-					email: ""
-				})
 
 			} catch (e) {
-
 				console.log('Помилка замовлення:', e);
-
 			} finally {
-
-				// 🔓 завжди розблоковуємо кнопку
+				// У будь-якому випадку (успіх чи помилка) знову вмикаємо кнопку відправки
 				this.setState({ disabledBtnSend: false });
-
 			}
 
 		}, randomTime)
@@ -600,41 +436,50 @@ class Cart extends Component {
 	// 	document.querySelector('#totalPrice').innerHTML = totalPrice
 	// }
 
+	onMaxQuantity(obj) {
+		let { value: quantity, maxQuantity, id } = obj;
+
+		// В кошику ми використовуємо warning_cart_
+		const warningElem = document.querySelector(`p[id="warning_cart_${id}"]`);
+		// Покращений пошук інпуту (за ID або за ім'ям)
+		const inputElem = document.querySelector(`input[id="input_product_cart_${id}"]`) ||
+			document.querySelector(`input[name="quantity_product_${id}"]`);
+
+		if (quantity > maxQuantity) {
+			if (warningElem) {
+				warningElem.classList.add("text_danger_limit");
+				warningElem.classList.remove("text-success", "text-warning");
+			}
+
+			if (inputElem && !inputElem.classList.contains("shake")) {
+				inputElem.classList.add("shake");
+				setTimeout(() => {
+					inputElem.classList.remove("shake");
+				}, 400);
+			}
+		} else {
+			if (warningElem) {
+				warningElem.classList.remove("text_danger_limit");
+				if (quantity > 0) warningElem.classList.add("text-success");
+			}
+		}
+	}
 
 	onBlurQuantity(obj) {
-
 		let { value: quantity, price, id, stepunits, quantityInBase, quantityInCart } = obj
 		let { quantityAdd, orders, customerId } = obj
 
-		let elem = document.querySelector(`p[id = warning_cart_${id}]`)
+		// Замість старого блоку зclassList.add("shadow"):
+		this.onMaxQuantity({ value: quantity, maxQuantity: quantityInBase, id })
 
-		//        let nowThisProductInBase = +(quantityInBase - (+(quantity - quantityInCart).toFixed(1))).toFixed(1)
-		//console.log('nowThisProductInBase', nowThisProductInBase)
-		//        document.querySelector(`span[id = quantity_product_${id}_in_cart]`).innerHTML = nowThisProductInBase
-
-		let maxQuantity = quantityInBase
-
-		if (quantity >= maxQuantity) {
-			elem.classList.add("shadow")
-		} else {
-			elem.classList.remove("shadow")
-		}
-
-		if (quantity < stepunits) {
-			return
-		}
+		if (quantity < stepunits) return
 
 		let thisPrice = +(+price * +quantity).toFixed(1)
-		document.querySelector(`p[id = product_price_${id}_cart]`).querySelector('span').innerHTML = thisPrice
-
-		// this.totalPriceCart()
-
-		//
+		const priceSpan = document.querySelector(`p[id = product_price_${id}_cart] span`)
+		if (priceSpan) priceSpan.innerHTML = thisPrice
 
 		this.onChangeQuantity({ quantity, quantityAdd, id, orders, customerId })
-
 	}
-
 	onChangeQuantity(obj) {
 		let { quantity, quantityAdd, id, orders, customerId } = obj
 
@@ -685,45 +530,27 @@ class Cart extends Component {
 	//    }
 
 	onClickArrow(obj) {
-
 		let { clickevent, id } = obj
-
-		let divInputNumber =
-			document.querySelector(`.divInputNumber_${id}`),
-			numberPlus = divInputNumber.querySelector('.arrow_plus'),
-			numberMinus = divInputNumber.querySelector('.arrow_minus'),
+		let divInputNumber = document.querySelector(`.divInputNumber_${id}`),
 			numberInput = divInputNumber.querySelector('[type="number"]'),
 			min = +numberInput.getAttribute('min'),
-			max = +numberInput.getAttribute('max'),
 			step = +numberInput.getAttribute('step') || 1
 
 		let valueInput = +numberInput.value
-
 		numberInput.focus()
 
 		if (clickevent === "plus") {
-
-			if (!(max < valueInput + step)) {
-				//                numberInput.value = (valueInput * 10 + step * 10) / 10
-				numberInput.value = +(valueInput + step).toFixed(1)
-
-			} else {
-				numberInput.value = max
-			}
-
+			// Додаємо без обмежень
+			numberInput.value = +(valueInput + step).toFixed(1)
 		} else if (clickevent === "minus") {
-
 			if (!(min > valueInput - step)) {
-				//                numberInput.value = (valueInput * 10 - step * 10) / 10
 				numberInput.value = +(valueInput - step).toFixed(1)
 			} else {
 				numberInput.value = min
 			}
-
 		}
 
-		numberInput.blur()
-
+		numberInput.blur() // Це автоматично запустить onBlur (onBlurQuantity)
 	}
 
 	updateIsOrdersThisCart = () => {
@@ -846,7 +673,7 @@ class Cart extends Component {
 
 										<div className="arrow arrow_minus d-flex justify-content-center align-items-center position-absolute" onClick={() => this.onClickArrow({ clickevent: 'minus', id: thisProduct.id })} ><i className="fa fa-minus" aria-hidden="true"></i></div>
 
-										<Input type="number" labelDisplay="d-none" min={thisProduct.stepunits} step={thisProduct.stepunits} max={`${thisProduct.quantity}`} className={`inputNumber ${classes.input_in_cart} text-center`} name={`quantity_product_${thisProduct.id}`} data_price={`${thisProduct.price}`} defaultValue={product.quantity} onBlur={event => this.onBlurQuantity({ value: +event.target.value, price: this.props.priceIncludedPromotion(thisProduct.price, thisProduct.promotion), id: thisProduct.id, quantityInBase: thisProduct.quantity, quantityInCart: product.quantity, stepunits: thisProduct.stepunits, quantityAdd: productQuantityInCar - (+event.target.value), orders, customerId })} />
+										<Input id={`input_product_cart_${thisProduct.id}`} type="number" labelDisplay="d-none" min={thisProduct.stepunits} step={thisProduct.stepunits} className={`inputNumber ${classes.input_in_cart} text-center`} name={`quantity_product_${thisProduct.id}`} data_price={`${thisProduct.price}`} defaultValue={product.quantity} onFocus={event => this.onMaxQuantity({ value: +event.target.value, maxQuantity: thisProduct.quantity, id: thisProduct.id })} onBlur={event => this.onBlurQuantity({ value: +event.target.value, price: this.props.priceIncludedPromotion(thisProduct.price, thisProduct.promotion), id: thisProduct.id, quantityInBase: thisProduct.quantity, quantityInCart: product.quantity, stepunits: thisProduct.stepunits, quantityAdd: productQuantityInCar - (+event.target.value), orders, customerId })} />
 
 										<div className="arrow arrow_plus  d-flex justify-content-center align-items-center position-absolute" onClick={() => this.onClickArrow({ clickevent: 'plus', id: thisProduct.id })} ><i className="fa fa-plus" aria-hidden="true"></i></div>
 
@@ -860,7 +687,7 @@ class Cart extends Component {
 								</div>
 								<div className="col order-4 px-0">
 									{this.props.authAdmin
-										? <p className="mb-0 text-danger mt-3 rounded p-2" id={`warning_cart_${thisProduct.id}`} >Доступно в магазині: <span className="text-primary" id={`quantity_product_${thisProduct.id}_in_cart`}>{this.state[`product_${thisProduct.id}`] ? this.state[`product_${thisProduct.id}`] : thisProduct.quantity}</span> <span className={'text-primary'} >{thisProduct.units}</span></p>
+										? <p className="mb-0 text-success mt-3 rounded p-2" id={`warning_cart_${thisProduct.id}`} >Доступно в магазині: <span className="text-primary" id={`quantity_product_${thisProduct.id}_in_cart`}>{this.state[`product_${thisProduct.id}`] ? this.state[`product_${thisProduct.id}`] : thisProduct.quantity}</span> <span className={'text-primary'} >{thisProduct.units}</span></p>
 										: product.quantity
 											? <p className="mb-0 text-success mt-1 mt-sm-3 rounded p-2" id={`warning_cart_${thisProduct.id}`} >Товар є в наявності</p>
 											: <p className="mb-0 text-danger mt-1 mt-sm-3 rounded p-2" id={`warning_cart_${thisProduct.id}`} >Товару немає в наявності</p>

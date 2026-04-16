@@ -15,14 +15,19 @@ class ProductPage extends Component {
 	onChangeQuantity(obj) {
 		let { value: quantity, price, promotion, id, maxQuantity, stepunits } = obj
 
+		// 1. Перевірка на мінімальну кількість
 		if (quantity < stepunits) {
 			return
 		}
 
+		// 2. Оновлення ціни (ваш існуючий код)
 		let thisPrice = +(this.props.priceIncludedPromotion(price, promotion) * quantity).toFixed(1)
-
 		document.querySelector(`span[id = product_price_${id}]`).innerHTML = thisPrice
 
+		// 3. ВИКЛИК ПЕРЕВІРКИ ЛІМІТУ
+		// Тепер, якщо юзер ввів руками 100 при наявності 17, 
+		// спрацює візуальна підсвітка (тінь/колір), але значення не скинеться.
+		this.onMaxQuantity({ value: quantity, maxQuantity, id })
 	}
 
 
@@ -35,30 +40,45 @@ class ProductPage extends Component {
 	}
 
 	onMaxQuantity(obj) {
+		let { value: quantity, maxQuantity, id } = obj;
 
-		let { value: quantity, maxQuantity, id } = obj
+		// Знаходимо текст попередження та сам інпут
+		const warningElem = document.querySelector(`p[id = warning_${id}]`);
+		const inputElem = document.querySelector(`#input_product_${id}`);
 
-		let elem = document.querySelector(`p[id = warning_${id}]`)
-		if (quantity >= maxQuantity) {
-			elem.classList.add("shadow")
+		if (quantity > maxQuantity) {
+			// 1. Ефект для тексту (Зміна кольору)
+			if (warningElem) {
+				warningElem.classList.add("text_danger_limit");
+				warningElem.classList.remove("text-success", "text-warning");
+			}
+
+			// 2. Візуальна "тряска" інпуту
+			if (inputElem && !inputElem.classList.contains("shake")) {
+				inputElem.classList.add("shake");
+
+				// Видаляємо клас після завершення анімації (через 400мс), 
+				// щоб її можна було повторити при наступному кліку
+				setTimeout(() => {
+					inputElem.classList.remove("shake");
+				}, 400);
+			}
 		} else {
-			elem.classList.remove("shadow")
+			// Якщо кількість в нормі — повертаємо стандартні кольори
+			if (warningElem) {
+				warningElem.classList.remove("text_danger_limit");
+				// Тут можна додати клас успіху, якщо потрібно
+				if (quantity > 0) warningElem.classList.add("text-success");
+			}
 		}
-
 	}
 
 	onClickArrow(obj) {
-
 		let { clickevent, id, maxQuantity } = obj
 
-		let divInputNumber =
-			document.querySelector(`.divInputNumberProduct_${id}`),
-			numberPlus = divInputNumber.querySelector('.arrow_plus'),
-			numberMinus = divInputNumber.querySelector('.arrow_minus'),
+		let divInputNumber = document.querySelector(`.divInputNumberProduct_${id}`),
 			numberInput = divInputNumber.querySelector('[type="number"]'),
-			quantity = +numberInput.value,
 			min = +numberInput.getAttribute('min'),
-			max = +numberInput.getAttribute('max'),
 			step = +numberInput.getAttribute('step') || 1
 
 		let valueInput = +numberInput.value
@@ -66,27 +86,27 @@ class ProductPage extends Component {
 		numberInput.focus()
 
 		if (clickevent === "plus") {
-
-			if (!(max <= valueInput + step)) {
-				numberInput.value = (valueInput * 10 + step * 10) / 10
-			} else {
-				numberInput.value = max
-			}
-
+			// Просто додаємо крок, ігноруючи будь-які максимуми
+			numberInput.value = (valueInput * 10 + step * 10) / 10
 		} else if (clickevent === "minus") {
-
 			if (!(min > valueInput - step)) {
 				numberInput.value = (valueInput * 10 - step * 10) / 10
 			} else {
 				numberInput.value = min
 			}
-
 		}
+
+		// ВАЖЛИВО: Отримуємо ОНОВЛЕНЕ значення після зміни
+		let updatedQuantity = +numberInput.value
 
 		numberInput.blur()
 
-		this.onMaxQuantity({ value: quantity, maxQuantity, id })
+		// Передаємо в onMaxQuantity вже нове значення
+		// Тепер підсвітка (shadow) з'явиться одразу, як тільки число перевищить складський запас
+		this.onMaxQuantity({ value: updatedQuantity, maxQuantity, id })
 
+		// Також варто викликати onChangeQuantity, щоб ціна в кошику/картці оновилася миттєво
+		// (якщо у вас там є доступ до потрібних параметрів ціни)
 	}
 
 	//    goToHomePage = () => {
@@ -136,7 +156,7 @@ class ProductPage extends Component {
 
 									<div className="arrow arrow_minus d-flex justify-content-center align-items-center position-absolute" onClick={() => this.onClickArrow({ clickevent: 'minus', id: thisProduct.id, maxQuantity: thisProduct.quantity })} ><i className="fa fa-minus" aria-hidden="true"></i></div>
 
-									<Input id={`input_product_${thisProduct.id}`} type="number" labelDisplay="d-none" className={`inputNumber text-center`} min={thisProduct.stepunits} step={thisProduct.stepunits} max={`${thisProduct.quantity}`} name={`product_${thisProduct.id}`} defaultValue={thisProduct.quantity ? 1 : 0} data_price={`${thisProduct.price}`} data_quantity={`${thisProduct.quantity}`} onFocus={event => this.onMaxQuantity({ value: +event.target.value, maxQuantity: thisProduct.quantity, id: thisProduct.id })} onBlur={event => this.onChangeQuantity({ value: +event.target.value, price: thisProduct.price, promotion: thisProduct.promotion, id: thisProduct.id, maxQuantity: thisProduct.quantity, stepunits: thisProduct.stepunits })} />
+									<Input id={`input_product_${thisProduct.id}`} type="number" labelDisplay="d-none" className={`inputNumber text-center`} min={thisProduct.stepunits} step={thisProduct.stepunits} name={`product_${thisProduct.id}`} defaultValue={thisProduct.quantity ? 1 : 0} data_price={`${thisProduct.price}`} data_quantity={`${thisProduct.quantity}`} onFocus={event => this.onMaxQuantity({ value: +event.target.value, maxQuantity: thisProduct.quantity, id: thisProduct.id })} onBlur={event => this.onChangeQuantity({ value: +event.target.value, price: thisProduct.price, promotion: thisProduct.promotion, id: thisProduct.id, maxQuantity: thisProduct.quantity, stepunits: thisProduct.stepunits })} />
 
 									<div className="arrow arrow_plus  d-flex justify-content-center align-items-center position-absolute" onClick={() => this.onClickArrow({ clickevent: 'plus', id: thisProduct.id, maxQuantity: thisProduct.quantity })} ><i className="fa fa-plus" aria-hidden="true"></i></div>
 
@@ -148,7 +168,6 @@ class ProductPage extends Component {
 									onClick={!window.localStorage.getItem('idThisUnKnownCustomers') ? this.props.addNewUnKnownCustomer : null}
 									selfType="success"
 									className="btn btn-success btn_to_cart"
-									disabled={!thisProduct.quantity}
 								>
 									<i className="fa fa-shopping-basket" aria-hidden="true"></i>
 								</Button>
@@ -160,10 +179,32 @@ class ProductPage extends Component {
 							</p>
 
 							{this.props.authAdmin
-								? <p className="mb-0 text-danger rounded" id={`warning_${thisProduct.id}`} >Доступно: <span className="text-primary">{`${thisProduct.quantity} ${thisProduct.units}.`}</span></p>
-								: thisProduct.quantity
-									? <p className="mb-0 text-success rounded" id={`warning_${thisProduct.id}`} >Товар є в наявності</p>
-									: <p className="mb-0 text-danger rounded" id={`warning_${thisProduct.id}`} >Товару немає в наявності</p>
+								? (
+									/* Логіка для адміна: завжди бачить точну кількість */
+									<p className="mb-0 text-success rounded" id={`warning_${thisProduct.id}`}>
+										Доступно: <span className="text-primary">{`${thisProduct.quantity} ${thisProduct.units}.`}</span>
+									</p>
+								)
+								: thisProduct.quantity > 0
+									? thisProduct.quantity < 20
+										? (
+											/* Якщо товару < 20 — показуємо точну кількість */
+											<p className="mb-0 text-warning rounded" id={`warning_${thisProduct.id}`}>
+												Залишилось всього: <span className="font-weight-bold">{`${thisProduct.quantity} ${thisProduct.units}.`}</span>
+											</p>
+										)
+										: (
+											/* Якщо товару >= 20 — показуємо загальний статус */
+											<p className="mb-0 text-success rounded" id={`warning_${thisProduct.id}`}>
+												Товар є в наявності
+											</p>
+										)
+									: (
+										/* Якщо товару 0 або менше */
+										<p className="mb-0 text-danger rounded" id={`warning_${thisProduct.id}`}>
+											Товару немає в наявності
+										</p>
+									)
 							}
 						</div>
 					</div>

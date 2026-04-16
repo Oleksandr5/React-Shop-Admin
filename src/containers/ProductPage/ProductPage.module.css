@@ -46,3 +46,25 @@
 .describe::-webkit-scrollbar {
 	width: 3px;
 }
+
+/* Анімація тряски */
+/* Додайте :global перед класом */
+:global(.shake) {
+  animation: shake 0.4s ease-in-out;
+  border-color: #dc3545 !important;
+}
+
+:global(.text_danger_limit) {
+  color: #dc3545 !important;
+  font-weight: bold;
+  transition: color 0.3s ease;
+}
+
+/* Анімацію можна залишити як є або теж у global */
+@keyframes shake {
+  0% { transform: translateX(0); }
+  25% { transform: translateX(-5px); }
+  50% { transform: translateX(5px); }
+  75% { transform: translateX(-5px); }
+  100% { transform: translateX(0); }
+}
