@@ -182,13 +182,14 @@ class Cart extends Component {
 		// successfulInfo .........   
 
 		setTimeout(async () => {
-
 			let emailAccount
+			// Прибираємо currentCustomerId, він нам тут не знадобиться, 
+			// бо ми використаємо idThisCustomers з аргументів
 
 			if (!hasAccount) {
-
 				let { name, tel, email } = this.state
 
+				// Перевіряємо локальне сховище для надійності
 				if (window.localStorage.getItem('idThisCustomers')) {
 					this.props.customers.forEach(customer => {
 						if (customer.id === +window.localStorage.getItem('idThisCustomers')) {
@@ -200,60 +201,50 @@ class Cart extends Component {
 				}
 
 				emailAccount = email
+				const thisCustomerEmailInBase = this.props.customers.find(customer => customer.email === emailAccount)
 
-				const thisCustomerEmailInBase = this.props.customers.filter(customer => customer.email === emailAccount)[0]
-
-				const isThisCustomerEmailInBase = thisCustomerEmailInBase ? true : false
-
-				if (!isThisCustomerEmailInBase) {
-					this.props.addNewCustomer({ email, name, tel, hasAccount, auth: false })
+				if (!thisCustomerEmailInBase) {
+					// ВАЖЛИВО: чекаємо завершення створення клієнта
+					await this.props.addNewCustomer({ email, name, tel, hasAccount, auth: false })
 				} else {
-					const auth = thisCustomerEmailInBase.auth
-
-					if (auth) {
-
+					if (thisCustomerEmailInBase.auth) {
+						// Якщо емейл зайнятий авторизованим профілем - стоп
 						let errorAuthInfo = `Вибачте, під цим емейлом вже зареєстрований користувач, авторизуйтеся або введіть інший емейл!!!`
-
 						successfulOrder_Info.innerHTML = errorAuthInfo
 						successfulOrder_Info.classList.add("text-danger")
 
-						// Порада: додайте сюди приховування іконки успіху, якщо вона була відкрита раніше
 						const successInfo = document.getElementById('blockInfo').querySelector('.successInfo')
 						const errorInfo = document.getElementById('blockInfo').querySelector('.errorInfo')
 						if (successInfo) successInfo.classList.add("d-none")
 						if (errorInfo) errorInfo.classList.remove("d-none")
 
 						this.props.errorFunctionCart()
-
-						return
-
+						return // Виходимо, не відправляємо замовлення
 					} else {
-						this.props.addNewCustomer({ email, name, tel, hasAccount, auth: false })
+						await this.props.addNewCustomer({ email, name, tel, hasAccount, auth: false })
 					}
-
 				}
-
 			} else {
-				emailAccount = this.props.customers.filter(customer => customer.id === this.props.customerId)[0].email
+				// Для зареєстрованих беремо емейл з пропсів
+				const customer = this.props.customers.find(customer => customer.id === this.props.customerId)
+				emailAccount = customer ? customer.email : ''
 			}
 
 			try {
 				console.log('sending_your_order...')
 
-				// Зберігаємо результат виконання екшену в змінну success.
-				// Оскільки в екшені є return, success буде або true, або false.
+				// ГОРОВНЕ ВИПРАВЛЕННЯ: використовуємо idThisCustomers
+				// Це гарантує, що екшен знайде кошик у базі orders/ навіть для гостя
 				const success = await this.props.addProductWithCartToOrdersHistory({
-					customerId: this.props.customerId,
+					customerId: idThisCustomers,
 					email: emailAccount,
 					productComments: this.state.productComments,
 					orderComment: this.state.orderComment,
 					orderType: currentOrderType
 				})
 
-				// ПЕРЕВІРКА: чи повернув екшен успіх (true)
 				if (success === true) {
-
-					// Очищаємо поля форми
+					// Тільки якщо запис в базу пройшов успішно (і товар є на складі)
 					const formControls = Object.assign({ ...this.state.formControls })
 					Object.keys(formControls).forEach(name => {
 						formControls[name].value = ''
@@ -289,8 +280,7 @@ class Cart extends Component {
 					})
 
 				} else {
-					// Якщо екшен повернув false (наприклад, спрацював alert через залишки товару)
-					// Приховуємо "Обробка даних...", щоб користувач міг далі редагувати кошик
+					// Якщо success === false (наприклад, не вистачило товару на складі)
 					const blockInfo = document.getElementById('blockInfo')
 					if (blockInfo) blockInfo.classList.add("d-none")
 				}
@@ -298,7 +288,6 @@ class Cart extends Component {
 			} catch (e) {
 				console.log('Помилка замовлення:', e);
 			} finally {
-				// У будь-якому випадку (успіх чи помилка) знову вмикаємо кнопку відправки
 				this.setState({ disabledBtnSend: false });
 			}
 

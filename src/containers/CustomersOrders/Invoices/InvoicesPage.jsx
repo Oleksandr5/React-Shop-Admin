@@ -2184,7 +2184,7 @@ const InvoicesPage = ({
 	fetchUsedMaterialsHistoryAction,
 	fetchAllUsedMaterialsHistoryAction,
 	fetchAllInvoices, fetchAllInvoicesReturn,
-	fetchUsedMaterials, addUsedMaterial, archiveAllDataMonthly, stock
+	fetchUsedMaterials, addUsedMaterial, stock
 }) => {
 
 
@@ -4589,5 +4589,5 @@ const mapStateToProps = state => {
 
 export default connect(mapStateToProps, {
 	fetchInvoices, fetchAllInvoices, fetchAllInvoicesReturn, fetchInvoicesReturn, fetchInvoicesSummary, fetchInvoicesSummaryReturn, fetchOrderNotifications, deleteNotification, clearNotifications,
-	fetchUsedMaterials, addUsedMaterial, fetchUsedMaterialsHistory, fetchUsedMaterialsHistoryAction, fetchAllUsedMaterialsHistoryAction, archiveAllDataMonthly, fetchRemainingMaterialsStart, setRemainingMaterialsStart
+	fetchUsedMaterials, addUsedMaterial, fetchUsedMaterialsHistory, fetchUsedMaterialsHistoryAction, fetchAllUsedMaterialsHistoryAction, fetchRemainingMaterialsStart, setRemainingMaterialsStart
 })(InvoicesPage);
