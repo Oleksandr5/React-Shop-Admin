@@ -535,6 +535,153 @@ export const archiveAllDataMonthly = async () => {
 	}
 };
 
+// Можливо треба замінити на цю версію з транзакцією:
+
+// export const archiveAllDataMonthly = async () => {
+// 	const rootRef = firebase.database().ref("/");
+
+// 	try {
+// 		// Використовуємо транзакцію для гарантії цілісності даних
+// 		const result = await rootRef.transaction((currentData) => {
+// 			// 1. ПЕРЕВІРКА НАЯВНОСТІ ДАНИХ (замість snapshot.val())
+// 			if (!currentData) {
+// 				console.warn("Дані в базі відсутні");
+// 				return currentData;
+// 			}
+
+// 			// Деструктуризація з дефолтними значеннями
+// 			const {
+// 				invoices = {},
+// 				invoicesReturn = {},
+// 				invoicesSummary = {},
+// 				invoicesSummaryReturn = {},
+// 				usedMaterials = {},
+// 				usedMaterialsHistory = {},
+// 				orderNotifications = {},
+// 				remainingMaterials = {},
+// 				remainingMaterialsStart = {},
+// 				invoiceStock = [],
+// 				products = [],
+// 				ordersHistory = [],
+// 				settings = {}
+// 			} = currentData;
+
+// 			const clientIds = settings?.clientsForWorkOrders || [];
+// 			const productIds = settings?.productsForWorkOrders || [];
+
+// 			// --- ФОРМУВАННЯ ШЛЯХУ ---
+// 			const date = new Date();
+// 			const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+// 			const timeStamp = `${String(date.getDate()).padStart(2, '0')}_${String(date.getHours()).padStart(2, '0')}-${String(date.getMinutes()).padStart(2, '0')}`;
+// 			const archivePath = `archive/${monthKey}/${timeStamp}`;
+
+// 			// --- 2. ЛОГІКА РОЗРАХУНКУ ЗАЛИШКІВ ---
+// 			const newRemainingMaterialsStart = {};
+// 			clientIds.forEach((cid) => {
+// 				newRemainingMaterialsStart[cid] = {};
+// 				productIds.forEach((pid) => {
+// 					const factualValue = remainingMaterials?.[cid]?.[pid];
+// 					if (factualValue !== undefined && factualValue !== null && factualValue !== "") {
+// 						newRemainingMaterialsStart[cid][pid] = Number(factualValue);
+// 					} else {
+// 						const start = Number(remainingMaterialsStart?.[cid]?.[pid] || 0);
+// 						const added = Number(invoicesSummary?.[cid]?.[pid]?.totalQuantity || 0);
+// 						const returned = Number(invoicesSummaryReturn?.[cid]?.[pid]?.totalQuantity || 0);
+// 						const spent = Number(usedMaterials?.[cid]?.[pid] || 0);
+
+// 						let calc = start + added - returned - spent;
+// 						newRemainingMaterialsStart[cid][pid] = calc < 0 ? 0 : calc;
+// 					}
+// 				});
+// 			});
+
+// 			// --- 3. РОЗДІЛЕННЯ ORDERS HISTORY (з перевіркою на об'єкт/масив) ---
+// 			const completedOrdersHistory = [];
+// 			const activeOrdersHistory = [];
+
+// 			// Безпечно перетворюємо ordersHistory у масив для обробки
+// 			const historyArray = Array.isArray(ordersHistory)
+// 				? ordersHistory
+// 				: Object.values(ordersHistory || {});
+
+// 			historyArray.forEach((customerData) => {
+// 				if (!customerData) return;
+
+// 				const completedCarts = (customerData.cartsHistory || []).filter(item => item.status === "completed");
+// 				const activeCarts = (customerData.cartsHistory || []).filter(item => item.status !== "completed");
+
+// 				const completedStock = (customerData.stockHistory || []).filter(item => item.status === "completed");
+// 				const activeStock = (customerData.stockHistory || []).filter(item => item.status !== "completed");
+
+// 				if (completedCarts.length > 0 || completedStock.length > 0) {
+// 					completedOrdersHistory.push({
+// 						...customerData,
+// 						cartsHistory: completedCarts,
+// 						stockHistory: completedStock
+// 					});
+// 				}
+// 				if (activeCarts.length > 0 || activeStock.length > 0) {
+// 					activeOrdersHistory.push({
+// 						...customerData,
+// 						cartsHistory: activeCarts,
+// 						stockHistory: activeStock
+// 					});
+// 				}
+// 			});
+
+// 			// --- 4. ОНОВЛЕННЯ СТРУКТУРИ ДАНИХ ПЕРЕД ЗБЕРЕЖЕННЯМ ---
+
+// 			// Створюємо шлях в архіві, якщо його немає
+// 			if (!currentData.archive) currentData.archive = {};
+// 			if (!currentData.archive[monthKey]) currentData.archive[monthKey] = {};
+
+// 			// Записуємо архівні дані
+// 			currentData.archive[monthKey][timeStamp] = {
+// 				archivedAt: date.toISOString(),
+// 				stockAtThatTime: products,
+// 				invoicesHistory: invoices,
+// 				invoicesReturnHistory: invoicesReturn,
+// 				invoicesSummaryHistory: invoicesSummary,
+// 				invoicesSummaryReturnHistory: invoicesSummaryReturn,
+// 				usedMaterialsHistory: usedMaterials,
+// 				usedMaterialsHistoryHistory: usedMaterialsHistory,
+// 				orderNotificationsHistory: orderNotifications,
+// 				remainingMaterialsHistory: remainingMaterials,
+// 				remainingMaterialsStartHistory: remainingMaterialsStart,
+// 				invoiceStockHistory: invoiceStock,
+// 				ordersHistoryArchive: completedOrdersHistory
+// 			};
+
+// 			// Очищуємо робочі гілки (аналог ваших updates = null)
+// 			currentData.ordersHistory = activeOrdersHistory;
+// 			currentData.invoices = null;
+// 			currentData.invoicesReturn = null;
+// 			currentData.invoicesSummary = null;
+// 			currentData.invoicesSummaryReturn = null;
+// 			currentData.usedMaterials = null;
+// 			currentData.usedMaterialsHistory = null;
+// 			currentData.orderNotifications = null;
+// 			currentData.remainingMaterials = null;
+// 			currentData.remainingMaterialsStart = newRemainingMaterialsStart;
+
+// 			// Повертаємо змінений об'єкт для фіксації транзакції
+// 			return currentData;
+// 		});
+
+// 		if (result.committed) {
+// 			console.log("✅ Архів успішно створено та дані оновлено");
+// 			return true;
+// 		} else {
+// 			console.warn("❌ Транзакцію не було зафіксовано");
+// 			return false;
+// 		}
+
+// 	} catch (error) {
+// 		console.error("Критична помилка при архівації:", error);
+// 		throw error;
+// 	}
+// };
+
 export const updateUsedMaterialLocal = (workerId, productId, value) => ({
 	type: UPDATE_USED_MATERIAL_SUCCESS,
 	payload: { workerId, productId, value }

@@ -6,7 +6,7 @@ import Input from '../../components/UI/Input/Input'
 import Loader from '../../components/UI/Loader/Loader'
 import Select from '../../components/UI/Select/Select'
 import { NavLink } from 'react-router-dom'
-import { updateIsOrdersHistoryThisCart, changeStatusCustomersOrders, removeOrderHistoryCustomer, removeOrdersHistoryCustomer, changeStatusCustomersReturns } from '../../redux/actions/products'
+import { updateIsOrdersHistoryThisCart, changeStatusCustomersOrders, updateOrderProductQuantity, removeOrderHistoryCustomer, removeOrdersHistoryCustomer, changeStatusCustomersReturns } from '../../redux/actions/products'
 import { onScroll, topFunction } from '../../redux/actions/menu'
 
 class CustomersOrders extends Component {
@@ -14,7 +14,8 @@ class CustomersOrders extends Component {
 	state = {
 		hasAccount: false,
 		valueSelectedStatusOrder: this.props.status,
-		valueSelectedStatusReturn: '' // Додано для повернень
+		valueSelectedStatusReturn: '', // Додано для повернень
+		editingFieldId: null // зберігатимемо ID продукту, який зараз редагується
 	}
 
 	getThisOrder(orders, customerId) {
@@ -86,7 +87,7 @@ class CustomersOrders extends Component {
 
 	}
 
-	renderOrders(order, indexOrderInHistory) {
+	renderOrders(order, indexOrderInHistory, customerId) {
 		const products = this.props.products;
 		const productsDeleted = this.props.productsDeleted;
 
@@ -98,6 +99,9 @@ class CustomersOrders extends Component {
 
 			return thisCart.map(product => {
 				const { id } = product;
+
+				// Перевіряємо, чи є ID цього продукту в state як активний для редагування
+				const isEditing = this.state.editingFieldId === id;
 
 				let thisProduct = products.find(p => p.id === id);
 
@@ -127,12 +131,39 @@ class CustomersOrders extends Component {
 						<div className="col-12 col-md-6 d-flex justify-content-between align-items-center order-3 order-md-2">
 							<Input
 								type="number"
-								className={`${classes.inputPrice}`}
+								// Комбінуємо класи через шаблонний рядок
+								className={`
+									${classes.inputPrice} 
+									{!isEditing ? classes.readOnlyInput : ''} 
+									${this.state.editingFieldId === id ? classes.editingInput : ''}
+								`}
 								name={`product_${id}_inHistory_${indexOrderInHistory}`}
-								id={`input_product_${id}_inHistory_${indexOrderInHistory}`}
-								data_price={`${product.price}`}
 								defaultValue={product.quantity}
-								readOnly="readOnly"
+								readOnly={!isEditing}
+
+								// При кліку активуємо ID
+								onClick={() => {
+									if (typeof order !== 'undefined' && order?.status === 'completed') {
+										alert("Замовлення завершене, редагування заблоковано.");
+										return; // Захист для завершених замовлень
+									}
+									this.setState({ editingFieldId: id });
+								}}
+
+								// При Blur — скидаємо
+								onBlur={(e) => {
+									this.setState({ editingFieldId: null });
+									const val = Number(e.target.value);
+
+									if (val >= 0 && val !== product.quantity) {
+										this.props.updateOrderProductQuantity({
+											customerId,
+											orderHistoryId: order.orderHistoryId,
+											productId: id,
+											newQuantity: val
+										});
+									}
+								}}
 							/>
 							<p className="mb-0" id={`product_price_${id}_inHistory_${indexOrderInHistory}`}>
 								<span name={`product_price_inHistory_${indexOrderInHistory}`}>
@@ -370,7 +401,7 @@ class CustomersOrders extends Component {
 													<h5 className={`text-primary ${classes.h5}`}>Дата: &nbsp;<span className={"text-info"}>{order.date}</span></h5>
 													<h5 className={`${classes.h5}`}>Статус: &nbsp;<span className={"text-warning"}>{selectStatusOrder}</span></h5>
 
-													{this.renderOrders(order, order.orderHistoryId)}
+													{this.renderOrders(order, order.orderHistoryId, customerId)}
 
 													{order.orderComment ? (
 														<div className="mt-3 p-3 rounded" style={{
@@ -460,6 +491,7 @@ function mapDispatchToProps(dispatch) {
 		topFunction: () => dispatch(topFunction()),
 		changeStatusCustomersOrders: (customerId, orderHistoryId, valueSelectedStatusOrder) =>
 			dispatch(changeStatusCustomersOrders(customerId, orderHistoryId, valueSelectedStatusOrder)),
+		updateOrderProductQuantity: (obj) => dispatch(updateOrderProductQuantity(obj)),
 		changeStatusCustomersReturns: (customerId, orderHistoryId, valueSelectedStatusReturn) =>
 			dispatch(changeStatusCustomersReturns(customerId, orderHistoryId, valueSelectedStatusReturn)),
 		removeOrderHistoryCustomer: (idCustomer, orderHistoryId) =>

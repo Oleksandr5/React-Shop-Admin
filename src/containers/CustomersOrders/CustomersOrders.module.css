@@ -92,3 +92,10 @@
 		font-size: 14px;
 	}
 }
+
+.editingInput {
+    border: 1px solid #f39c12 !important; /* Золотий колір */
+    background-color: #fffcf5 !important; /* Легкий відтінок фону для акценту */
+    outline: none;
+    box-shadow: 0 0 5px rgba(243, 156, 18, 0.3);
+}

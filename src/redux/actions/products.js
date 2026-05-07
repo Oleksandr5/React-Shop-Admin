@@ -1759,6 +1759,68 @@ export const removeOrderHistoryIds = async (db) => {
 	}
 };
 
+export function updateOrderProductQuantity(obj) {
+	return async (dispatch, getState) => {
+		// Деструктуризація об'єкта для зручності
+		const { customerId, orderHistoryId, productId, newQuantity } = obj;
+
+		const db = firebase.database();
+		const newQty = Number(newQuantity);
+
+		try {
+			// 1. Перевірка складу (залишаємо вашу логіку)
+			const responseProducts = await axios.get(`products.json`);
+			const productsData = Array.isArray(responseProducts.data)
+				? responseProducts.data
+				: Object.values(responseProducts.data || {});
+
+			const productInStock = productsData.find(p => p && String(p.id) === String(productId));
+
+			if (productInStock && newQty > Number(productInStock.quantity)) {
+				alert(`Недостатньо товару на складі! \nДоступно: ${productInStock.quantity} ${productInStock.units || 'шт.'}`);
+				return false;
+			}
+
+			// 2. ТРАНЗАКЦІЯ
+			await db.ref('ordersHistory').transaction((currentData) => {
+				if (!currentData) return currentData;
+
+				let data = Array.isArray(currentData) ? [...currentData] : Object.values(currentData);
+
+				const customerIndex = data.findIndex(item => item && item.customerId === customerId);
+				if (customerIndex === -1) return currentData;
+
+				const orderIndex = data[customerIndex].cartsHistory?.findIndex(o => o.orderHistoryId === orderHistoryId);
+				if (orderIndex === -1 || orderIndex === undefined) return currentData;
+
+				const cart = data[customerIndex].cartsHistory[orderIndex].cart;
+				const productInCartIndex = cart.findIndex(p => String(p.id) === String(productId));
+
+				if (productInCartIndex !== -1) {
+					data[customerIndex].cartsHistory[orderIndex].cart[productInCartIndex].quantity = newQty;
+				}
+
+				return data;
+			});
+
+			// 3. Оновлення Redux
+			const finalHistoryResponse = await axios.get(`ordersHistory.json`);
+			const cleanHistory = finalHistoryResponse.data
+				? (Array.isArray(finalHistoryResponse.data) ? finalHistoryResponse.data : Object.values(finalHistoryResponse.data))
+				: [];
+
+			dispatch(updateOrdersHistory(cleanHistory));
+			return true;
+
+		} catch (e) {
+			console.error("Помилка при оновленні кількості:", e);
+			alert("Помилка при оновленні.");
+			return false;
+		}
+	};
+}
+
+
 export function addProductWithCartToOrdersHistory(obj) {
 	return async (dispatch, getState) => {
 
@@ -2031,14 +2093,166 @@ export function updateIsOrdersThisCart(status) {
 	}
 }
 
+// export function changeStatusCustomersOrders(customerId, orderHistoryId, valueSelectedStatusOrder) {
+// 	return async (dispatch, getState) => {
+// 		const db = firebase.database();
+
+// 		try {
+// 			console.log('--- СТАРТ: ЗМІНА СТАТУСУ ТА СКЛАДУ ---');
+
+// 			// 1. ТРАНЗАКЦІЯ ДЛЯ ТОВАРІВ
+// 			await db.ref('products').transaction((currentProducts) => {
+// 				if (!currentProducts) return currentProducts;
+
+// 				console.log('ТРАНЗАКЦІЯ (products) ДО:', JSON.parse(JSON.stringify(currentProducts)));
+
+// 				const ordersHistory = getState().products.ordersHistory;
+// 				const adminEntry = ordersHistory.find(o => o.customerId === customerId);
+// 				const cartItem = adminEntry?.cartsHistory.find(c => c.orderHistoryId === orderHistoryId);
+
+// 				if (!cartItem) return currentProducts;
+
+// 				const oldStatus = cartItem.status;
+// 				if (oldStatus === valueSelectedStatusOrder) return currentProducts;
+
+// 				let products = Array.isArray(currentProducts) ? [...currentProducts] : Object.values(currentProducts);
+
+// 				if (oldStatus === 'in process...' && valueSelectedStatusOrder === 'completed') {
+// 					for (let item of cartItem.cart) {
+// 						const p = products.find(p => String(p.id) === String(item.id));
+// 						if (!p || Number(p.quantity) < Number(item.quantity)) {
+// 							throw new Error(`Insufficient_Stock:${p?.name || 'Товар'}`);
+// 						}
+// 					}
+// 				}
+
+// 				cartItem.cart.forEach(item => {
+// 					const product = products.find(p => String(p.id) === String(item.id));
+// 					if (product) {
+// 						const qty = Number(item.quantity);
+// 						const startQty = Number(product.quantity || 0);
+
+// 						if (oldStatus === 'in process...' && valueSelectedStatusOrder === 'completed') {
+// 							product.quantity = Number((startQty - qty).toFixed(2));
+// 							product.popularity = (Number(product.popularity) || 0) + 1;
+// 						} else if (oldStatus === 'completed' && valueSelectedStatusOrder === 'in process...') {
+// 							product.quantity = Number((startQty + qty).toFixed(2));
+// 						}
+// 					}
+// 				});
+
+// 				console.log('ТРАНЗАКЦІЯ (products) ПІСЛЯ:', JSON.parse(JSON.stringify(products)));
+// 				return products;
+// 			});
+
+// 			// 2. ТРАНЗАКЦІЯ ДЛЯ ІСТОРІЇ
+// 			await db.ref('ordersHistory').transaction((currentHistory) => {
+// 				if (!currentHistory) return currentHistory;
+// 				console.log('ТРАНЗАКЦІЯ (ordersHistory) ДО:', JSON.parse(JSON.stringify(currentHistory)));
+
+// 				let history = Array.isArray(currentHistory) ? [...currentHistory] : Object.values(currentHistory);
+// 				const adminEntry = history.find(h => h && h.customerId === customerId);
+// 				const targetOrder = adminEntry?.cartsHistory?.find(c => c.orderHistoryId === orderHistoryId);
+
+// 				if (targetOrder) {
+// 					targetOrder.status = valueSelectedStatusOrder;
+// 				}
+
+// 				console.log('ТРАНЗАКЦІЯ (ordersHistory) ПІСЛЯ:', JSON.parse(JSON.stringify(history)));
+// 				return history;
+// 			});
+
+// 			// 3. НАКЛАДНІ ТА ПОВІДОМЛЕННЯ (Invoices)
+// 			const cartItem = getState().products.ordersHistory
+// 				.find(o => o.customerId === customerId)
+// 				?.cartsHistory.find(c => c.orderHistoryId === orderHistoryId);
+
+// 			if (valueSelectedStatusOrder === 'completed') {
+// 				const productsSnap = await db.ref('products').once('value');
+// 				const pArr = Object.values(productsSnap.val() || {});
+
+// 				const invoiceData = {
+// 					idOrderHistory: orderHistoryId,
+// 					customerId,
+// 					date: cartItem.date,
+// 					status: 'done',
+// 					orderComment: cartItem.orderComment || "",
+// 					items: cartItem.cart.map(item => {
+// 						const p = pArr.find(p => String(p.id) === String(item.id));
+// 						return {
+// 							productId: item.id,
+// 							name: p?.name || item.productName || 'Товар',
+// 							units: p?.units || 'шт',
+// 							quantity: Number(item.quantity),
+// 							price: p?.price || 0,
+// 							comment: item.comment || ""
+// 						};
+// 					})
+// 				};
+// 				await Promise.all([
+// 					db.ref(`invoices/${customerId}/${orderHistoryId}`).set(invoiceData),
+// 					db.ref(`orderNotifications/${customerId}/${orderHistoryId}`).set({
+// 						orderId: orderHistoryId, customerId, date: cartItem.date, createdAt: Date.now()
+// 					})
+// 				]);
+// 			} else {
+// 				await Promise.all([
+// 					db.ref(`invoices/${customerId}/${orderHistoryId}`).remove(),
+// 					db.ref(`orderNotifications/${customerId}/${orderHistoryId}`).remove()
+// 				]);
+// 			}
+
+// 			// 4. SUMMARY
+// 			const invoicesSnap = await db.ref(`invoices/${customerId}`).once('value');
+// 			const invData = invoicesSnap.val();
+// 			if (!invData) {
+// 				await db.ref(`invoicesSummary/${customerId}`).remove();
+// 			} else {
+// 				const summary = {};
+// 				Object.values(invData).forEach(inv => {
+// 					inv.items?.forEach(item => {
+// 						if (!summary[item.productId]) {
+// 							summary[item.productId] = { productId: item.productId, name: item.name, units: item.units, totalQuantity: 0 };
+// 						}
+// 						summary[item.productId].totalQuantity += Number(item.quantity);
+// 					});
+// 				});
+// 				await db.ref(`invoicesSummary/${customerId}`).set(summary);
+// 			}
+
+// 			// 5. ОНОВЛЕННЯ REDUX (Вирішуємо проблему з оновленням)
+// 			const [resProd, resHist] = await Promise.all([
+// 				axios.get('products.json'),
+// 				axios.get('ordersHistory.json')
+// 			]);
+
+// 			// ПЕРЕТВОРЮЄМО ОБ'ЄКТИ В МАСИВИ (запобіжник для Redux)
+// 			const cleanProducts = resProd.data ? (Array.isArray(resProd.data) ? resProd.data : Object.values(resProd.data)) : [];
+// 			const cleanHistory = resHist.data ? (Array.isArray(resHist.data) ? resHist.data : Object.values(resHist.data)) : [];
+
+// 			dispatch(updateProducts(cleanProducts));
+// 			dispatch(updateOrdersHistory(cleanHistory));
+
+// 			console.log('--- УСПІШНО ЗАВЕРШЕНО ТА ОНОВЛЕНО ---');
+
+// 		} catch (e) {
+// 			console.error("Помилка:", e);
+// 			if (e.message.includes('Insufficient_Stock')) {
+// 				alert(`Недостатньо товару: ${e.message.split(':')[1]}`);
+// 			}
+// 		}
+// 	};
+// }  // ця функція "кричить" про помилку (throw Error), що іноді змушує React або Firebase викидати червоні написи в консоль (як на ваших скріншотах). А переписана нижче функція "тихо" зупиняє транзакцію (return), зберігає список проблемних товарів у змінну і показує вам зрозумілий alert вже після того, як транзакція безпечно завершилася.
+
 export function changeStatusCustomersOrders(customerId, orderHistoryId, valueSelectedStatusOrder) {
 	return async (dispatch, getState) => {
 		const db = firebase.database();
+		let outOfStockData = null;
 
 		try {
 			console.log('--- СТАРТ: ЗМІНА СТАТУСУ ТА СКЛАДУ ---');
 
-			// 1. ТРАНЗАКЦІЯ ДЛЯ ТОВАРІВ
+			// 1. ТРАНЗАКЦІЯ ДЛЯ ТОВАРІВ (Списання/Повернення залишків)
 			await db.ref('products').transaction((currentProducts) => {
 				if (!currentProducts) return currentProducts;
 
@@ -2055,15 +2269,30 @@ export function changeStatusCustomersOrders(customerId, orderHistoryId, valueSel
 
 				let products = Array.isArray(currentProducts) ? [...currentProducts] : Object.values(currentProducts);
 
+				// Перевірка наявності при спробі завершити замовлення
 				if (oldStatus === 'in process...' && valueSelectedStatusOrder === 'completed') {
+					let outOfStockItems = [];
 					for (let item of cartItem.cart) {
 						const p = products.find(p => String(p.id) === String(item.id));
-						if (!p || Number(p.quantity) < Number(item.quantity)) {
-							throw new Error(`Insufficient_Stock:${p?.name || 'Товар'}`);
+						const requested = Number(item.quantity);
+						const available = Number(p?.quantity || 0);
+
+						if (!p || available < requested) {
+							outOfStockItems.push({
+								name: p?.name || `ID: ${item.id}`,
+								requested: requested,
+								available: available
+							});
 						}
+					}
+
+					if (outOfStockItems.length > 0) {
+						outOfStockData = outOfStockItems;
+						return; // Скасування транзакції через повернення undefined
 					}
 				}
 
+				// Логіка зміни кількості
 				cartItem.cart.forEach(item => {
 					const product = products.find(p => String(p.id) === String(item.id));
 					if (product) {
@@ -2071,9 +2300,11 @@ export function changeStatusCustomersOrders(customerId, orderHistoryId, valueSel
 						const startQty = Number(product.quantity || 0);
 
 						if (oldStatus === 'in process...' && valueSelectedStatusOrder === 'completed') {
+							// ВІДНІМАННЯ ЗІ СКЛАДУ ПРИ ПІДТВЕРДЖЕННІ
 							product.quantity = Number((startQty - qty).toFixed(2));
 							product.popularity = (Number(product.popularity) || 0) + 1;
 						} else if (oldStatus === 'completed' && valueSelectedStatusOrder === 'in process...') {
+							// ПОВЕРНЕННЯ НА СКЛАД ПРИ СКАСУВАННІ
 							product.quantity = Number((startQty + qty).toFixed(2));
 						}
 					}
@@ -2082,6 +2313,16 @@ export function changeStatusCustomersOrders(customerId, orderHistoryId, valueSel
 				console.log('ТРАНЗАКЦІЯ (products) ПІСЛЯ:', JSON.parse(JSON.stringify(products)));
 				return products;
 			});
+
+			// Перевірка на помилку недостатньої кількості (винесено з транзакції)
+			if (outOfStockData) {
+				let errorMessage = "Неможливо змінити статус. Недостатньо товару на складі:\n\n";
+				outOfStockData.forEach(item => {
+					errorMessage += `- ${item.name}: потрібно ${item.requested}, в наявності ${item.available}\n`;
+				});
+				alert(errorMessage);
+				return;
+			}
 
 			// 2. ТРАНЗАКЦІЯ ДЛЯ ІСТОРІЇ
 			await db.ref('ordersHistory').transaction((currentHistory) => {
@@ -2140,7 +2381,7 @@ export function changeStatusCustomersOrders(customerId, orderHistoryId, valueSel
 				]);
 			}
 
-			// 4. SUMMARY
+			// 4. SUMMARY (Оновлення залишків по клієнту)
 			const invoicesSnap = await db.ref(`invoices/${customerId}`).once('value');
 			const invData = invoicesSnap.val();
 			if (!invData) {
@@ -2158,13 +2399,12 @@ export function changeStatusCustomersOrders(customerId, orderHistoryId, valueSel
 				await db.ref(`invoicesSummary/${customerId}`).set(summary);
 			}
 
-			// 5. ОНОВЛЕННЯ REDUX (Вирішуємо проблему з оновленням)
+			// 5. ОНОВЛЕННЯ REDUX
 			const [resProd, resHist] = await Promise.all([
 				axios.get('products.json'),
 				axios.get('ordersHistory.json')
 			]);
 
-			// ПЕРЕТВОРЮЄМО ОБ'ЄКТИ В МАСИВИ (запобіжник для Redux)
 			const cleanProducts = resProd.data ? (Array.isArray(resProd.data) ? resProd.data : Object.values(resProd.data)) : [];
 			const cleanHistory = resHist.data ? (Array.isArray(resHist.data) ? resHist.data : Object.values(resHist.data)) : [];
 
@@ -2175,9 +2415,7 @@ export function changeStatusCustomersOrders(customerId, orderHistoryId, valueSel
 
 		} catch (e) {
 			console.error("Помилка:", e);
-			if (e.message.includes('Insufficient_Stock')) {
-				alert(`Недостатньо товару: ${e.message.split(':')[1]}`);
-			}
+			alert("Сталася помилка при зміні статусу замовлення.");
 		}
 	};
 }
