@@ -1055,41 +1055,63 @@ export function onSelectedProducts(selectedProducts) {
 
 // start filter products on admin products page
 
+// export function filterConditionAdmin(objproduct, objprops) {
+// 	return (dispatch, getState) => {
+
+// 		let filterCond = true
+
+// 		for (const property in objprops) {
+
+// 			let condition
+
+// 			if (property === 'popularity') {
+
+// 				if (objprops[property]) {
+// 					if (objproduct[property] !== 0) {
+// 						condition = true
+// 					} else {
+// 						condition = false
+// 					}
+// 				} else {
+// 					condition = true
+// 				}
+
+// 			} else {
+// 				condition = objproduct[property] === objprops[property]
+// 			}
+
+// 			if (filterCond === true || filterCond === false) {
+// 				let newCondition = filterCond && condition
+// 				filterCond = newCondition
+// 			} else {
+// 				filterCond = condition
+// 			}
+// 		}
+
+// 		return filterCond
+// 	}
+// }
+
 export function filterConditionAdmin(objproduct, objprops) {
-	return (dispatch, getState) => {
+	let filterCond = true;
 
-		let filterCond = true
+	for (const property in objprops) {
+		let condition = true;
 
-		for (const property in objprops) {
-
-			let condition
-
-			if (property === 'popularity') {
-
-				if (objprops[property]) {
-					if (objproduct[property] !== 0) {
-						condition = true
-					} else {
-						condition = false
-					}
-				} else {
-					condition = true
-				}
-
-			} else {
-				condition = objproduct[property] === objprops[property]
-			}
-
-			if (filterCond === true || filterCond === false) {
-				let newCondition = filterCond && condition
-				filterCond = newCondition
-			} else {
-				filterCond = condition
+		if (property === 'popularity') {
+			condition = objprops[property] ? (objproduct[property] !== 0) : true;
+		} else {
+			// Перевірка на пусті значення в фільтрі
+			if (objprops[property] !== undefined && objprops[property] !== null && objprops[property] !== '') {
+				condition = objproduct[property] === objprops[property];
 			}
 		}
 
-		return filterCond
+		filterCond = filterCond && condition;
+		if (!filterCond) break; // Оптимізація: якщо одна умова не підійшла, далі не перевіряємо
 	}
+
+	return filterCond; // Повертає чистий boolean (true/false)
 }
 
 export function visibleFilterAdmin(obj) {

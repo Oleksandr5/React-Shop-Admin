@@ -418,6 +418,29 @@ class ProductsTable extends Component {
 			option={this.optionVisibleProduct()}
 		/>
 
+
+
+		// 1. Спочатку сортуємо весь масив
+		const sortedProducts = orderBy(this.props.products, ['id', 'popularity', 'promotion', 'price', 'name'], ['desc', 'desc', 'desc', 'asc', 'desc']);
+
+		console.log('sortedProducts', sortedProducts)
+		// 2. Створюємо список елементів, зберігаючи оригінальний index
+		const productItems = sortedProducts.map((product, index) => {
+			if (filterConditionAdmin(product, this.props.filterPropsAdmin)) {
+				return (
+					<ProductItem
+						key={product.id}
+						product={product} // ПЕРЕДАЄМО ВЕСЬ ОБ'ЄКТ
+						productId={product.id}
+						promotion={product.promotion}
+						index={index}
+					/>
+				);
+			}
+			return null;
+		}).filter(item => item !== null);
+		console.log('productItems', productItems)
+
 		return (
 			<table className={classes.ProductsTable}>
 				<thead>
@@ -441,8 +464,6 @@ class ProductsTable extends Component {
 						<th className={`${classes.headerTitle} ${classes.min_width}`}>Edit</th>
 						<th className={`${classes.headerTitle} ${classes.min_width}`}>remove</th>
 					</tr>
-				</thead>
-				<thead className={classes.productsFilters}>
 					<tr className={classes.trHeaderSelect}>
 						<th className={classes.headerTitleCheckAll}>
 
@@ -464,19 +485,15 @@ class ProductsTable extends Component {
 					</tr>
 				</thead>
 				<tbody>
-					{this.props.selectedProductsAdmin[0]
-						? orderBy(this.props.products, ['popularity', 'promotion', 'price', 'name'], ['desc', 'desc', 'asc', 'desc']).map((product, index) => {
-							if (this.props.filterConditionAdmin(product, this.props.filterPropsAdmin)) {
-								return <ProductItem key={product.id} productId={product.id} promotion={product.promotion} index={index} />
-							}
-						})
-						: this.props.selectedProductsAdmin[0] === null
-							? <tr><th className={classes.mob_d_none}></th><th className={classes.mob_d_none}></th><th className={classes.mob_d_none}></th><th className={classes.mob_d_none}></th><th className={classes.mob_d_none}></th><th className={classes.mob_d_none}></th><th><h3 className="text-danger text-center m-1">В даній категорії немає продуктів</h3></th><th className={classes.mob_d_none}></th><th className={classes.mob_d_none}></th><th className={classes.mob_d_none}></th><th className={classes.mob_d_none}></th><th className={classes.mob_d_none}></th><th className={classes.mob_d_none}></th><th className={classes.mob_d_none}></th><th className={classes.mob_d_none}></th></tr>
-							: orderBy(this.props.products, ['popularity', 'promotion', 'price', 'name'], ['desc', 'desc', 'asc', 'desc']).map((product, index) => {
-								if (this.props.filterConditionAdmin(product, this.props.filterPropsAdmin)) {
-									return <ProductItem key={product.id} productId={product.id} promotion={product.promotion} index={index} />
-								}
-							})
+					{productItems.length > 0
+						? productItems
+						: (
+							<tr>
+								<th colSpan="15">
+									<h3 className="text-danger text-center m-1">В даній категорії немає продуктів</h3>
+								</th>
+							</tr>
+						)
 					}
 				</tbody>
 
@@ -505,8 +522,7 @@ function mapDispatchToProps(dispatch) {
 		promotionFilterAdmin: obj => dispatch(promotionFilterAdmin(obj)),
 		visibleFilterAdmin: obj => dispatch(visibleFilterAdmin(obj)),
 		resetFiltersAdmin: () => dispatch(resetFiltersAdmin()),
-		popularityFilterAdmin: obj => dispatch(popularityFilterAdmin(obj)),
-		filterConditionAdmin: (objproduct, objprops) => dispatch(filterConditionAdmin(objproduct, objprops))
+		popularityFilterAdmin: obj => dispatch(popularityFilterAdmin(obj))
 	}
 }
 

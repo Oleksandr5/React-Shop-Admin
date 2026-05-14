@@ -183,9 +183,13 @@ class ProductItem extends Component {
 			option={this.optionPromotionsProduct()}
 		/>
 
-		const { index } = this.props
+		// Тепер ми беремо готовий об'єкт продукту з props, 
+		// який нам передав батьківський компонент
+		const product = this.props.product;
 
-		let product = orderBy(this.props.products, ['popularity', 'promotion', 'price', 'name'], ['desc', 'desc', 'asc', 'desc'])[index]
+		if (!product) return null; // Захист від помилок
+
+		const { productId } = this.props;
 
 		//        if(filter) {
 		//            product = this.props.selectedProductsAdmin[index]
