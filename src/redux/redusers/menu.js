@@ -17,8 +17,6 @@ const initialState = {
 		{ to: '/switchcustomerscarts', name: 'Кошики клієнтів', exact: true },
 		{ to: '/invoice-stock', name: '📦 Накладні складу', exact: true, adminOnly: true },
 		{ to: '/invoices', name: 'Накладні', exact: true },
-		{ to: '/archive', name: '📦 Архів', exact: true, adminOnly: true },
-		{ to: '/archive-reports', name: '📋 Архів звітів', exact: true, adminOnly: true },
 		{ to: '/customerslistedit', name: 'Список користувачів', exact: true },
 		{ to: '/categorieslistedit', name: 'Список категорій', exact: true },
 		{ to: '/productslistedit', name: 'Список продуктів', exact: true }
