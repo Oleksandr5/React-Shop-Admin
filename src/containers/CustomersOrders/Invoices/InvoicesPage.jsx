@@ -489,7 +489,7 @@ const CrewInventoryReport = ({
 						handlePrintCombinedData(reportRows, crewNames);
 					}}
 				>
-					🖨️ Друк звіту екіпажу {crewNames}
+					🖨️ Показати звіт екіпажу {crewNames}
 				</button>
 
 				<button
@@ -1805,7 +1805,7 @@ const UsedMaterialsTable = ({
 
 				<div className={classes.ga_rowLayout}>
 					<button className={`${classes.ga_btnBase} ${classes.ga_btnBlue}`} onClick={(e) => { e.stopPropagation(); handlePrintUsedMaterials(usedMaterials, stock, finalName); }}>
-						🖨️ Друк Використані матеріали ${finalName}
+						🖨️ Показати Використані матеріали ${finalName}
 					</button>
 					<button className={`${classes.ga_btnBase} ${classes.ga_btnGreen}`} onClick={(e) => { e.stopPropagation(); handleExportUsedMaterialsToCSV(usedMaterials, stock, finalName); }}>
 						📥 Експорт Excel (CSV) Використані матеріали ${finalName}
@@ -4184,7 +4184,7 @@ const InvoicesPage = ({
 						handlePrintOrderTable(filteredData, finalName);
 					}}
 				>
-					🖨️ Друк таблиці замовлень / повернень ${finalName}
+					🖨️ Показати таблиці замовлень / повернень ${finalName}
 				</button>
 
 				<button
@@ -4340,7 +4340,7 @@ const InvoicesPage = ({
 						handlePrintInvoicesSummary(combinedSummary, finalName); // Або ваша функція для друку саме цього звіту
 					}}
 				>
-					🖨️ Друк Загальну к-ть матеріалів ${finalName}
+					🖨️ Показати Загальну к-ть матеріалів ${finalName}
 				</button>
 				<button
 					className={classes.btnExport}
@@ -4430,7 +4430,7 @@ const InvoicesPage = ({
 								}}
 								className={classes.btnPrint}
 							>
-								🖨️ Друк Склад
+								🖨️ Показати Склад
 							</button>
 
 							<button
