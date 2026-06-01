@@ -3831,213 +3831,215 @@ const InvoicesPage = ({
 			</div>
 
 			{isAdminUsedMaterials && notifications.length > 0 && (
-				<>
-					<div className={classes.notificationsBlock} style={{ marginBottom: '20px' }}>
-						<button
-							className={classes.btnToggle}
-							onClick={() => setVisibleTables(prev => ({ ...prev, notifications: !prev.notifications }))}
+				<div className={classes.notificationsBlock} style={{ marginBottom: '20px' }}>
+					<button
+						className={classes.btnToggle}
+						onClick={() => setVisibleTables(prev => ({ ...prev, notifications: !prev.notifications }))}
+						style={{
+							marginBottom: visibleTables.notifications ? '15px' : '0'
+						}}
+					>
+						<span style={{ display: 'flex', alignItems: 'center' }}>
+							{visibleTables.notifications ? (
+								<>
+									<span className={classes.arrowRed}>▲</span>
+									<span>Приховати активні сповіщення</span>
+								</>
+							) : (
+								<>
+									<span className={classes.arrowGreen}>▼</span>
+									<span>Показати активні сповіщення</span>
+								</>
+							)}
+						</span>
+						<span style={{ fontSize: '0.9em', opacity: 0.9, marginLeft: 'auto' }}>
+							({notifications.length})
+						</span>
+					</button>
+					{visibleTables.notifications && (
+						<div className={classes.notificationsContent}>
+							<div className={classes.notificationsHeader}>
+								<h3>
+									🔔 Підтверджені замовлення / повернення
+									{archiveStatus}
+								</h3>
+
+								{/* Кнопка "Очистити" з'являється тільки в Live-режимі */}
+								{!isArchiveMode && (
+									<button
+										className={classes.clearBtn}
+										onClick={() => { if (window.confirm("Очистити всі?")) clearNotifications(isAdminInvoices ? null : selectedUser); }}
+									>
+										❌ Очистити всі
+									</button>
+								)}
+							</div>
+
+							<div className={classes.notificationsList}>
+								{notifications
+									// Додаємо сортування перед рендером
+									.sort((a, b) => {
+										const idA = parseInt(a.orderId || a.id || 0, 10);
+										const idB = parseInt(b.orderId || b.id || 0, 10);
+										return idB - idA; // Від більшого до меншого
+									})
+									.map((n, i) => {
+										const isReturn = n.type === 'return';
+
+										// Визначаємо поля (враховуючи різницю між Live та Архівною структурою)
+										const orderId = n.orderId || n.id || '---';
+										const customerId = n.customerId || n.userId || '---';
+										const date = n.date || n.createdAt || '---';
+
+										return (
+											<div
+												key={`${orderId}_${i}`}
+												className={`${classes.notificationItem} ${isReturn ? classes.returnType : ''}`}
+											>
+												<div
+													onClick={() => handleOrderDetails({ ...n, orderId, customerId })}
+													style={{ cursor: 'pointer', flex: 1 }}
+													title="Натисніть, щоб побачити деталі"
+												>
+													<strong>
+														{isReturn ? '↩️ Повернення' : '📦 Замовлення'} #{orderId}
+													</strong>
+													<div className={classes.meta}>
+														👤 {customerId} ({customers.find(c => String(c.id) === String(customerId))?.name || 'Клієнт'}) | 📅 {date}
+													</div>
+												</div>
+
+												{/* Кошик з'являється тільки в Live-режимі (як і було) */}
+												{!isArchiveMode && (
+													<button
+														className={classes.deleteBtn}
+														onClick={() => { if (window.confirm("Видалити сповіщення?")) deleteNotification(n); }}
+													>
+														🗑
+													</button>
+												)}
+											</div>
+										);
+									})}
+							</div>
+						</div>
+					)}
+				</div>
+
+			)}
+
+			{isAdminUsedMaterials && (
+				<div style={{
+					padding: '15px',
+					background: '#f8f9fa',
+					borderRadius: '10px',
+					marginBottom: '20px',
+					border: '1px solid #dee2e6',
+					boxShadow: '0 2px 4px rgba(0,0,0,0.05)'
+				}}>
+					<h4 style={{ marginTop: 0, color: '#333' }}>🔍 Глобальний пошук по матеріалу</h4>
+
+					<div style={{
+						display: 'flex',
+						alignItems: 'center',
+						flexWrap: 'wrap',
+						gap: '10px'
+					}}>
+						{/* Випадаючий список */}
+						<select
+							value={globalSearchTerm}
+							onChange={(e) => setGlobalSearchTerm(e.target.value)}
 							style={{
-								marginBottom: visibleTables.notifications ? '15px' : '0'
+								padding: '10px',
+								flex: '1 1 300px',
+								minWidth: '200px',
+								maxWidth: '100%', // Щоб не виходило за межі екрану
+								borderRadius: '5px',
+								border: '1px solid #ced4da',
+								fontSize: '14px',
+								outline: 'none',
+								height: '42px',
+								appearance: 'auto', // Гарантує стандартний вигляд зі стрілкою та скролом
+								overflowY: 'auto'   // Дозволяє внутрішній скрол, якщо браузер це підтримує для select
 							}}
 						>
-							<span style={{ display: 'flex', alignItems: 'center' }}>
-								{visibleTables.notifications ? (
-									<>
-										<span className={classes.arrowRed}>▲</span>
-										<span>Приховати активні сповіщення</span>
-									</>
-								) : (
-									<>
-										<span className={classes.arrowGreen}>▼</span>
-										<span>Показати активні сповіщення</span>
-									</>
-								)}
-							</span>
-							<span style={{ fontSize: '0.9em', opacity: 0.9, marginLeft: 'auto' }}>
-								({notifications.length})
-							</span>
+							<option value="">-- Оберіть матеріал зі списку --</option>
+							{(stock || [])
+								.filter(product => {
+									const pId = String(product.productId || product.id);
+									return (dynamicProductIds || []).some(id => String(id) === pId);
+								})
+								.sort((a, b) => (a.name || "").localeCompare(b.name || ""))
+								.map((product) => (
+									<option key={product.productId || product.id} value={product.name}>
+										{product.name}
+									</option>
+								))
+							}
+						</select>
+
+						{/* Кнопка 1: Замовлення */}
+						<button
+							onClick={() => handlePrintMaterialGlobalSearch(globalSearchTerm)}
+							disabled={!globalSearchTerm}
+							style={{
+								padding: '10px 20px',
+								flex: '1 1 200px', // Розтягується на всю ширину на мобілках
+								background: globalSearchTerm ? '#17a2b8' : '#ccc',
+								color: '#fff',
+								border: 'none',
+								borderRadius: '5px',
+								cursor: globalSearchTerm ? 'pointer' : 'default',
+								fontWeight: 'bold',
+								transition: '0.3s',
+								height: '42px',
+								whiteSpace: 'nowrap'
+							}}
+						>
+							📦 Пошук в замовленнях
 						</button>
-						{visibleTables.notifications && (
-							<div className={classes.notificationsContent}>
-								<div className={classes.notificationsHeader}>
-									<h3>
-										🔔 Підтверджені замовлення / повернення
-										{archiveStatus}
-									</h3>
 
-									{/* Кнопка "Очистити" з'являється тільки в Live-режимі */}
-									{!isArchiveMode && (
-										<button
-											className={classes.clearBtn}
-											onClick={() => { if (window.confirm("Очистити всі?")) clearNotifications(isAdminInvoices ? null : selectedUser); }}
-										>
-											❌ Очистити всі
-										</button>
-									)}
-								</div>
+						{/* Кнопка 2: Списання */}
+						<button
+							onClick={() => handlePrintUsedMaterialGlobalSearch(globalSearchTerm)}
+							disabled={!globalSearchTerm}
+							style={{
+								padding: '10px 20px',
+								flex: '1 1 200px', // Розтягується на всю ширину на мобілках
+								background: globalSearchTerm ? '#6c757d' : '#ccc',
+								color: '#fff',
+								border: 'none',
+								borderRadius: '5px',
+								cursor: globalSearchTerm ? 'pointer' : 'default',
+								fontWeight: 'bold',
+								transition: '0.3s',
+								height: '42px',
+								whiteSpace: 'nowrap'
+							}}
+						>
+							🔨 Пошук списань (об'єкти)
+						</button>
 
-								<div className={classes.notificationsList}>
-									{notifications
-										// Додаємо сортування перед рендером
-										.sort((a, b) => {
-											const idA = parseInt(a.orderId || a.id || 0, 10);
-											const idB = parseInt(b.orderId || b.id || 0, 10);
-											return idB - idA; // Від більшого до меншого
-										})
-										.map((n, i) => {
-											const isReturn = n.type === 'return';
-
-											// Визначаємо поля (враховуючи різницю між Live та Архівною структурою)
-											const orderId = n.orderId || n.id || '---';
-											const customerId = n.customerId || n.userId || '---';
-											const date = n.date || n.createdAt || '---';
-
-											return (
-												<div
-													key={`${orderId}_${i}`}
-													className={`${classes.notificationItem} ${isReturn ? classes.returnType : ''}`}
-												>
-													<div
-														onClick={() => handleOrderDetails({ ...n, orderId, customerId })}
-														style={{ cursor: 'pointer', flex: 1 }}
-														title="Натисніть, щоб побачити деталі"
-													>
-														<strong>
-															{isReturn ? '↩️ Повернення' : '📦 Замовлення'} #{orderId}
-														</strong>
-														<div className={classes.meta}>
-															👤 {customerId} ({customers.find(c => String(c.id) === String(customerId))?.name || 'Клієнт'}) | 📅 {date}
-														</div>
-													</div>
-
-													{/* Кошик з'являється тільки в Live-режимі (як і було) */}
-													{!isArchiveMode && (
-														<button
-															className={classes.deleteBtn}
-															onClick={() => { if (window.confirm("Видалити сповіщення?")) deleteNotification(n); }}
-														>
-															🗑
-														</button>
-													)}
-												</div>
-											);
-										})}
-								</div>
-							</div>
+						{/* Кнопка скидання */}
+						{globalSearchTerm && (
+							<button
+								onClick={() => setGlobalSearchTerm("")}
+								style={{
+									flex: '1 1 100%', // На мобілках скидання буде окремим рядком знизу (опціонально)
+									textAlign: 'center',
+									background: 'none',
+									border: 'none',
+									color: '#dc3545',
+									cursor: 'pointer',
+									fontSize: '14px',
+									padding: '5px'
+								}}
+							>
+								❌ Скинути
+							</button>
 						)}
 					</div>
-					<div style={{
-						padding: '15px',
-						background: '#f8f9fa',
-						borderRadius: '10px',
-						marginBottom: '20px',
-						border: '1px solid #dee2e6',
-						boxShadow: '0 2px 4px rgba(0,0,0,0.05)'
-					}}>
-						<h4 style={{ marginTop: 0, color: '#333' }}>🔍 Глобальний пошук по матеріалу</h4>
-
-						<div style={{
-							display: 'flex',
-							alignItems: 'center',
-							flexWrap: 'wrap',
-							gap: '10px'
-						}}>
-							{/* Випадаючий список */}
-							<select
-								value={globalSearchTerm}
-								onChange={(e) => setGlobalSearchTerm(e.target.value)}
-								style={{
-									padding: '10px',
-									flex: '1 1 300px',
-									minWidth: '200px',
-									maxWidth: '100%', // Щоб не виходило за межі екрану
-									borderRadius: '5px',
-									border: '1px solid #ced4da',
-									fontSize: '14px',
-									outline: 'none',
-									height: '42px',
-									appearance: 'auto', // Гарантує стандартний вигляд зі стрілкою та скролом
-									overflowY: 'auto'   // Дозволяє внутрішній скрол, якщо браузер це підтримує для select
-								}}
-							>
-								<option value="">-- Оберіть матеріал зі списку --</option>
-								{(stock || [])
-									.filter(product => {
-										const pId = String(product.productId || product.id);
-										return (dynamicProductIds || []).some(id => String(id) === pId);
-									})
-									.sort((a, b) => (a.name || "").localeCompare(b.name || ""))
-									.map((product) => (
-										<option key={product.productId || product.id} value={product.name}>
-											{product.name}
-										</option>
-									))
-								}
-							</select>
-
-							{/* Кнопка 1: Замовлення */}
-							<button
-								onClick={() => handlePrintMaterialGlobalSearch(globalSearchTerm)}
-								disabled={!globalSearchTerm}
-								style={{
-									padding: '10px 20px',
-									flex: '1 1 200px', // Розтягується на всю ширину на мобілках
-									background: globalSearchTerm ? '#17a2b8' : '#ccc',
-									color: '#fff',
-									border: 'none',
-									borderRadius: '5px',
-									cursor: globalSearchTerm ? 'pointer' : 'default',
-									fontWeight: 'bold',
-									transition: '0.3s',
-									height: '42px',
-									whiteSpace: 'nowrap'
-								}}
-							>
-								📦 Пошук в замовленнях
-							</button>
-
-							{/* Кнопка 2: Списання */}
-							<button
-								onClick={() => handlePrintUsedMaterialGlobalSearch(globalSearchTerm)}
-								disabled={!globalSearchTerm}
-								style={{
-									padding: '10px 20px',
-									flex: '1 1 200px', // Розтягується на всю ширину на мобілках
-									background: globalSearchTerm ? '#6c757d' : '#ccc',
-									color: '#fff',
-									border: 'none',
-									borderRadius: '5px',
-									cursor: globalSearchTerm ? 'pointer' : 'default',
-									fontWeight: 'bold',
-									transition: '0.3s',
-									height: '42px',
-									whiteSpace: 'nowrap'
-								}}
-							>
-								🔨 Пошук списань (об'єкти)
-							</button>
-
-							{/* Кнопка скидання */}
-							{globalSearchTerm && (
-								<button
-									onClick={() => setGlobalSearchTerm("")}
-									style={{
-										flex: '1 1 100%', // На мобілках скидання буде окремим рядком знизу (опціонально)
-										textAlign: 'center',
-										background: 'none',
-										border: 'none',
-										color: '#dc3545',
-										cursor: 'pointer',
-										fontSize: '14px',
-										padding: '5px'
-									}}
-								>
-									❌ Скинути
-								</button>
-							)}
-						</div>
-					</div>
-				</>
+				</div>
 
 			)}
 
