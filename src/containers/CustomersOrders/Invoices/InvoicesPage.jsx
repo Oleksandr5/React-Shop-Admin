@@ -813,6 +813,9 @@ const UsedMaterialsTable = ({
 	remainingMaterialsStart,
 	fetchRemainingMaterialsStart
 }) => {
+
+	const dispatch = useDispatch(); // Додайте цей рядок сюди!	
+
 	const [inputValues, setInputValues] = useState({});
 	const [agreementValues, setAgreementValues] = useState({});
 	const [commonAgreement, setCommonAgreement] = useState('');
@@ -827,7 +830,54 @@ const UsedMaterialsTable = ({
 	const [editingEntryId, setEditingEntryId] = useState(null);
 	const [commentValues, setCommentValues] = useState({}); // Стейт для коментарів у таблиці
 
-	const dispatch = useDispatch(); // Додайте цей рядок сюди!	
+	// 💡 СТАНИ ТА ФУНКЦІЯ ДЛЯ РЕДАГУВАННЯ SHORT NAME:
+	const [editingShortId, setEditingShortId] = useState(null);
+	const [editShortValue, setEditShortValue] = useState("");
+
+	// 2. ФУНКЦІЇ-ОБРОБНИКИ СТВОРЮЮТЬСЯ ПІСЛЯ ХУКІВ
+	// Передаємо productId (значення 156)
+
+	const handleSaveShortName = async (productId) => {
+		setEditingShortId(null);
+		const trimmed = editShortValue.trim();
+
+		if (!productId) {
+			console.error("Помилка: productId не передано!");
+			return;
+		}
+
+		try {
+			await firebase.database().ref('products').transaction((currentData) => {
+				if (!currentData) return currentData;
+
+				// Працюємо безпечно як з об'єктом, так і з масивом, зберігаючи оригінальні ключі
+				const keys = Object.keys(currentData);
+				const targetKey = keys.find(key => currentData[key] && String(currentData[key].id) === String(productId));
+
+				if (targetKey !== undefined) {
+					currentData[targetKey].name_short = trimmed;
+				}
+
+				return currentData;
+			});
+
+			console.log(`Успішно оновлено name_short для товару id:${productId} на "${trimmed}"`);
+
+			// ОНОВЛЮЄМО СТАН/СПИСОК ПІСЛЯ ЗБЕРЕЖЕННЯ:
+			if (typeof fetchUsedMaterials === 'function') {
+				fetchUsedMaterials();
+			}
+			if (typeof fetchRemainingMaterialsStart === 'function') {
+				fetchRemainingMaterialsStart();
+			}
+
+		} catch (err) {
+			console.error("Помилка при збереженні в Firebase:", err);
+			alert("Помилка при збереженні!");
+		}
+	};
+
+
 	// Знаходимо користувача в масиві за його ID
 	const userObj = customers?.find(c => String(c.id) === String(selectedUser));
 	console.log('my_combinedSummary', combinedSummary)
@@ -865,6 +915,7 @@ const UsedMaterialsTable = ({
 			return {
 				productId: id,
 				name: productFromStock?.name || userInventory?.name || `Товар #${id}`,
+				name_short: productFromStock?.name_short || userInventory?.name_short || "",
 				units: productFromStock?.units || userInventory?.units || '',
 				totalQuantity: userInventory ? userInventory.totalQuantity : 0
 			};
@@ -934,7 +985,9 @@ const UsedMaterialsTable = ({
 				const matches = historyArray.filter(log => String(log.agreement).trim() === term);
 
 				if (matches.length > 0) {
-					const productInfo = fullMaterialsList.find(s => Number(s.productId) === Number(productId));
+					const productInfo = fullMaterialsList.find(
+						s => String(s.productId) === String(productId) || String(s.id) === String(productId)
+					);
 
 					matches.forEach(match => {
 						const date = match.createdAt
@@ -949,6 +1002,7 @@ const UsedMaterialsTable = ({
 
 						foundMaterials.push({
 							name: productInfo?.name || `Товар #${productId}`,
+							name_short: productInfo?.name_short || "",
 							quantity: Number(match.value || 0),
 							units: productInfo?.units || '',
 							date: date,
@@ -963,6 +1017,7 @@ const UsedMaterialsTable = ({
 		if (foundMaterials.length === 0) {
 			alert(`По угоді №${term} не списано товарів`);
 		} else {
+			// 1. Формуємо детальний список з датами та кількістю
 			const listText = foundMaterials
 				.map(m => {
 					const commentPart = m.comment ? ` (Прим: ${m.comment})` : "";
@@ -970,7 +1025,42 @@ const UsedMaterialsTable = ({
 				})
 				.join('\n');
 
-			alert(`📦 Товари списані на угоду №${term}:\n\n${listText}`);
+			// 2. Формуємо короткий список: беремо суто name_short і фільтруємо від порожніх та "no"
+			const shortNamesText = foundMaterials
+				.filter(m => {
+					// Визначаємо, яка назва буде використовуватися
+					const nameToUse = (m.name_short && String(m.name_short).trim() !== '')
+						? m.name_short
+						: m.name;
+
+					if (!nameToUse) return false;
+
+					const cleaned = String(nameToUse).trim().toLowerCase();
+					// Відсіюємо порожні назви та "no"
+					return cleaned !== '' && cleaned !== 'no';
+				})
+				.map(m => {
+					const hasShort = m.name_short && String(m.name_short).trim() !== '';
+					const name = hasShort ? m.name_short : m.name;
+					return `${name}-${m.quantity}`;
+					// return `${name} : ${m.quantity} ${m.units}`;
+				})
+				.join(', ');
+
+			// 3. Текст для сповіщення
+			const shortListDisplay = shortNamesText || '— (немає товарів для короткого списку)';
+
+			// 4. Копіюємо в буфер обміну та показуємо alert
+			navigator.clipboard.writeText(shortNamesText).then(() => {
+				alert(
+					`📦 Товари списані на угоду №${term}:\n\n` +
+					`${listText}\n\n` +
+					`📋 Короткий список:\n${shortListDisplay}\n\n` +
+					`✅ Короткий список скопійовано в буфер обміну!`
+				);
+			}).catch(() => {
+				prompt("Скопіюйте короткий список (Ctrl+C):", shortNamesText);
+			});
 		}
 	};
 
@@ -1855,7 +1945,7 @@ const UsedMaterialsTable = ({
 								);
 							})
 							.map((item) => {
-								const { productId, name, totalQuantity, units } = item;
+								const { productId, name, name_short, totalQuantity, units } = item;
 								// Отримуємо залишок на початок для конкретного ID товару
 								const startLimit = remainingMaterialsStart?.[productId] ?? 0;
 								const valueInRedux = usedMaterials?.[productId] ?? 0;
@@ -1893,6 +1983,51 @@ const UsedMaterialsTable = ({
 										<td className={classes.nameColumn}>
 											<div style={{ fontWeight: '600', fontSize: '14px' }}>{name}</div>
 											<div style={{ fontSize: '10px', color: '#999' }}>ID: {productId}</div>
+											<div style={{ fontSize: '10px', color: '#999', marginTop: '2px' }}>
+												Short:{' '}
+												{editingShortId === productId ? (
+													<input
+														type="text"
+														value={editShortValue}
+														onChange={(e) => setEditShortValue(e.target.value)}
+														onBlur={() => handleSaveShortName(productId)} // Збереження при втраті фокусу
+														onKeyDown={(e) => {
+															if (e.key === 'Enter') {
+																e.preventDefault();
+																e.target.blur(); // Спричиняє onBlur, який сам безпечно збереже дані
+															}
+															if (e.key === 'Escape') {
+																e.preventDefault();
+																setEditingShortId(null); // Просто закриваємо без збереження
+															}
+														}}
+														autoFocus
+														style={{
+															fontSize: '11px',
+															padding: '1px 4px',
+															border: '1px solid #007bff',
+															borderRadius: '3px',
+															outline: 'none',
+															width: '90px'
+														}}
+													/>
+												) : (
+													<span
+														onClick={() => {
+															setEditingShortId(productId);
+															setEditShortValue(name_short || "");
+														}}
+														title="Клацніть, щоб змінити"
+														style={{
+															cursor: 'pointer',
+															textDecoration: 'underline dotted',
+															color: name_short ? '#333' : '#aaa'
+														}}
+													>
+														{name_short || '—'}
+													</span>
+												)}
+											</div>
 										</td>
 
 										{/* КОЛОНКА 2: УПРАВЛІННЯ ТА ПОКАЗНИКИ */}

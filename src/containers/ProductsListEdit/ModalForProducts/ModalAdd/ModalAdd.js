@@ -15,6 +15,10 @@ function createFormControls() {
 			label: 'Введіть назву',
 			errorMessage: 'Поле з назвою не повинне бути пустим'
 		}, { required: true }),
+		name_short: createControl({
+			label: 'Введіть скорочену назву',
+			errorMessage: 'Поле з назвою не повинне бути пустим'
+		}, { required: true }),
 		price: createControl({
 			label: 'Введіть ціну',
 			errorMessage: 'Поле з ціною не повинне бути пустим'
@@ -107,7 +111,7 @@ class ModalAdd extends Component {
 
 	addProductHandler = event => {
 
-		const { name, price, quantity, describe, image } = this.state.formControls
+		const { name, name_short, price, quantity, describe, image } = this.state.formControls
 
 		const selectsForm = [...document.querySelectorAll('select.addOptionToAddProduct')].map(select => {
 			return { name: select.name, value: select.value }
@@ -135,6 +139,7 @@ class ModalAdd extends Component {
 
 		this.props.addNewProduct({
 			name: name.value,
+			name_short: name_short.value,
 			category,
 			subcategory,
 			price: +price.value,

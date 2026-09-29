@@ -34,6 +34,20 @@ class ModalEdit extends Component {
 					required: true
 				}
 			},
+			name_short: {
+				id: 'name_short',
+				htmlFor: 'name_short',
+				value: this.props.products.filter(product => product.id === this.props.idProduct)[0].name_short || '',
+				name: 'name_short',
+				type: 'text',
+				label: 'Введіть коротку назву',
+				errorMessage: 'Поле з короткою назвою не повинне бути пустим',
+				valid: true,
+				touched: false,
+				validation: {
+					required: true
+				}
+			},
 			price: {
 				id: 'price',
 				htmlFor: 'price',
@@ -92,6 +106,7 @@ class ModalEdit extends Component {
 			}
 		},
 		name: this.props.products.filter(product => product.id === this.props.idProduct)[0].name,
+		name_short: this.props.products.filter(product => product.id === this.props.idProduct)[0].name_short || '',
 		price: this.props.products.filter(product => product.id === this.props.idProduct)[0].price,
 		//        price: document.querySelector(`input[name = price_product_${id}]`).value,
 		quantity: this.props.products.filter(product => product.id === this.props.idProduct)[0].quantity,
@@ -445,7 +460,7 @@ class ModalEdit extends Component {
 
 	editDate(id) {
 
-		const { name, price, quantity, describe, image } = this.state.formControls
+		const { name, name_short, price, quantity, describe, image } = this.state.formControls
 
 		const selectsForm = [...document.querySelectorAll('select.addOptionToEditProduct')].map(select => {
 			return { name: select.name, value: select.value }
@@ -474,6 +489,7 @@ class ModalEdit extends Component {
 		this.props.editProduct({
 			id,
 			name: name.value,
+			name_short: name_short.value,
 			category,
 			subcategory,
 			units,

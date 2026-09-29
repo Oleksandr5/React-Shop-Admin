@@ -154,7 +154,7 @@ export function updateIsSubcategory(isSubcategories) {
 export function addNewProduct(obj) {
 	return async (dispatch, getState) => {
 
-		const { name, category, subcategory, price, promotion, units, stepunits, quantity, describe, image, visibleproduct } = obj
+		const { name, name_short, category, subcategory, price, promotion, units, stepunits, quantity, describe, image, visibleproduct } = obj
 
 		let idLastProduct = -1
 
@@ -183,6 +183,7 @@ export function addNewProduct(obj) {
 		if (!existingNameProduct) {
 			const productItem = {
 				name,
+				name_short,
 				category,
 				subcategory,
 				price,
@@ -340,10 +341,11 @@ export function editFieldProduct(obj) {
 export function editProduct(obj) {
 	return async (dispatch, getState) => {
 
-		const { id, name, category, subcategory, price, quantity, describe, image, units, stepunits, visibleproduct, promotion } = obj
+		const { id, name, name_short, category, subcategory, price, quantity, describe, image, units, stepunits, visibleproduct, promotion } = obj
 
 		const productItem = {
 			name,
+			name_short,
 			category,
 			subcategory,
 			price,

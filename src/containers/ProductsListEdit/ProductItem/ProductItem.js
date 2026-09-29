@@ -252,6 +252,14 @@ class ProductItem extends Component {
 						</NavLink>
 					</div>
 				</th>
+				<th className={classes.thName}>
+					<div className={classes.leftTitle}>name_short</div>
+					<div className={`overflow-auto webkit_scrollbar_width webkit_scrollbar_style ${classes.th_value}`}>
+						<NavLink className={`${classes.a_to_product_page}`} to={'/product/' + id}>
+							{product.name_short}
+						</NavLink>
+					</div>
+				</th>
 				<th>
 					<div className={classes.leftTitle}>price</div>
 					<div className={`d-flex flex-column flex-sm-row py-3 py-sm-0 px-0 px-sm-3 overflow-auto webkit_scrollbar_width webkit_scrollbar_style ${classes.th_value}`}>

@@ -452,6 +452,7 @@ class ProductsTable extends Component {
 						<th className={classes.headerTitle}>id</th>
 						<th className={`${classes.headerTitle} ${classes.min_width} ${classes.th_image}`}>image</th>
 						<th className={`${classes.headerTitle} ${classes.min_width}`}>name</th>
+						<th className={`${classes.headerTitle} ${classes.min_width}`}>name_short</th>
 						<th className={`${classes.headerTitle} ${classes.min_width}`}>price</th>
 						<th className={`${classes.headerTitle} ${classes.min_width}`}>quantity</th>
 						<th className={`${classes.headerTitle} ${classes.min_width}`}>promotion</th>
@@ -471,6 +472,7 @@ class ProductsTable extends Component {
 						<th className={classes.headerTitle}></th>
 						<th className={classes.headerTitle}></th>
 						<th className={classes.headerTitle}>name</th>
+						<th className={classes.headerTitle}>name_short</th>
 						<th className={classes.headerTitle}></th>
 						<th className={classes.headerTitle}></th>
 						<th className={classes.headerTitleSelect}>{selectPromotionsProduct}</th>
