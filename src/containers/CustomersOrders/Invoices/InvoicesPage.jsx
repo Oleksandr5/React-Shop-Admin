@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useMemo, useRef } from 'react'
 import { connect, useDispatch } from 'react-redux'
 import { fetchInvoices, fetchInvoicesReturn, fetchAllInvoices, fetchAllInvoicesReturn, fetchInvoicesSummary, fetchInvoicesSummaryReturn, fetchOrderNotifications, deleteNotification, clearNotifications, fetchUsedMaterials, addUsedMaterial, fetchUsedMaterialsHistory, fetchUsedMaterialsHistoryAction, fetchAllUsedMaterialsHistoryAction, archiveAllDataMonthly, updateUsedMaterialLocal, fetchRemainingMaterialsStart, setRemainingMaterialsStart } from '../../../redux/actions/invoices'; // шлях до ваших екшенів інвойсів
+import { updateProductShortName } from '../../../redux/actions/products';
 
 import classes from './InvoicesPage.module.css';
 import firebase from 'firebase';
@@ -837,44 +838,11 @@ const UsedMaterialsTable = ({
 	// 2. ФУНКЦІЇ-ОБРОБНИКИ СТВОРЮЮТЬСЯ ПІСЛЯ ХУКІВ
 	// Передаємо productId (значення 156)
 
-	const handleSaveShortName = async (productId) => {
+	const handleSaveShortName = (productId) => {
 		setEditingShortId(null);
-		const trimmed = editShortValue.trim();
 
-		if (!productId) {
-			console.error("Помилка: productId не передано!");
-			return;
-		}
-
-		try {
-			await firebase.database().ref('products').transaction((currentData) => {
-				if (!currentData) return currentData;
-
-				// Працюємо безпечно як з об'єктом, так і з масивом, зберігаючи оригінальні ключі
-				const keys = Object.keys(currentData);
-				const targetKey = keys.find(key => currentData[key] && String(currentData[key].id) === String(productId));
-
-				if (targetKey !== undefined) {
-					currentData[targetKey].name_short = trimmed;
-				}
-
-				return currentData;
-			});
-
-			console.log(`Успішно оновлено name_short для товару id:${productId} на "${trimmed}"`);
-
-			// ОНОВЛЮЄМО СТАН/СПИСОК ПІСЛЯ ЗБЕРЕЖЕННЯ:
-			if (typeof fetchUsedMaterials === 'function') {
-				fetchUsedMaterials();
-			}
-			if (typeof fetchRemainingMaterialsStart === 'function') {
-				fetchRemainingMaterialsStart();
-			}
-
-		} catch (err) {
-			console.error("Помилка при збереженні в Firebase:", err);
-			alert("Помилка при збереженні!");
-		}
+		// Оновлюємо ShortName через Redux-екшен (використовуємо dispatch)
+		dispatch(updateProductShortName(productId, editShortValue));
 	};
 
 
@@ -4726,5 +4694,5 @@ const mapStateToProps = state => {
 
 export default connect(mapStateToProps, {
 	fetchInvoices, fetchAllInvoices, fetchAllInvoicesReturn, fetchInvoicesReturn, fetchInvoicesSummary, fetchInvoicesSummaryReturn, fetchOrderNotifications, deleteNotification, clearNotifications,
-	fetchUsedMaterials, addUsedMaterial, fetchUsedMaterialsHistory, fetchUsedMaterialsHistoryAction, fetchAllUsedMaterialsHistoryAction, fetchRemainingMaterialsStart, setRemainingMaterialsStart
+	fetchUsedMaterials, addUsedMaterial, fetchUsedMaterialsHistory, fetchUsedMaterialsHistoryAction, fetchAllUsedMaterialsHistoryAction, fetchRemainingMaterialsStart, setRemainingMaterialsStart, updateProductShortName
 })(InvoicesPage);

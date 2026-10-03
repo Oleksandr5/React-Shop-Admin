@@ -1,4 +1,4 @@
-import { FETCH_PRODUCTS_DATA_START, FETCH_PRODUCTS_DATA_SUCCESS, FETCH_PRODUCTS_DATA_ERROR, TOGGLE_FILTER_HANDLER, MENU_CLOSE_HANDLER, ON_SELECTED_PRODUCTS, ON_SELECTED_PRODUCTS_ADMIN, RESET_FILTERS, RESET_FILTERS_ADMIN, UPDATE_IS_SUBCATEGORY, UPDATE_ORDERS, UPDATE_ORDERS_HISTORY, UPDATEPRODUCTS, UPDATE_PRODUCTS_DELETED, UPDATECATEGORIES, UPDATE_IS_ORDERS_THIS_CART, UPDATE_IS_ORDERS_HISTORY_THIS_CART, UPDATE_FILTER_PROPS, UPDATE_FILTER_PROPS_ADMIN, UPDATE_IS_QUANT_PROD_IN_DB, SET_FILTER_BY, SET_SEARCH_QUERY, SET_CURRENT_PAGE, SET_TOTAL_PRODUCTS_COUNT, CHANGE_PORTION_NUMBER, UPDATE_INVOICE_STOCK } from './actionTypes'
+import { FETCH_PRODUCTS_DATA_START, FETCH_PRODUCTS_DATA_SUCCESS, FETCH_PRODUCTS_DATA_ERROR, TOGGLE_FILTER_HANDLER, MENU_CLOSE_HANDLER, ON_SELECTED_PRODUCTS, ON_SELECTED_PRODUCTS_ADMIN, RESET_FILTERS, RESET_FILTERS_ADMIN, UPDATE_IS_SUBCATEGORY, UPDATE_ORDERS, UPDATE_ORDERS_HISTORY, UPDATEPRODUCTS, UPDATE_PRODUCTS_DELETED, UPDATECATEGORIES, UPDATE_IS_ORDERS_THIS_CART, UPDATE_IS_ORDERS_HISTORY_THIS_CART, UPDATE_FILTER_PROPS, UPDATE_FILTER_PROPS_ADMIN, UPDATE_IS_QUANT_PROD_IN_DB, SET_FILTER_BY, SET_SEARCH_QUERY, SET_CURRENT_PAGE, SET_TOTAL_PRODUCTS_COUNT, CHANGE_PORTION_NUMBER, UPDATE_INVOICE_STOCK, UPDATE_PRODUCT_SHORT_NAME } from './actionTypes'
 import { onScrollCart, topFunctionCart, bottomFunctionCart, errorFunctionCart } from './menu'
 import axios from '../../axios/axios-quiz'
 import firebase from 'firebase'
@@ -3525,4 +3525,50 @@ export function updateFirebaseProductComment(orderIndex, cartIndex, comment) {
 			}
 		} catch (e) { console.error(e) }
 	}
+}
+
+// 1. Синхронний екшен для Reducer[cite: 3]
+export function updateProductShortNameSuccess(productId, name_short) {
+	return {
+		type: UPDATE_PRODUCT_SHORT_NAME,
+		payload: { productId, name_short }
+	};
+}
+
+// 2. Асинхронний екшен для оновлення в Firebase та Redux Store[cite: 5]
+export function updateProductShortName(productId, name_short) {
+	return async (dispatch, getState) => {
+		const trimmed = name_short ? name_short.trim() : '';
+
+		if (!productId) {
+			console.error("Помилка: productId не передано!");
+			return;
+		}
+
+		try {
+			await firebase.database().ref('products').transaction((currentData) => {
+				if (!currentData) return currentData;
+
+				const keys = Object.keys(currentData);
+				const targetKey = keys.find(
+					key => currentData[key] && String(currentData[key].id) === String(productId)
+				);
+
+				if (targetKey !== undefined) {
+					currentData[targetKey].name_short = trimmed;
+				}
+
+				return currentData;
+			});
+
+			console.log(`Успішно оновлено name_short для товару ID:${productId} на "${trimmed}"`);
+
+			// Передаємо name_short у синхронний екшен
+			dispatch(updateProductShortNameSuccess(productId, trimmed));
+
+		} catch (err) {
+			console.error("Помилка при збереженні в Firebase:", err);
+			alert("Помилка при збереженні!");
+		}
+	};
 }
