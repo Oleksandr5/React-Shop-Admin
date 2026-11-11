@@ -2846,6 +2846,188 @@ const InvoicesPage = ({
 		}
 	};
 
+	const handlePrintObjectsAgreementsReport = () => { // Прибрали async для стабільності window.open
+		try {
+			console.log("--- 🚀 START GLOBAL OBJECTS REPORT GENERATION ---");
+
+			// Використовуємо глобальну історію (архів або реалтайм)
+			const historyData = allUsedMaterialsHistory || {};
+			const productsList = stock || [];
+			const customersList = customers || [];
+
+			if (Object.keys(historyData).length === 0) {
+				return alert(isArchiveMode ? "Архів порожній або ще завантажується..." : "Дані про списання відсутні.");
+			}
+
+			const currentDate = new Date().toLocaleString('uk-UA');
+			const modeTitle = isArchiveMode ? "АРХІВ" : "ПОТОЧНІ ДАНІ";
+
+			// 1. ГРУПУВАННЯ ДАНИХ: Екіпаж -> Угода -> Товари/Події
+			const resultsByCrew = {};
+
+			Object.keys(historyData).forEach(uId => {
+				const userProducts = historyData[uId] || {};
+				const userObj = customersList.find(c => String(c.id) === String(uId));
+				const crewDisplayName = userObj ? `${userObj.name} (${uId})` : `Екіпаж ID: ${uId}`;
+
+				const stockMap = new Map((productsList || []).map(s => [Number(s.productId || s.id), s]));
+				const summaryMap = new Map((invoicesSummary || []).map(s => [Number(s.productId), s]));
+
+				const agreementsMap = {};
+
+				Object.keys(userProducts).forEach(productId => {
+					const histRaw = userProducts[productId];
+					if (histRaw) {
+						const hist = Object.values(histRaw);
+						const productFromStock = stockMap.get(Number(productId));
+						const userInventory = summaryMap.get(Number(productId));
+
+						const name = productFromStock?.name || userInventory?.name || `Товар #${productId}`;
+						const units = productFromStock?.units || userInventory?.units || '';
+
+						hist.forEach(log => {
+							const agreement = String(log.agreement || "Без угоди").trim();
+
+							// 🛑 ВІДСІЧЕННЯ: якщо угода складається ВИКЛЮЧО з цифр — пропускаємо її
+							if (/^\d+$/.test(agreement)) {
+								return;
+							}
+
+							if (!agreementsMap[agreement]) agreementsMap[agreement] = [];
+
+							agreementsMap[agreement].push({
+								name,
+								quantity: Number(log.value || 0),
+								units,
+								comment: log.comment || "",
+								date: log.createdAt
+									? new Date(log.createdAt).toLocaleString("uk-UA", { day: '2-digit', month: '2-digit', year: '2-digit' })
+									: "---"
+							});
+						});
+					}
+				});
+
+				// Якщо у цього екіпажа є угоди (що не складаються лише з цифр), додаємо до загального списку
+				if (Object.keys(agreementsMap).length > 0) {
+					resultsByCrew[crewDisplayName] = agreementsMap;
+				}
+			});
+
+			if (Object.keys(resultsByCrew).length === 0) {
+				return alert("Не знайдено жодної угоди з літерями/словами у вибраному режимі.");
+			}
+
+			// 2. ФОРМУВАННЯ HTML ДЛЯ POPUP-ВІКНА
+			let reportHtml = `
+        <html>
+        <head>
+            <title>Глобальний звіт по угодах (Об'єкти)</title>
+            <style>
+                body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; padding: 20px; color: #333; line-height: 1.4; }
+                .header { text-align: center; border-bottom: 3px solid #4a90e2; margin-bottom: 25px; padding-bottom: 10px; }
+                .header h2 { margin: 5px 0; color: #2c3e50; }
+                .mode-badge { background: ${isArchiveMode ? '#e67e22' : '#27ae60'}; color: white; padding: 3px 10px; border-radius: 12px; font-size: 14px; vertical-align: middle; }
+                
+                .user-section { margin-bottom: 35px; border: 1px solid #dee2e6; border-radius: 6px; overflow: hidden; page-break-inside: avoid; box-shadow: 0 2px 5px rgba(0,0,0,0.05); }
+                .user-header { background: #4a90e2; color: white; padding: 12px 15px; font-size: 18px; font-weight: bold; }
+                
+                .agreement-section { margin: 15px; border: 1px solid #eee; border-radius: 4px; }
+                .agreement-title { background: #17a2b8; color: white; padding: 8px 12px; font-weight: bold; border-radius: 4px 4px 0 0; }
+                
+                table { width: 100%; border-collapse: collapse; font-size: 13px; }
+                th, td { border: 1px solid #dee2e6; padding: 8px 12px; text-align: left; }
+                th { background: #f8f9fa; font-weight: bold; }
+                tr:nth-child(even) { background-color: #fafafa; }
+                
+                .no-print { text-align: center; margin: 30px; }
+                .btn-print { padding: 12px 30px; background: #28a745; color: white; border: none; border-radius: 5px; cursor: pointer; font-size: 16px; font-weight: bold; box-shadow: 0 2px 4px rgba(0,0,0,0.2); }
+                @media print { .no-print { display: none; } body { padding: 0; } .user-section { border: 1px solid #000; } }
+            </style>
+        </head>
+        <body>
+            <div class="header">
+                <h2>📋 Глобальний звіт списань по угодах (Об'єкти)</h2>
+                <p>
+                    <span class="mode-badge">${modeTitle}</span> 
+                    &nbsp; | &nbsp; 📅 <b>Дата:</b> ${currentDate}
+                </p>
+            </div>
+        `;
+
+			// 3. ВИВЕДЕННЯ ДАНИХ ПО ЕКІПАЖАХ ТА УГОДАХ
+			Object.keys(resultsByCrew).sort().forEach(crewName => {
+				reportHtml += `<div class="user-section"><div class="user-header">👤 Екіпаж: ${crewName}</div>`;
+
+				const agreementsMap = resultsByCrew[crewName];
+				const sortedAgreements = Object.keys(agreementsMap).sort((a, b) =>
+					a.localeCompare(b, 'uk', { sensitivity: 'accent', numeric: true })
+				);
+
+				sortedAgreements.forEach(agNum => {
+					const items = agreementsMap[agNum];
+					reportHtml += `
+                <div class="agreement-section">
+                    <div class="agreement-title">📄 Угода: ${agNum}</div>
+                    <table>
+                        <thead>
+                            <tr>
+                                <th style="width: 15%">Дата</th>
+                                <th>Товар</th>
+                                <th style="width: 15%; text-align: right;">Кількість</th>
+                                <th>Примітка</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${items.map(m => `
+                                <tr>
+                                    <td>${m.date}</td>
+                                    <td>${m.name}</td>
+                                    <td style="text-align: right;"><b>${m.quantity}</b> ${m.units}</td>
+                                    <td>${m.comment}</td>
+                                </tr>
+                            `).join('')}
+                        </tbody>
+                    </table>
+                </div>
+            `;
+				});
+
+				reportHtml += `</div>`;
+			});
+
+			reportHtml += `
+            <div class="no-print">
+                <button class="btn-print" onclick="window.print()">
+                    🖨️ Роздрукувати звіт
+                </button>
+            </div>
+        </body>
+        </html>
+        `;
+
+			// 4. ВІДКРИТТЯ POPUP-ВІКНА
+			const winWidth = 1100;
+			const winHeight = 850;
+			const left = (window.screen.width / 2) - (winWidth / 2);
+			const top = (window.screen.height / 2) - (winHeight / 2);
+
+			const newWindow = window.open("", "_blank",
+				`width=${winWidth},height=${winHeight},top=${top},left=${left},scrollbars=yes,resizable=yes`);
+
+			if (newWindow) {
+				newWindow.document.write(reportHtml);
+				newWindow.document.close();
+			} else {
+				alert("Помилка: Браузер заблокував спливаюче вікно. Дозвольте спливаючі вікна для цього сайту.");
+			}
+
+		} catch (err) {
+			console.error("🛑 Error:", err);
+			alert("Помилка: " + err.message);
+		}
+	};
+
 	const handlePrintUsedMaterialGlobalSearch = (searchQuery) => {
 		try {
 			// allUsedMaterialsHistory автоматично підтягне архів або реалтайм завдяки вашому useMemo
@@ -3013,6 +3195,8 @@ const InvoicesPage = ({
 			alert("Сталася помилка при формуванні звіту. Перевірте консоль.");
 		}
 	};
+
+
 
 	const handleCustomerChange = (e) => {
 		const userId = e.target.value;
@@ -4121,6 +4305,28 @@ const InvoicesPage = ({
 							}}
 						>
 							🔨 Пошук списань (об'єкти)
+						</button>
+
+						<button
+							onClick={() => {
+								handlePrintObjectsAgreementsReport();
+							}}
+							style={{
+								padding: '10px 20px',
+								flex: '1 1 200px', // Розтягується на всю ширину на мобілках
+								background: globalSearchTerm ? '#17a2b8' : '#ccc',
+								color: '#fff',
+								border: 'none',
+								borderRadius: '5px',
+								cursor: globalSearchTerm ? 'pointer' : 'default',
+								fontWeight: 'bold',
+								transition: '0.3s',
+								height: '42px',
+								whiteSpace: 'nowrap'
+							}}
+							className={`${classes.ga_btnBase} ${classes.ga_btnGrey}`}
+						>
+							📋 Звіт по всіх об'єктах
 						</button>
 
 						{/* Кнопка скидання */}
