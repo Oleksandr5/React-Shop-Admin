@@ -4009,7 +4009,7 @@ const InvoicesPage = ({
 				</div>
 
 
-				{isAdminFullAccess && (
+				{isAdminUsedMaterials && (
 					<>
 						{/* 2. БЛОК МІСЯЦЯ АРХІВУ */}
 						<div style={{ flex: 1, minWidth: '160px' }}>
